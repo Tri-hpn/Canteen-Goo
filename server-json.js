@@ -11,6 +11,94 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_FILE = path.join(__dirname, "canteen-db.json");
 
+// ============================================================
+// AUTO-SEED DB nếu file chưa tồn tại (lần đầu deploy Render)
+// ============================================================
+function initDBIfNeeded() {
+  if (fs.existsSync(DB_FILE)) return;
+
+  console.log("📦 DB chưa có → khởi tạo với 3 user mặc định...");
+
+  const empty = {
+    users: [
+      {
+        id: 1,
+        name: "Admin",
+        email: "admin@vwa.vn",
+        password: bcrypt.hashSync("admin123", 10),
+        role: "ADMIN",
+        status: "Hoạt động",
+        phone: "",
+        points: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 2,
+        name: "Nhân viên Demo",
+        email: "employee@vwa.vn",
+        password: bcrypt.hashSync("employee123", 10),
+        role: "EMPLOYEE",
+        status: "Hoạt động",
+        phone: "",
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 3,
+        name: "Khách Demo",
+        email: "customer@vwa.vn",
+        password: bcrypt.hashSync("customer123", 10),
+        role: "CUSTOMER",
+        status: "Hoạt động",
+        phone: "",
+        points: 1000,
+        created_at: new Date().toISOString(),
+      },
+    ],
+    menu_items: [],
+    categories: [
+      { id: 1, name: "Cơm", icon: "🍚", order: 1 },
+      { id: 2, name: "Bún", icon: "🍜", order: 2 },
+      { id: 3, name: "Đồ uống", icon: "🥤", order: 3 },
+    ],
+    sizes: [
+      { id: 1, name: "S", extra_price: 0 },
+      { id: 2, name: "M", extra_price: 5000 },
+      { id: 3, name: "L", extra_price: 10000 },
+    ],
+    toppings: [],
+    orders: [],
+    inventory: [],
+    notifications: [],
+    vouchers: [],
+    reviews: [],
+    messages: [],
+    attendances: [],
+    imports: [],
+    price_history: [],
+    shifts: [],
+    wallets: [],
+    wallet_transactions: [],
+    settings: {
+      bank: "VCB",
+      account: "",
+      accountName: "CANTEEN VWA",
+      hotline: "",
+      email: "admin@vwa.vn",
+      address: "",
+      qrCustomImage: "",
+    },
+  };
+
+  fs.writeFileSync(DB_FILE, JSON.stringify(empty, null, 2), "utf-8");
+  console.log("✅ Đã tạo DB với 3 user mặc định:");
+  console.log("   👤 admin@vwa.vn / admin123");
+  console.log("   👤 employee@vwa.vn / employee123");
+  console.log("   👤 customer@vwa.vn / customer123");
+}
+
+// Gọi ngay khi khởi động server → đảm bảo DB tồn tại
+initDBIfNeeded();
+
 function loadDB() {
   return JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
 }
