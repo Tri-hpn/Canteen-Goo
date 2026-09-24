@@ -535,32 +535,38 @@ export default function OwnerMenu() {
                           {m.stock}
                         </td>
                         <td style={{ ...tdStyle, textAlign: "center" }}>
-                          <button
+ <button
   onClick={() => toggleActive(m)}
   title={isActive ? "Tắt món" : "Bật món"}
   aria-label={isActive ? "Tắt món" : "Bật món"}
+  aria-pressed={isActive}
   style={{
-    background: "transparent",
+    background: isActive
+      ? "rgba(24, 169, 103, 0.1)"
+      : "rgba(148, 163, 184, 0.12)",
     border: 0,
     cursor: "pointer",
     color: isActive ? "#18a967" : "#94a3b8",
     padding: 6,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     display: "grid",
     placeItems: "center",
-    transition: "background 0.15s",
+    margin: "0 auto",
+    transition: "all 0.2s",
   }}
-  onMouseEnter={(e) =>
-    (e.currentTarget.style.background = "var(--bg-tertiary, #f5f7fb)")
-  }
-  onMouseLeave={(e) =>
-    (e.currentTarget.style.background = "transparent")
-  }
+  onMouseEnter={(e) => {
+    e.currentTarget.style.transform = "scale(1.05)";
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.transform = "scale(1)";
+  }}
 >
   {isActive ? (
-    <ToggleRight size={28} strokeWidth={2.2} />
+    <ToggleRight size={30} strokeWidth={2.3} />
   ) : (
-    <ToggleLeft size={28} strokeWidth={2.2} />
+    <ToggleLeft size={30} strokeWidth={2.3} />
   )}
 </button>
                         </td>

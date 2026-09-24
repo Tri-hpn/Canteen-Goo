@@ -285,10 +285,12 @@ app.put("/api/auth/profile", auth(), (req, res) => {
 // ============ MENU ============
 app.get("/api/menu", (req, res) => {
   const db = loadDB();
-  const { q = "", category = "T?t c?" } = req.query;
-  let items = db.menu_items.filter(m => m.active);
+  const { q = "", category = "Tất cả", all } = req.query;
+  // all=1 → trả về TẤT CẢ món (kể cả đã tắt) — dùng cho Owner/Employee
+  // Không có all → chỉ món active — dùng cho Customer
+  let items = all === "1" ? [...db.menu_items] : db.menu_items.filter(m => m.active);
   if (q) items = items.filter(m => m.name.toLowerCase().includes(q.toLowerCase()));
-  if (category && category !== "T?t c?") items = items.filter(m => m.category === category);
+  if (category && category !== "Tất cả") items = items.filter(m => m.category === category);
   res.json(items);
 });
 
