@@ -6,54 +6,39 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import mongoose from "mongoose";
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_FILE = path.join(__dirname, "canteen-db.json");
 
 // ============================================================
-// AUTO-SEED DB nếu file chưa tồn tại (lần đầu deploy Render)
+// MONGODB — Lưu DB dưới dạng 1 document JSON
 // ============================================================
-function initDBIfNeeded() {
-  if (fs.existsSync(DB_FILE)) return;
+const MONGO_URI = process.env.MONGO_URI;
+let MongoModel = null;
+let dbCache = null;
 
-  console.log("📦 DB chưa có → khởi tạo với 3 user mặc định...");
+if (MONGO_URI) {
+  const dbSchema = new mongoose.Schema(
+    {
+      _id: { type: String, default: "main" },
+      data: { type: mongoose.Schema.Types.Mixed },
+    },
+    { collection: "canteen_db", minimize: false }
+  );
+  MongoModel = mongoose.model("CanteenDB", dbSchema);
+}
 
-  const empty = {
-       users: [
-      {
-        id: 1,
-        name: "Quản trị viên",
-        email: "admin@vwa.vn",
-        password: bcrypt.hashSync("123456", 10),
-        role: "ADMIN",
-        status: "Hoạt động",
-        phone: "0900000001",
-        points: 0,
-        created_at: "2025-01-01T00:00:00.000Z",
-      },
-      {
-        id: 2,
-        name: "Trần Văn Trí",
-        email: "nhanvien@vwa.vn",
-        password: bcrypt.hashSync("123456", 10),
-        role: "EMPLOYEE",
-        status: "Hoạt động",
-        phone: "",
-        points: 50,
-        created_at: "2025-01-01T00:00:00.000Z",
-      },
-      {
-        id: 3,
-        name: "Trần Văn Trí",
-        email: "sinhvien@vwa.vn",
-        password: bcrypt.hashSync("123456", 10),
-        role: "CUSTOMER",
-        status: "Hoạt động",
-        phone: "",
-        points: 1959,
-        created_at: "2025-01-01T00:00:00.000Z",
-      },
+// ============================================================
+// SEED DATA — Dùng khi DB chưa có (lần đầu)
+// ============================================================
+function buildSeedData() {
+  return {
+    users: [
+      { id: 1, name: "Quản trị viên", email: "admin@vwa.vn", password: bcrypt.hashSync("123456", 10), role: "ADMIN", status: "Hoạt động", phone: "0900000001", points: 0, created_at: "2025-01-01T00:00:00.000Z" },
+      { id: 2, name: "Trần Văn Trí", email: "nhanvien@vwa.vn", password: bcrypt.hashSync("123456", 10), role: "EMPLOYEE", status: "Hoạt động", phone: "", points: 50, created_at: "2025-01-01T00:00:00.000Z" },
+      { id: 3, name: "Trần Văn Trí", email: "sinhvien@vwa.vn", password: bcrypt.hashSync("123456", 10), role: "CUSTOMER", status: "Hoạt động", phone: "", points: 1959, created_at: "2025-01-01T00:00:00.000Z" },
     ],
     menu_items: [],
     categories: [
@@ -79,32 +64,70 @@ function initDBIfNeeded() {
     shifts: [],
     wallets: [],
     wallet_transactions: [],
-    settings: {
-      bank: "VCB",
-      account: "",
-      accountName: "CANTEEN VWA",
-      hotline: "",
-      email: "admin@vwa.vn",
-      address: "",
-      qrCustomImage: "",
-    },
+    settings: { bank: "VCB", account: "", accountName: "CANTEEN VWA", hotline: "", email: "admin@vwa.vn", address: "", qrCustomImage: "" },
   };
-
-  fs.writeFileSync(DB_FILE, JSON.stringify(empty, null, 2), "utf-8");
-  console.log("✅ Đã tạo DB với 3 user mặc định:");
-  console.log("   👤 admin@vwa.vn / 123456");
-  console.log("   👤 nhanvien@vwa.vn / 123456");
-  console.log("   👤 sinhvien@vwa.vn / 123456");
 }
 
-// Gọi ngay khi khởi động server → đảm bảo DB tồn tại
-initDBIfNeeded();
+async function initMongo() {
+  if (!MONGO_URI || !MongoModel) {
+    console.log("⚠️ Không có MONGO_URI → dùng file JSON local");
+    if (!fs.existsSync(DB_FILE)) {
+      const seed = buildSeedData();
+      fs.writeFileSync(DB_FILE, JSON.stringify(seed, null, 2), "utf-8");
+      dbCache = seed;
+      console.log("✅ Đã tạo file DB seed");
+    } else {
+      dbCache = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
+    }
+    return false;
+  }
+
+  try {
+    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 10000 });
+    console.log("✅ Đã kết nối MongoDB");
+
+    let doc = await MongoModel.findById("main");
+    if (!doc) {
+      console.log("📦 DB chưa có trên MongoDB → khởi tạo seed...");
+      const seed = buildSeedData();
+      await MongoModel.create({ _id: "main", data: seed });
+      dbCache = seed;
+      console.log("✅ Đã seed DB lên MongoDB");
+      console.log("   👤 admin@vwa.vn / 123456");
+      console.log("   👤 nhanvien@vwa.vn / 123456");
+      console.log("   👤 sinhvien@vwa.vn / 123456");
+    } else {
+      dbCache = doc.data;
+      console.log(
+        "✅ Đã load DB từ MongoDB: " +
+          (dbCache.menu_items?.length || 0) + " món, " +
+          (dbCache.users?.length || 0) + " users"
+      );
+    }
+    return true;
+  } catch (e) {
+    console.error("❌ MongoDB lỗi:", e.message);
+    console.log("⚠️ Fallback sang file JSON local");
+    return false;
+  }
+}
 
 function loadDB() {
+  if (dbCache) return dbCache;
   return JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
 }
+
 function saveDB(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+  dbCache = data;
+  if (MONGO_URI && MongoModel) {
+    MongoModel.updateOne(
+      { _id: "main" },
+      { $set: { data: data } },
+      { upsert: true }
+    ).catch((e) => console.error("Mongo save error:", e.message));
+  } else {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+  }
 }
 
 function notifyNewOrder(db, order) {
@@ -2014,4 +2037,8 @@ app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
 });
 
 
-app.listen(PORT, () => console.log("?? API (JSON): http://localhost:" + PORT));
+initMongo().then(() => {
+  app.listen(PORT, () =>
+    console.log("🚀 API (JSON): http://localhost:" + PORT)
+  );
+});
