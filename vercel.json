@@ -10,7 +10,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://canteen-vwa-api.onrender.com/api/$1"
+      "destination": "https://canteen-goo.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",
