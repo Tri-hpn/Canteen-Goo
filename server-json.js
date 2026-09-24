@@ -1,0 +1,1928 @@
+import express from "express";
+import cors from "cors";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+dotenv.config();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DB_FILE = path.join(__dirname, "canteen-db.json");
+
+function loadDB() {
+  return JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
+}
+function saveDB(data) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+
+function notifyNewOrder(db, order) {
+  if (!db.notifications) db.notifications = [];
+  const staff = db.users.filter(u => u.role === "ADMIN" || u.role === "EMPLOYEE");
+  staff.forEach(s => {
+    const id = Math.max(0, ...db.notifications.map(n => n.id)) + 1;
+    db.notifications.push({
+      id, user_id: s.id,
+      title: "Đơn hàng mới",
+      content: order.customer_name + " vừa đặt đơn " + order.code + " (" + order.total.toLocaleString("vi-VN") + "d)",
+      type: "order",
+      link: s.role === "ADMIN" ? "/owner" : "/employee/orders",
+      read: false, created_at: new Date().toISOString()
+    });
+  });
+}
+
+function notifyOrderStatus(db, order, newStatus) {
+  if (!db.notifications) db.notifications = [];
+  const id = Math.max(0, ...db.notifications.map(n => n.id)) + 1;
+  db.notifications.push({
+    id, user_id: order.customer_id,
+    title: "Đơn hàng " + order.code + " đã " + newStatus.toLowerCase(),
+    content: "Đơn hàng của bạn đang ở trạng thái: " + newStatus,
+    type: "status", link: "/customer/orders", read: false,
+    created_at: new Date().toISOString()
+  });
+}
+
+const app = express();
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    /.vercel.app$/,
+    /.onrender.com$/
+  ],
+  credentials: true
+}));
+app.use(express.json({ limit: "10mb" }));
+
+const JWT_SECRET = process.env.JWT_SECRET || "canteen_vwa_json_secret_2026";
+
+function auth(roles = []) {
+  return (req, res, next) => {
+    const header = req.headers.authorization || "";
+    const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+    if (!token) return res.status(401).json({ message: "Chua dang nh?p" });
+    try {
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (roles.length && !roles.includes(payload.role))
+        return res.status(403).json({ message: "Không có quyền" });
+      req.user = payload;
+      next();
+    } catch {
+      res.status(401).json({ message: "Token không hợp lệ" });
+    }
+  };
+}
+
+// ============ AUTH ============
+app.post("/api/auth/login", (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.status(400).json({ message: "Thiếu email/mật khẩu" });
+    const db = loadDB();
+    const user = db.users.find(u => u.email === email.toLowerCase());
+    if (!user) return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
+    const ok = bcrypt.compareSync(password, user.password);
+    if (!ok) return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+  } catch (e) {
+    console.error("LOGIN ERROR:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.post("/api/auth/register", (req, res) => {
+  try {
+    const { email, password, name, phone } = req.body || {};
+    if (!email || !password || !name) return res.status(400).json({ message: "Thiếu thông tin" });
+    if (password.length < 6) return res.status(400).json({ message: "Mật khẩu phải từ 6 ký tự" });
+    const db = loadDB();
+    if (db.users.find(u => u.email === email.toLowerCase()))
+      return res.status(400).json({ message: "Email đã được sử dụng" });
+    const hash = bcrypt.hashSync(password, 10);
+    const id = Math.max(0, ...db.users.map(u => u.id)) + 1;
+    const user = { id, email: email.toLowerCase(), password: hash, name, phone: phone || "", role: "CUSTOMER", status: "Hoạt động", points: 0 };
+    db.users.push(user);
+    saveDB(db);
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: "7d" });
+    res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ CHANGE PASSWORD ============
+app.put("/api/auth/password", auth(), (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Thieu thong tin" });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "Mat khau phai tu 6 ky tu" });
+    }
+    const db = loadDB();
+    const u = db.users.find(x => x.id === req.user.id);
+    if (!u) return res.status(404).json({ message: "Khong tim thay user" });
+    const ok = bcrypt.compareSync(currentPassword, u.password);
+    if (!ok) return res.status(401).json({ message: "Mat khau hien tai khong dung" });
+    u.password = bcrypt.hashSync(newPassword, 10);
+    saveDB(db);
+    res.json({ ok: true, message: "Doi mat khau thanh cong" });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.get("/api/auth/me", auth(), (req, res) => {
+  const db = loadDB();
+  const u = db.users.find(x => x.id === req.user.id);
+  if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
+  res.json({ id: u.id, email: u.email, name: u.name, role: u.role, points: u.points || 0, phone: u.phone || "", address: u.address || "", avatar: u.avatar || "" });
+});
+
+app.put("/api/auth/profile", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const u = db.users.find(x => x.id === req.user.id);
+    if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
+    const { name, phone, avatar, address, email } = req.body;
+    if (email && email !== u.email) {
+      const emailNorm = email.toLowerCase().trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm))
+        return res.status(400).json({ message: "Email không hợp lệ" });
+      if (db.users.find(x => x.id !== u.id && x.email === emailNorm))
+        return res.status(400).json({ message: "Email đã được sử dụng" });
+      u.email = emailNorm;
+    }
+    if (name !== undefined && name.trim()) u.name = name.trim();
+    if (phone !== undefined) u.phone = phone.trim();
+    if (avatar !== undefined) u.avatar = avatar;
+    if (address !== undefined) u.address = address.trim();
+    saveDB(db);
+    res.json({ id: u.id, email: u.email, name: u.name, role: u.role, phone: u.phone, avatar: u.avatar, address: u.address, points: u.points });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ MENU ============
+app.get("/api/menu", (req, res) => {
+  const db = loadDB();
+  const { q = "", category = "T?t c?" } = req.query;
+  let items = db.menu_items.filter(m => m.active);
+  if (q) items = items.filter(m => m.name.toLowerCase().includes(q.toLowerCase()));
+  if (category && category !== "T?t c?") items = items.filter(m => m.category === category);
+  res.json(items);
+});
+
+app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  const id = Math.max(0, ...db.menu_items.map(m => m.id)) + 1;
+  const body = { ...req.body };
+  if (body.original_price && body.discount_percent !== undefined) {
+    if (body.discount_percent > 0) {
+      body.price = Math.round(body.original_price * (1 - body.discount_percent / 100));
+    } else {
+      body.price = body.original_price;
+    }
+  }
+  const item = { id, active: 1, sold: 0, ...body };
+  db.menu_items.push(item);
+  saveDB(db);
+  res.status(201).json(item);
+});
+
+app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const i = db.menu_items.findIndex(m => m.id == req.params.id);
+    if (i < 0) return res.status(404).json({ message: "Không tìm thấy món" });
+    const oldItem = db.menu_items[i];
+    const newData = { ...req.body };
+    if (newData.original_price && newData.discount_percent !== undefined) {
+      if (newData.discount_percent > 0) {
+        newData.price = Math.round(newData.original_price * (1 - newData.discount_percent / 100));
+      } else {
+        newData.price = newData.original_price;
+      }
+    }
+    if (newData.price && newData.price !== oldItem.price) {
+      if (!db.price_history) db.price_history = [];
+      const historyId = Math.max(0, ...db.price_history.map(h => h.id)) + 1;
+      db.price_history.push({
+        id: historyId, menu_item_id: oldItem.id, menu_item_name: oldItem.name,
+        old_price: oldItem.price, new_price: newData.price,
+        changed_by: req.user.name, changed_by_id: req.user.id,
+        reason: newData.reason || "", created_at: new Date().toISOString()
+      });
+    }
+    delete newData.reason;
+    db.menu_items[i] = { ...oldItem, ...newData };
+    saveDB(db);
+    res.json({ ok: true, item: db.menu_items[i] });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.get("/api/price-history", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  const { menu_item_id } = req.query;
+  let list = db.price_history || [];
+  if (menu_item_id) list = list.filter(h => h.menu_item_id == menu_item_id);
+  list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  res.json(list);
+});
+
+app.delete("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  db.menu_items = db.menu_items.filter(m => m.id != req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ============ USERS ============
+app.get("/api/users", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const { role } = req.query;
+  const list = role ? db.users.filter(u => u.role === role) : db.users;
+  res.json(list.map(u => ({ ...u, password: undefined })));
+});
+
+app.post("/api/users", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const id = Math.max(0, ...db.users.map(u => u.id)) + 1;
+  const hash = bcrypt.hashSync(req.body.password || "123456", 10);
+  const user = { id, email: req.body.email, password: hash, name: req.body.name, phone: req.body.phone || "", role: req.body.role || "EMPLOYEE", status: "Hoạt động", points: 0 };
+  db.users.push(user);
+  saveDB(db);
+  res.status(201).json({ ...user, password: undefined });
+});
+
+app.put("/api/users/:id", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const i = db.users.findIndex(u => u.id == req.params.id);
+  if (i >= 0) {
+    const data = { ...req.body };
+    if (data.password) data.password = bcrypt.hashSync(data.password, 10);
+    else delete data.password;
+    db.users[i] = { ...db.users[i], ...data };
+  }
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.delete("/api/users/:id", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  db.users = db.users.filter(u => u.id != req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ============ ORDERS ============
+app.post("/api/orders", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const { items, payment = "Ti?n mật", note = "", discount = 0, voucherCode } = req.body;
+    if (!items?.length) return res.status(400).json({ message: "Giỏ hàng trống" });
+    let subtotal = 0;
+    const detailed = items.map(it => {
+      const m = db.menu_items.find(x => x.id == it.menuItem);
+      if (!m) throw new Error("Món không tồn tại");
+      if (m.stock < it.qty) throw new Error(m.name + " không d? hàng");
+      subtotal += m.price * it.qty;
+      m.stock -= it.qty;
+      m.sold += it.qty;
+      return { menu_item_id: m.id, name: m.name, price: m.price, qty: it.qty };
+    });
+    const total = Math.max(0, subtotal - discount);
+
+    // === WALLET PAYMENT: tru tien vi neu chon thanh toan bang Vi ===
+    if (payment === "Ví Canteen" || payment === "WALLET") {
+      if (!db.wallets) db.wallets = [];
+      let wallet = db.wallets.find(w => w.user_id === req.user.id);
+      if (!wallet) {
+        wallet = { user_id: req.user.id, balance: 0, created_at: new Date().toISOString() };
+        db.wallets.push(wallet);
+      }
+      if (wallet.balance < total) {
+        throw new Error("Số dư ví không đủ. Vui lòng nạp thêm " + (total - wallet.balance).toLocaleString("vi-VN") + "đ");
+      }
+      wallet.balance -= total;
+      wallet.updated_at = new Date().toISOString();
+
+      if (!db.wallet_transactions) db.wallet_transactions = [];
+      const wtxId = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
+      db.wallet_transactions.push({
+        id: wtxId,
+        code: "PAY" + Date.now().toString().slice(-8),
+        user_id: req.user.id,
+        user_name: req.user.name,
+        user_email: req.user.email,
+        type: "payment",
+        amount: total,
+        method: "WALLET",
+        status: "approved",
+        note: "Thanh toán đơn hàng",
+        order_code: "",
+        created_at: new Date().toISOString(),
+        approved_at: new Date().toISOString()
+      });
+    }
+    const pointsEarned = Math.floor(total * 0.01);
+    const customer = db.users.find(u => u.id === req.user.id);
+    if (customer) customer.points = (customer.points || 0) + pointsEarned;
+    const id = Math.max(0, ...db.orders.map(o => o.id)) + 1;
+    const code = "VWA-" + Date.now().toString().slice(-8);
+    // Cap nhat order_code vao wallet transaction vua tao (neu co)
+    if ((payment === "Ví Canteen" || payment === "WALLET") && db.wallet_transactions) {
+      const lastWTx = db.wallet_transactions[db.wallet_transactions.length - 1];
+      if (lastWTx && lastWTx.user_id === req.user.id && lastWTx.type === "payment" && !lastWTx.order_code) {
+        lastWTx.order_code = code;
+        lastWTx.note = "Thanh toán đơn " + code;
+      }
+    }
+    const order = { id, code, customer_id: req.user.id, customer_name: req.user.name, subtotal, discount, total, points_earned: pointsEarned, status: "Chờ xác nhận", payment, note, items: detailed, created_at: new Date().toISOString() };
+    db.orders.push(order);
+
+    if (voucherCode) {
+      const vc = (db.vouchers || []).find(v =>
+        v.code.toUpperCase() === voucherCode.toUpperCase() &&
+        v.user_id === req.user.id &&
+        !v.used
+      );
+      if (vc) {
+        vc.used = true;
+        vc.used_at = new Date().toISOString();
+        vc.order_code = order.code;
+      }
+    }
+
+    notifyNewOrder(db, order);
+    saveDB(db);
+    res.status(201).json({ ...order, _id: order.id });
+  } catch (e) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+app.get("/api/orders/me", auth(), (req, res) => {
+  const db = loadDB();
+  const enrich = (o) => {
+    const items = (o.items || []).map(it => {
+      const menu = (db.menu_items || []).find(m => m.id == it.menu_item_id);
+      return { ...it, image: menu?.image || "", category: menu?.category || "" };
+    });
+    return { ...o, items, _id: o.id };
+  };
+  res.json(db.orders.filter(o => o.customer_id === req.user.id).map(enrich));
+});
+
+app.get("/api/orders", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  const { status } = req.query;
+  let list = db.orders;
+  if (status && status !== "T?t c?") {
+    list = list.filter(o => o.status === status);
+  }
+  res.json(list.map(o => ({ ...o, _id: o.id })));
+});
+
+app.patch("/api/orders/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  const o = db.orders.find(x => x.id == req.params.id);
+  if (o) {
+    o.status = req.body.status;
+    o.updated_at = new Date().toISOString();
+    notifyOrderStatus(db, o, req.body.status);
+  }
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.post("/api/orders/:id/received", auth(), (req, res) => {
+  const db = loadDB();
+  const o = db.orders.find(x => x.id == req.params.id);
+  if (!o) return res.status(404).json({ message: "Không tìm thấy đơn" });
+  if (o.customer_id !== req.user.id) return res.status(403).json({ message: "Không có quyền" });
+  if (o.status !== "Sẵn sàng nhận") return res.status(400).json({ message: "Đơn chưa sẵn sàng nhận" });
+  o.status = "Hoàn thành";
+  o.received_at = new Date().toISOString();
+  const customer = db.users.find(u => u.id === o.customer_id);
+  if (customer) customer.points = (customer.points || 0) + 5;
+  notifyOrderStatus(db, o, "Hoàn thành");
+  saveDB(db);
+  res.json({ ok: true, order: o });
+});
+
+app.post("/api/orders/:id/cancel", auth(), (req, res) => {
+  const db = loadDB();
+  const o = db.orders.find(x => x.id == req.params.id);
+  if (!o) return res.status(404).json({ message: "Không tìm thấy đơn" });
+  if (o.customer_id !== req.user.id) return res.status(403).json({ message: "Không có quyền" });
+  if (o.status !== "Chờ xác nhận") return res.status(400).json({ message: "Chỉ hủy được đơn chờ xác nhận" });
+  o.status = "Đã hủy";
+  notifyOrderStatus(db, o, "Đã hủy");
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ============ REVIEWS ============
+app.get("/api/reviews/can-review/:menuItemId", auth(), (req, res) => {
+  const db = loadDB();
+  const menuItemId = req.params.menuItemId;
+  const hasReviewed = (db.reviews || []).some(r =>
+    r.user_id === req.user.id && r.menu_item_id == menuItemId
+  );
+  res.json({ canReview: !hasReviewed, hasPurchased: true, hasReviewed });
+});
+
+app.get("/api/reviews/me", auth(), (req, res) => {
+  const db = loadDB();
+  const list = (db.reviews || []).filter(r => r.user_id === req.user.id);
+  res.json(list);
+});
+
+app.get("/api/reviews/:menuItemId", (req, res) => {
+  const db = loadDB();
+  const reviews = (db.reviews || []).filter(r => r.menu_item_id == req.params.menuItemId);
+  res.json(reviews);
+});
+
+app.post("/api/reviews", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const { menuItemId, rating, comment } = req.body;
+    if (!menuItemId || !rating) return res.status(400).json({ message: "Thiếu thông tin" });
+    if (rating < 1 || rating > 5) return res.status(400).json({ message: "Đánh giá phải 1-5 sao" });
+
+    if (!db.reviews) db.reviews = [];
+
+    const alreadyReviewed = db.reviews.find(r =>
+      r.user_id === req.user.id && r.menu_item_id == menuItemId
+    );
+    if (alreadyReviewed) {
+      return res.status(400).json({ message: "Ban da danh gia mon nay roi" });
+    }
+
+    const id = Math.max(0, ...db.reviews.map(r => r.id)) + 1;
+    const review = {
+      id,
+      menu_item_id: menuItemId,
+      user_id: req.user.id,
+      user_name: req.user.name,
+      rating: +rating,
+      comment: comment || "",
+      created_at: new Date().toISOString()
+    };
+    db.reviews.push(review);
+
+    const itemReviews = db.reviews.filter(r => r.menu_item_id == menuItemId);
+    const avgRating = itemReviews.reduce((s, r) => s + r.rating, 0) / itemReviews.length;
+    const mi = db.menu_items.find(m => m.id == menuItemId);
+    if (mi) {
+      mi.rating = Math.round(avgRating * 10) / 10;
+      mi.review_count = itemReviews.length;
+    }
+    const authorUser = db.users.find(u => u.id === req.user.id);
+    if (authorUser) {
+      authorUser.points = (authorUser.points || 0) + 10;
+    }
+    saveDB(db);
+    res.status(201).json({ ...review, pointsEarned: 10 });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ POINTS ============
+app.get("/api/points/me", auth(), (req, res) => {
+  const db = loadDB();
+  const u = db.users.find(x => x.id === req.user.id);
+  if (!u) return res.status(404).json({ message: "Khong tim thay user" });
+  
+  const orderHistory = (db.orders || [])
+    .filter(o => o.customer_id === req.user.id)
+    .map(o => ({ code: o.code, total: o.total, points: o.points_earned || 0, date: o.created_at, type: "earn" }));
+  
+  const voucherHistory = (db.vouchers || [])
+    .filter(v => v.user_id === req.user.id)
+    .map(v => ({ code: v.code, total: v.value, points: -(v.points_used || 0), date: v.created_at, type: "redeem", used: v.used || false }));
+  
+  const history = [...orderHistory, ...voucherHistory]
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  
+  res.json({ points: u.points || 0, history });
+});
+
+app.post("/api/points/redeem", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const { points } = req.body;
+    if (!points || points < 100) return res.status(400).json({ message: "Cần ít nhất 100 điểm" });
+    const u = db.users.find(x => x.id === req.user.id);
+    if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
+    if ((u.points || 0) < points) return res.status(400).json({ message: "Không d? di?m" });
+    u.points -= points;
+    const value = points * 100;
+    if (!db.vouchers) db.vouchers = [];
+    const voucherId = Math.max(0, ...db.vouchers.map(v => v.id)) + 1;
+    const code = "VOUCHER" + String(voucherId).padStart(4, "0");
+    const voucher = { id: voucherId, code, user_id: req.user.id, value, points_used: points, used: false, created_at: new Date().toISOString() };
+    db.vouchers.push(voucher);
+    saveDB(db);
+    res.status(201).json(voucher);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ ADMIN VOUCHERS ============
+app.get("/api/vouchers", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  res.json((db.vouchers || []).sort((a, b) => (b.id || 0) - (a.id || 0)));
+});
+
+app.post("/api/vouchers", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.vouchers) db.vouchers = [];
+    const { code, value, user_id, points_used } = req.body;
+    if (!code || !value) return res.status(400).json({ message: "Thieu ma hoac gia tri" });
+    const id = Math.max(0, ...db.vouchers.map(v => v.id)) + 1;
+    const voucher = {
+      id,
+      code: code.toUpperCase(),
+      value: +value,
+      user_id: user_id ? +user_id : null,
+      points_used: +points_used || 0,
+      used: false,
+      created_at: new Date().toISOString()
+    };
+    db.vouchers.push(voucher);
+    saveDB(db);
+    res.status(201).json(voucher);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.put("/api/vouchers/:id", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const v = (db.vouchers || []).find(x => x.id == req.params.id);
+  if (!v) return res.status(404).json({ message: "Khong tim thay" });
+  if (req.body.value !== undefined) v.value = +req.body.value;
+  if (req.body.used !== undefined) v.used = req.body.used;
+  if (req.body.code) v.code = req.body.code.toUpperCase();
+  saveDB(db);
+  res.json({ ok: true, voucher: v });
+});
+
+app.delete("/api/vouchers/:id", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  db.vouchers = (db.vouchers || []).filter(x => x.id != req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.get("/api/vouchers/me", auth(), (req, res) => {
+  const db = loadDB();
+  res.json((db.vouchers || []).filter(v => v.user_id === req.user.id));
+});
+
+app.post("/api/vouchers/validate", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ message: "Thiếu mã voucher" });
+    const voucher = (db.vouchers || []).find(v => v.code.toUpperCase() === code.toUpperCase() && v.user_id === req.user.id && !v.used);
+    if (!voucher) return res.status(404).json({ message: "Mã voucher không hợp lệ hoặc đã dùng" });
+    res.json({ valid: true, value: voucher.value, code: voucher.code });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ PUBLIC VOUCHERS (uu dai toan he thong) ============
+app.get("/api/vouchers/public", auth(), (req, res) => {
+  const db = loadDB();
+  const myVouchers = (db.vouchers || []).filter(v => v.user_id === req.user.id);
+  const claimedIds = myVouchers.map(v => v.claimed_from).filter(Boolean);
+
+  const publicVouchers = (db.vouchers || []).filter(v =>
+    !v.user_id &&
+    !v.used &&
+    !claimedIds.includes(v.id)
+  ).sort((a, b) => (b.value || 0) - (a.value || 0));
+
+  res.json(publicVouchers);
+});
+
+app.post("/api/vouchers/claim/:id", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const template = (db.vouchers || []).find(v =>
+      v.id == req.params.id && !v.user_id
+    );
+    if (!template) return res.status(404).json({ message: "Voucher khong ton tai hoac da het" });
+
+    const alreadyClaimed = (db.vouchers || []).find(v =>
+      v.user_id === req.user.id && v.claimed_from === template.id
+    );
+    if (alreadyClaimed) return res.status(400).json({ message: "Ban da nhan voucher nay roi" });
+
+    const id = Math.max(0, ...db.vouchers.map(v => v.id)) + 1;
+    const newVoucher = {
+      id,
+      code: template.code + "-U" + req.user.id,
+      value: template.value,
+      user_id: req.user.id,
+      points_used: 0,
+      used: false,
+      claimed_from: template.id,
+      created_at: new Date().toISOString()
+    };
+    db.vouchers.push(newVoucher);
+    saveDB(db);
+    res.status(201).json({ ok: true, voucher: newVoucher });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ PROMOTIONS (mon giam gia) ============
+app.get("/api/promotions", (req, res) => {
+  const db = loadDB();
+  const list = (db.menu_items || []).filter(m =>
+    m.active && m.discount_percent && m.discount_percent > 0
+  ).map(m => ({
+    id: m.id,
+    name: m.name,
+    image: m.image,
+    category: m.category,
+    description: m.description,
+    original_price: m.original_price || m.price,
+    price: m.price,
+    discount_percent: m.discount_percent,
+    stock: m.stock,
+    sold: m.sold || 0,
+    rating: m.rating || 0
+  }));
+  res.json(list);
+});
+// ============ CATEGORIES (DANH MUC MON AN) ============
+const DEFAULT_CATEGORIES = [
+  { id: 1, name: "Com", icon: "??", order: 1 },
+  { id: 2, name: "Món mặn", icon: "??", order: 2 },
+  { id: 3, name: "Món chay", icon: "??", order: 3 },
+  { id: 4, name: "Món phụ", icon: "??", order: 4 },
+  { id: 5, name: "Đồ ăn nhanh", icon: "??", order: 5 },
+  { id: 6, name: "Đồ uống", icon: "??", order: 6 },
+  { id: 7, name: "Combo", icon: "??", order: 7 }
+];
+
+function ensureCategories(db) {
+  if (!db.categories || !Array.isArray(db.categories) || db.categories.length === 0) {
+    db.categories = [...DEFAULT_CATEGORIES];
+  }
+  return db.categories;
+}
+
+app.get("/api/categories", (req, res) => {
+  const db = loadDB();
+  const cats = ensureCategories(db);
+  saveDB(db);
+  res.json([...cats].sort((a, b) => (a.order || 0) - (b.order || 0)));
+});
+
+app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  try {
+    const db = loadDB();
+    ensureCategories(db);
+    const { name, icon } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ message: "Thiếu tên danh mục" });
+    const trimmed = name.trim();
+    if (db.categories.find(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+      return res.status(400).json({ message: "Danh mục đã tồn tại" });
+    }
+    const id = Math.max(0, ...db.categories.map(c => c.id)) + 1;
+    const order = Math.max(0, ...db.categories.map(c => c.order || 0)) + 1;
+    const cat = { id, name: trimmed, icon: icon || "???", order };
+    db.categories.push(cat);
+    saveDB(db);
+    res.status(201).json(cat);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  try {
+    const db = loadDB();
+    ensureCategories(db);
+    const cat = db.categories.find(c => c.id == req.params.id);
+    if (!cat) return res.status(404).json({ message: "Không tìm thấy danh mục" });
+    const oldName = cat.name;
+    const { name, icon } = req.body;
+    if (name && name.trim()) {
+      const trimmed = name.trim();
+      if (db.categories.find(c => c.id != req.params.id && c.name.toLowerCase() === trimmed.toLowerCase())) {
+        return res.status(400).json({ message: "Tên danh mục đã tồn tại" });
+      }
+      cat.name = trimmed;
+      if (trimmed !== oldName) {
+        (db.menu_items || []).forEach(m => {
+          if (m.category === oldName) m.category = trimmed;
+        });
+      }
+    }
+    if (icon !== undefined) cat.icon = icon;
+    saveDB(db);
+    res.json(cat);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.delete("/api/categories/:id", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    ensureCategories(db);
+    const cat = db.categories.find(c => c.id == req.params.id);
+    if (!cat) return res.status(404).json({ message: "Không tìm thấy danh mục" });
+    const usedCount = (db.menu_items || []).filter(m => m.category === cat.name).length;
+    if (usedCount > 0) {
+      return res.status(400).json({
+        message: "Không thể xóa — có " + usedCount + " món đang dùng danh mục này"
+      });
+    }
+    db.categories = db.categories.filter(c => c.id != req.params.id);
+    saveDB(db);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+// ============ WALLET (VI CANTEEN) ============
+function getOrCreateWallet(db, userId) {
+  if (!db.wallets) db.wallets = [];
+  let w = db.wallets.find(x => x.user_id === userId);
+  if (!w) {
+    w = {
+      user_id: userId,
+      balance: 0,
+      bank_name: "",
+      bank_account: "",
+      bank_account_name: "",
+      linked_at: "",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    db.wallets.push(w);
+  }
+  return w;
+}
+
+app.get("/api/wallet/me", auth(), (req, res) => {
+  const db = loadDB();
+  const w = getOrCreateWallet(db, req.user.id);
+  saveDB(db);
+  res.json({
+    balance: w.balance || 0,
+    bank_name: w.bank_name || "",
+    bank_account: w.bank_account || "",
+    bank_account_name: w.bank_account_name || "",
+    linked_at: w.linked_at || ""
+  });
+});
+
+app.get("/api/wallet/transactions", auth(), (req, res) => {
+  const db = loadDB();
+  const list = (db.wallet_transactions || [])
+    .filter(t => t.user_id === req.user.id)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 100);
+  res.json(list);
+});
+
+app.post("/api/wallet/deposit", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const { amount, method, note } = req.body;
+    const amt = +amount;
+    if (!amt || amt < 10000) return res.status(400).json({ message: "Số tiền tối thiểu 10.000đ" });
+    if (amt > 50000000) return res.status(400).json({ message: "S? ti?n t?i da 50.000.000d" });
+    if (!["QR", "CASH"].includes(method)) return res.status(400).json({ message: "Phuong th?c không h?p l?" });
+
+    if (!db.wallet_transactions) db.wallet_transactions = [];
+    const id = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
+    const code = "DEP" + Date.now().toString().slice(-8);
+    const tx = {
+      id,
+      code,
+      user_id: req.user.id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      type: "deposit",
+      amount: amt,
+      method,
+      status: "pending",
+      note: note || "",
+      admin_note: "",
+      created_at: new Date().toISOString()
+    };
+    db.wallet_transactions.push(tx);
+    saveDB(db);
+    res.status(201).json({ ok: true, transaction: tx });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.post("/api/wallet/withdraw", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const { amount, note } = req.body;
+    const amt = +amount;
+    if (!amt || amt < 20000) return res.status(400).json({ message: "Số tiền rút tối thiểu 20.000đ" });
+    const w = getOrCreateWallet(db, req.user.id);
+    if (w.balance < amt) return res.status(400).json({ message: "Số dư không đủ" });
+    if (!w.bank_account) return res.status(400).json({ message: "Chưa liên kết tài khoản ngân hàng" });
+
+    if (!db.wallet_transactions) db.wallet_transactions = [];
+    const id = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
+    const code = "WDR" + Date.now().toString().slice(-8);
+    const tx = {
+      id,
+      code,
+      user_id: req.user.id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      type: "withdraw",
+      amount: amt,
+      method: "BANK",
+      status: "pending",
+      note: note || "",
+      admin_note: "",
+      bank_name: w.bank_name,
+      bank_account: w.bank_account,
+      bank_account_name: w.bank_account_name,
+      created_at: new Date().toISOString()
+    };
+    db.wallet_transactions.push(tx);
+    // Tru tam giu so du
+    w.balance -= amt;
+    w.updated_at = new Date().toISOString();
+    saveDB(db);
+    res.status(201).json({ ok: true, transaction: tx, newBalance: w.balance });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.post("/api/wallet/link-bank", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const { bank_name, bank_account, bank_account_name } = req.body;
+    if (!bank_name || !bank_account || !bank_account_name) {
+      return res.status(400).json({ message: "Thiếu thông tin ngân hàng" });
+    }
+    const w = getOrCreateWallet(db, req.user.id);
+    w.bank_name = bank_name;
+    w.bank_account = String(bank_account).trim();
+    w.bank_account_name = bank_account_name.toUpperCase().trim();
+    w.linked_at = new Date().toISOString();
+    w.updated_at = new Date().toISOString();
+    saveDB(db);
+    res.json({ ok: true, wallet: w });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// Admin: danh sach yeu cau cho duyet
+app.get("/api/wallet/requests", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const { status } = req.query;
+  let list = (db.wallet_transactions || []);
+  if (status && status !== "all") {
+    list = list.filter(t => t.status === status);
+  } else {
+    // mac dinh hien pending
+    list = list.filter(t => t.status === "pending");
+  }
+  list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  res.json(list);
+});
+
+// Admin: tat ca giao dich (moi status)
+app.get("/api/wallet/all", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const list = [...(db.wallet_transactions || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  res.json(list);
+});
+
+app.get("/api/wallet/stats", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const all = db.wallet_transactions || [];
+  const wallets = db.wallets || [];
+  res.json({
+    totalBalance: wallets.reduce((s, w) => s + (w.balance || 0), 0),
+    totalUsers: wallets.length,
+    totalDeposited: all.filter(t => t.type === "deposit" && t.status === "approved").reduce((s, t) => s + (t.amount || 0), 0),
+    totalWithdrawn: all.filter(t => t.type === "withdraw" && t.status === "approved").reduce((s, t) => s + (t.amount || 0), 0),
+    totalPaid: all.filter(t => t.type === "payment" && t.status === "approved").reduce((s, t) => s + (t.amount || 0), 0),
+    pendingCount: all.filter(t => t.status === "pending").length,
+    pendingDepositCount: all.filter(t => t.type === "deposit" && t.status === "pending").length,
+    pendingWithdrawCount: all.filter(t => t.type === "withdraw" && t.status === "pending").length
+  });
+});
+
+app.patch("/api/wallet/requests/:id/approve", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const tx = (db.wallet_transactions || []).find(t => t.id == req.params.id);
+    if (!tx) return res.status(404).json({ message: "Khách" });
+    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dich da xu ly" });
+
+    const w = getOrCreateWallet(db, tx.user_id);
+    if (tx.type === "deposit") {
+      w.balance += tx.amount;
+    } else if (tx.type === "withdraw") {
+      // Da tru tam, khong lam gi them
+    }
+    w.updated_at = new Date().toISOString();
+    tx.status = "approved";
+    tx.approved_by = req.user.name;
+    tx.approved_at = new Date().toISOString();
+    if (req.body.admin_note) tx.admin_note = req.body.admin_note;
+    saveDB(db);
+    res.json({ ok: true, transaction: tx, newBalance: w.balance });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.patch("/api/wallet/requests/:id/reject", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const tx = (db.wallet_transactions || []).find(t => t.id == req.params.id);
+    if (!tx) return res.status(404).json({ message: "Khách" });
+    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dich da xu ly" });
+
+    const w = getOrCreateWallet(db, tx.user_id);
+    if (tx.type === "withdraw") {
+      // Hoan lai so du da tru tam
+      w.balance += tx.amount;
+      w.updated_at = new Date().toISOString();
+    }
+    tx.status = "rejected";
+    tx.approved_by = req.user.name;
+    tx.approved_at = new Date().toISOString();
+    if (req.body.admin_note) tx.admin_note = req.body.admin_note;
+    saveDB(db);
+    res.json({ ok: true, transaction: tx });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// Thanh toan bang vi (dung tu checkout)
+app.post("/api/wallet/pay", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const { amount, order_code } = req.body;
+    const amt = +amount;
+    if (!amt || amt <= 0) return res.status(400).json({ message: "So tien khong hop le" });
+    const w = getOrCreateWallet(db, req.user.id);
+    if (w.balance < amt) return res.status(400).json({ message: "So du vi khong du" });
+
+    if (!db.wallet_transactions) db.wallet_transactions = [];
+    const id = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
+    const tx = {
+      id,
+      code: "PAY" + Date.now().toString().slice(-8),
+      user_id: req.user.id,
+      user_name: req.user.name,
+      type: "payment",
+      amount: amt,
+      method: "WALLET",
+      status: "approved",
+      note: "Thanh toan don " + (order_code || ""),
+      order_code: order_code || "",
+      created_at: new Date().toISOString(),
+      approved_at: new Date().toISOString()
+    };
+    db.wallet_transactions.push(tx);
+    w.balance -= amt;
+    w.updated_at = new Date().toISOString();
+    saveDB(db);
+    res.status(201).json({ ok: true, transaction: tx, newBalance: w.balance });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+// ============ VOUCHER STATS & ADMIN ============
+app.get("/api/vouchers/stats", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const all = db.vouchers || [];
+  const publicTemplates = all.filter(v => !v.user_id);
+  const personal = all.filter(v => v.user_id);
+  const used = all.filter(v => v.used);
+
+  let totalClaims = 0;
+  publicTemplates.forEach(t => {
+    totalClaims += all.filter(v => v.claimed_from === t.id).length;
+  });
+
+  res.json({
+    total: all.length,
+    public: publicTemplates.length,
+    personal: personal.length,
+    used: used.length,
+    available: personal.filter(v => !v.used).length,
+    totalClaims,
+    totalValue: all.reduce((s, v) => s + (v.value || 0), 0),
+    usedValue: used.reduce((s, v) => s + (v.value || 0), 0)
+  });
+});
+
+app.get("/api/vouchers/claims/:templateId", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const claims = (db.vouchers || []).filter(v => v.claimed_from == req.params.templateId);
+  const list = claims.map(v => {
+    const user = db.users.find(u => u.id === v.user_id);
+    return {
+      id: v.id,
+      code: v.code,
+      user_id: v.user_id,
+      user_name: user?.name || "User #" + v.user_id,
+      user_email: user?.email || "",
+      used: v.used,
+      used_at: v.used_at,
+      created_at: v.created_at
+    };
+  });
+  res.json(list);
+});
+
+app.get("/api/vouchers/user/:userId", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const userId = +req.params.userId;
+  const user = db.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ message: "Khong tim thay user" });
+  const list = (db.vouchers || []).filter(v => v.user_id === userId);
+  res.json({
+    user: { id: user.id, name: user.name, email: user.email, phone: user.phone, points: user.points || 0 },
+    vouchers: list,
+    stats: {
+      total: list.length,
+      used: list.filter(v => v.used).length,
+      available: list.filter(v => !v.used).length,
+      totalValue: list.reduce((s, v) => s + (v.value || 0), 0)
+    }
+  });
+});
+
+app.delete("/api/vouchers/revoke/:id", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const v = (db.vouchers || []).find(x => x.id == req.params.id);
+  if (!v) return res.status(404).json({ message: "Khong tim thay voucher" });
+  if (v.used) return res.status(400).json({ message: "Khong the thu hoi voucher da dung" });
+  db.vouchers = db.vouchers.filter(x => x.id != req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
+// ============ CHAT ============
+function normalizeUserId(id) {
+  if (id === undefined || id === null) return null;
+  const n = Number(id);
+  return isNaN(n) ? id : n;
+}
+
+app.get("/api/chat/conversations", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  const convMap = {};
+  (db.messages || []).forEach((m) => {
+    const uid = normalizeUserId(m.user_id);
+    if (uid === null) return;
+    if (!convMap[uid]) {
+      convMap[uid] = { user_id: uid, user_name: m.user_name || "Khách", last_message: m.content, last_time: m.created_at, unread: 0 };
+    }
+    if (m.from === "customer" && !m.read) convMap[uid].unread += 1;
+    if (new Date(m.created_at) > new Date(convMap[uid].last_time)) {
+      convMap[uid].last_message = m.content;
+      convMap[uid].last_time = m.created_at;
+      convMap[uid].user_name = m.user_name || convMap[uid].user_name;
+    }
+  });
+  res.json(Object.values(convMap).sort((a, b) => new Date(b.last_time) - new Date(a.last_time)));
+});
+
+app.get("/api/chat/me", auth(), (req, res) => {
+  const db = loadDB();
+  const myId = normalizeUserId(req.user.id);
+  const list = (db.messages || []).filter((m) => normalizeUserId(m.user_id) === myId).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  res.json(list);
+});
+
+app.get("/api/chat/with/:userId", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  const targetId = normalizeUserId(req.params.userId);
+  const list = (db.messages || []).filter((m) => normalizeUserId(m.user_id) === targetId).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  let changed = false;
+  (db.messages || []).forEach((m) => {
+    if (normalizeUserId(m.user_id) === targetId && m.from === "customer" && !m.read) {
+      m.read = true;
+      changed = true;
+    }
+  });
+  if (changed) saveDB(db);
+  res.json(list);
+});
+
+app.post("/api/chat/send", auth(), (req, res) => {
+  try {
+    const db = loadDB();
+    const { content, toUserId } = req.body;
+    if (!content?.trim()) return res.status(400).json({ message: "Tin nhắn trống" });
+    if (!db.messages) db.messages = [];
+    const id = Math.max(0, ...db.messages.map((m) => m.id)) + 1;
+    const isStaff = req.user.role === "ADMIN" || req.user.role === "EMPLOYEE";
+    let userId, userName;
+    if (isStaff) {
+      userId = normalizeUserId(toUserId);
+      if (userId === null) return res.status(400).json({ message: "Thiếu toUserId" });
+      const customer = db.users.find((u) => normalizeUserId(u.id) === userId);
+      userName = customer?.name || "Khách";
+    } else {
+      userId = normalizeUserId(req.user.id);
+      userName = req.user.name;
+    }
+    const message = { id, user_id: userId, user_name: userName, from: isStaff ? "staff" : "customer", from_name: req.user.name, content: content.trim(), read: false, created_at: new Date().toISOString() };
+    db.messages.push(message);
+    saveDB(db);
+    res.status(201).json(message);
+  } catch (e) {
+    console.error("CHAT SEND ERROR:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ NOTIFICATIONS ============
+app.get("/api/notifications", auth(), (req, res) => {
+  const db = loadDB();
+  const list = (db.notifications || []).filter(n => n.user_id === req.user.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50);
+  const unread = list.filter(n => !n.read).length;
+  res.json({ list, unread });
+});
+
+app.post("/api/notifications/:id/read", auth(), (req, res) => {
+  const db = loadDB();
+  const n = (db.notifications || []).find(x => x.id == req.params.id && x.user_id === req.user.id);
+  if (n) n.read = true;
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.post("/api/notifications/read-all", auth(), (req, res) => {
+  const db = loadDB();
+  (db.notifications || []).forEach(n => { if (n.user_id === req.user.id) n.read = true; });
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ============ TOPPINGS & SIZES ============
+app.get("/api/toppings", (req, res) => {
+  const db = loadDB();
+  const { category } = req.query;
+  let list = db.toppings || [];
+  if (category) list = list.filter(t => t.applies_to?.includes(category));
+  res.json(list);
+});
+
+app.get("/api/sizes", (req, res) => {
+  const db = loadDB();
+  res.json(db.sizes || [
+    { id: "S", name: "Nhỏ", extra_price: 0 },
+    { id: "M", name: "Vừa", extra_price: 5000 },
+    { id: "L", name: "Lớn", extra_price: 10000 }
+  ]);
+});
+
+// ============ STATS ============
+app.get("/api/stats", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  const today = new Date().toISOString().slice(0, 10);
+  const todayOrders = db.orders.filter(o => o.created_at?.startsWith(today));
+  const byStatus = {};
+  db.orders.forEach(o => { byStatus[o.status] = (byStatus[o.status] || 0) + 1; });
+  res.json({
+    revenue: todayOrders.reduce((s, o) => s + o.total, 0),
+    orderCount: todayOrders.length,
+    customerCount: db.users.filter(u => u.role === "CUSTOMER").length,
+    lowStock: db.inventory.filter(i => i.qty < i.min).length,
+    byStatus: Object.entries(byStatus).map(([_id, count]) => ({ _id, count }))
+  });
+});
+
+// ============ INVENTORY ============
+app.get("/api/inventory", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  res.json(db.inventory);
+});
+
+app.post("/api/inventory", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.inventory) db.inventory = [];
+    const { code, name, qty, unit, min } = req.body;
+    if (!code || !name) return res.status(400).json({ message: "Thiếu mã hoặc tên" });
+    if (db.inventory.find(x => x.code === code)) return res.status(400).json({ message: "Mã nguyên liệu đã tồn tại" });
+    const item = { code, name, qty: +qty || 0, unit: unit || "kg", min: +min || 0 };
+    db.inventory.push(item);
+    saveDB(db);
+    res.status(201).json(item);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.put("/api/inventory/:code", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const item = db.inventory?.find(x => x.code === req.params.code);
+    if (!item) return res.status(404).json({ message: "Không tìm thấy nguyên liệu" });
+    Object.assign(item, req.body);
+    saveDB(db);
+    res.json(item);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.delete("/api/inventory/:code", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  db.inventory = (db.inventory || []).filter(x => x.code !== req.params.code);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.post("/api/inventory/:code/import", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const item = db.inventory?.find(x => x.code === req.params.code);
+    if (!item) return res.status(404).json({ message: "Không tìm thấy nguyên liệu" });
+    const { qty, note, supplier } = req.body;
+    if (!qty || +qty <= 0) return res.status(400).json({ message: "Số lượng không hợp lệ" });
+    const importQty = +qty;
+    const before = item.qty;
+    item.qty += importQty;
+    item.last_import = new Date().toISOString();
+    if (!db.imports) db.imports = [];
+    const id = Math.max(0, ...db.imports.map(i => i.id)) + 1;
+    const record = { id, code: item.code, name: item.name, qty: importQty, before, after: item.qty, unit: item.unit, supplier: supplier || "", note: note || "", imported_by: req.user.name, imported_by_id: req.user.id, created_at: new Date().toISOString() };
+    db.imports.push(record);
+    saveDB(db);
+    res.status(201).json({ message: "Nhập kho thành công", item, record });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.get("/api/inventory/imports", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  res.json((db.imports || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+});
+
+// ============ ATTENDANCE ============
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.attendances) db.attendances = [];
+    const today = todayStr();
+    const now = new Date();
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+
+    const { shift: bodyShift } = req.body || {};
+    let shift = bodyShift || "";
+    if (!shift) {
+      if (hour >= 6 && hour < 12) shift = "Ca sáng";
+      else if (hour >= 12 && hour < 18) shift = "Ca chiều";
+      else if (hour >= 18 && hour < 22) shift = "Ca tối";
+      else shift = "Ngoài giờ";
+    }
+
+    // Kiem tra da check-in CA NAY chua (khong phai ca nao cung duoc)
+    const existing = db.attendances.find(a =>
+      a.employee_id === req.user.id &&
+      a.date === today &&
+      a.shift === shift &&
+      a.checkIn
+    );
+    if (existing) {
+      return res.status(400).json({ message: "Bạn đã check-in " + shift + " hôm nay rồi" });
+    }
+
+    // Tinh gio chuan cua ca
+    const SHIFT_START = { "Ca sáng": 6, "Ca chiều": 12, "Ca tối": 18 };
+    const SHIFT_END = { "Ca sáng": 12, "Ca chiều": 18, "Ca tối": 22 };
+    const startHour = SHIFT_START[shift] || 8;
+    const late = hour > startHour || (hour === startHour && minute > 15);
+
+    const status = late ? "Đi muộn" : "Đúng giờ";
+    const id = Math.max(0, ...db.attendances.map(a => a.id)) + 1;
+    const attendance = {
+      id,
+      employee_id: req.user.id,
+      employee_name: req.user.name,
+      date: today,
+      shift,
+      checkIn: now.toISOString(),
+      checkOut: null,
+      hours: 0,
+      status,
+      note: "",
+      created_at: now.toISOString()
+    };
+    db.attendances.push(attendance);
+    saveDB(db);
+    res.status(201).json({ message: "Check-in " + shift + " thành công", attendance });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const today = todayStr();
+    const now = new Date();
+
+    const { shift: bodyShift } = req.body || {};
+    let shift = bodyShift || "";
+    if (!shift) {
+      const hour = now.getHours();
+      if (hour >= 6 && hour < 12) shift = "Ca sáng";
+      else if (hour >= 12 && hour < 18) shift = "Ca chiều";
+      else if (hour >= 18 && hour < 22) shift = "Ca tối";
+      else shift = "Ngoài giờ";
+    }
+
+    // Tim attendance cua ca nay chua check-out
+    const att = db.attendances?.find(a =>
+      a.employee_id === req.user.id &&
+      a.date === today &&
+      a.shift === shift &&
+      a.checkIn &&
+      !a.checkOut
+    );
+    if (!att) return res.status(400).json({ message: "Bạn chưa check-in " + shift + " hôm nay" });
+
+    att.checkOut = now.toISOString();
+    att.hours = Math.round(((now - new Date(att.checkIn)) / 3600000) * 100) / 100;
+    if (now.getHours() < 17 && att.status === "Đúng giờ") att.status = "Về sớm";
+    saveDB(db);
+    res.json({ message: "Check-out " + shift + " thành công", attendance: att });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.get("/api/attendance/today", auth(), (req, res) => {
+  const db = loadDB();
+  const today = todayStr();
+  const att = (db.attendances || []).find(a => a.employee_id === req.user.id && a.date === today);
+  res.json(att || null);
+});
+
+app.get("/api/attendance/me", auth(), (req, res) => {
+  const db = loadDB();
+  const list = (db.attendances || []).filter(a => a.employee_id === req.user.id);
+  res.json(list.sort((a, b) => b.date.localeCompare(a.date)));
+});
+
+app.get("/api/attendance", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  let list = db.attendances || [];
+  const { from, to, employee_id, month } = req.query;
+  if (month) list = list.filter(a => a.date && a.date.startsWith(month));
+  else if (from && to) list = list.filter(a => a.date >= from && a.date <= to);
+  if (employee_id) list = list.filter(a => a.employee_id == employee_id);
+  list.sort((a, b) => b.date.localeCompare(a.date));
+  res.json(list);
+});
+
+app.get("/api/attendance/employees", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const list = db.users.filter(u => u.role === "EMPLOYEE");
+  res.json(list.map(u => ({ id: u.id, name: u.name, role: u.role })));
+});
+
+// ============ PERMISSIONS ============
+const ALL_PERMISSIONS = [
+  { key: "menu.view", label: "Xem th?c don" },
+  { key: "menu.create", label: "Thêm món" },
+  { key: "menu.update", label: "S?a món" },
+  { key: "menu.toggle", label: "T?t / B?t món" },
+  { key: "menu.delete", label: "Xóa món" },
+  { key: "orders.view", label: "Xem don hàng" },
+  { key: "orders.process", label: "Xử lý đơn hàng" },
+  { key: "orders.cancel", label: "H?y don hàng" },
+  { key: "inventory.view", label: "Xem kho" },
+  { key: "inventory.import", label: "Nh?p kho" },
+  { key: "inventory.manage", label: "Quản lý kho" },
+  { key: "customers.view", label: "Xem khách hàng" },
+  { key: "customers.manage", label: "Quản lý khách hàng" },
+  { key: "employees.view", label: "Xem nhân viên" },
+  { key: "employees.manage", label: "Quản lý nhân viên" },
+  { key: "attendance.view", label: "Xem chờm công" },
+  { key: "attendance.manage", label: "Quản lý chấm công" },
+  { key: "reports.view", label: "Xem báo cáo" },
+  { key: "backup.export", label: "Xu?t backup" },
+  { key: "backup.import", label: "Nh?p backup" },
+  { key: "backup.reset", label: "Reset database" },
+  { key: "settings.view", label: "Xem cài đặt" },
+  { key: "settings.manage", label: "Quản lý cài đặt" }
+];
+
+const ROLE_PERMISSIONS = {
+  ADMIN: ALL_PERMISSIONS.map(p => p.key),
+  EMPLOYEE: ["menu.view", "menu.update", "orders.view", "orders.process", "inventory.view", "inventory.import", "customers.view", "attendance.view"],
+  CUSTOMER: []
+};
+
+app.get("/api/permissions", auth(["ADMIN"]), (req, res) => {
+  res.json({ all: ALL_PERMISSIONS, roles: ROLE_PERMISSIONS });
+});
+
+app.get("/api/permissions/me", auth(), (req, res) => {
+  const db = loadDB();
+  const u = db.users.find(x => x.id === req.user.id);
+  if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
+  const rolePerms = ROLE_PERMISSIONS[u.role] || [];
+  const customPerms = u.permissions || [];
+  const allPerms = [...new Set([...rolePerms, ...customPerms])];
+  res.json({ role: u.role, permissions: allPerms, default: rolePerms, custom: customPerms });
+});
+
+app.get("/api/permissions/:userId", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const u = db.users.find(x => x.id == req.params.userId);
+  if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
+  const rolePerms = ROLE_PERMISSIONS[u.role] || [];
+  const customPerms = u.permissions || [];
+  const allPerms = [...new Set([...rolePerms, ...customPerms])];
+  res.json({ userId: u.id, userName: u.name, role: u.role, permissions: allPerms, default: rolePerms, custom: customPerms });
+});
+
+app.put("/api/permissions/:userId", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const u = db.users.find(x => x.id == req.params.userId);
+    if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
+    if (u.role === "ADMIN") return res.status(400).json({ message: "Không th? s?a quyền ADMIN" });
+    const { custom } = req.body;
+    if (!Array.isArray(custom)) return res.status(400).json({ message: "custom phải là array" });
+    u.permissions = custom.filter(p => ALL_PERMISSIONS.some(ap => ap.key === p));
+    saveDB(db);
+    res.json({ ok: true, user: { id: u.id, permissions: u.permissions } });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ BACKUP ============
+app.get("/api/backup/export", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  res.json({ version: "1.0", exported_at: new Date().toISOString(), exported_by: req.user.name, data: db });
+});
+
+app.post("/api/backup/import", auth(["ADMIN"]), (req, res) => {
+  try {
+    const { data } = req.body;
+    if (!data) return res.status(400).json({ message: "File backup không hợp lệ" });
+    if (!data.users || !data.menu_items) return res.status(400).json({ message: "File backup thiếu dữ liệu cần thiết" });
+    const current = loadDB();
+    const backupFile = path.join(__dirname, "canteen-db-auto-backup-" + Date.now() + ".json");
+    fs.writeFileSync(backupFile, JSON.stringify(current, null, 2), "utf-8");
+    saveDB(data);
+    res.json({ message: "Import thành công!", stats: { users: data.users?.length || 0, menu_items: data.menu_items?.length || 0, orders: data.orders?.length || 0, inventory: data.inventory?.length || 0 }, auto_backup_saved: path.basename(backupFile) });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.get("/api/backup/stats", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    res.json({
+      users: db.users?.length || 0,
+      customers: db.users?.filter(u => u.role === "CUSTOMER").length || 0,
+      employees: db.users?.filter(u => u.role === "EMPLOYEE").length || 0,
+      menu_items: db.menu_items?.length || 0,
+      orders: db.orders?.length || 0,
+      inventory: db.inventory?.length || 0,
+      toppings: db.toppings?.length || 0,
+      sizes: db.sizes?.length || 0,
+      reviews: db.reviews?.length || 0,
+      vouchers: db.vouchers?.length || 0,
+      notifications: db.notifications?.length || 0,
+      messages: db.messages?.length || 0,
+      attendances: db.attendances?.length || 0,
+      imports: db.imports?.length || 0,
+      price_history: db.price_history?.length || 0,
+      db_size_bytes: JSON.stringify(db).length
+    });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ REPORTS ============
+app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const { period = "day" } = req.query;
+    const now = new Date();
+
+    const completedOrders = (db.orders || []).filter(o => o.status === "Hoan thanh" || o.status === "Hoàn thành");
+
+    let result = [];
+    let totalRevenue = 0;
+    let totalOrders = 0;
+
+    if (period === "day") {
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const dayOrders = completedOrders.filter(o => (o.created_at || "").startsWith(dateStr));
+        const revenue = dayOrders.reduce((s, o) => s + (o.total || 0), 0);
+        const dayLabel = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][d.getDay()];
+        result.push({ label: dayLabel, date: dateStr, revenue, orders: dayOrders.length });
+        totalRevenue += revenue;
+        totalOrders += dayOrders.length;
+      }
+    } else if (period === "week") {
+      for (let i = 3; i >= 0; i--) {
+        const weekEnd = new Date(now);
+        weekEnd.setDate(weekEnd.getDate() - i * 7);
+        const weekStart = new Date(weekEnd);
+        weekStart.setDate(weekStart.getDate() - 6);
+        const weekOrders = completedOrders.filter(o => {
+          const d = new Date(o.created_at);
+          return d >= weekStart && d <= weekEnd;
+        });
+        const revenue = weekOrders.reduce((s, o) => s + (o.total || 0), 0);
+        result.push({
+          label: "Tuan " + (4 - i),
+          date: weekStart.toISOString().slice(0, 10) + " - " + weekEnd.toISOString().slice(0, 10),
+          revenue,
+          orders: weekOrders.length
+        });
+        totalRevenue += revenue;
+        totalOrders += weekOrders.length;
+      }
+    } else if (period === "month") {
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const year = d.getFullYear();
+        const month = d.getMonth();
+        const monthOrders = completedOrders.filter(o => {
+          const od = new Date(o.created_at);
+          return od.getFullYear() === year && od.getMonth() === month;
+        });
+        const revenue = monthOrders.reduce((s, o) => s + (o.total || 0), 0);
+        result.push({
+          label: "T" + (month + 1),
+          date: year + "-" + String(month + 1).padStart(2, "0"),
+          revenue,
+          orders: monthOrders.length
+        });
+        totalRevenue += revenue;
+        totalOrders += monthOrders.length;
+      }
+    } else if (period === "year") {
+      for (let i = 4; i >= 0; i--) {
+        const year = now.getFullYear() - i;
+        const yearOrders = completedOrders.filter(o => {
+          const od = new Date(o.created_at);
+          return od.getFullYear() === year;
+        });
+        const revenue = yearOrders.reduce((s, o) => s + (o.total || 0), 0);
+        result.push({ label: String(year), date: String(year), revenue, orders: yearOrders.length });
+        totalRevenue += revenue;
+        totalOrders += yearOrders.length;
+      }
+    }
+
+    const menuSold = {};
+    (db.orders || []).forEach(o => {
+      if (o.status !== "Hoan thanh" && o.status !== "Hoàn thành") return;
+      (o.items || []).forEach(it => {
+        if (!menuSold[it.menu_item_id]) {
+          menuSold[it.menu_item_id] = { id: it.menu_item_id, name: it.name, sold: 0, revenue: 0 };
+        }
+        menuSold[it.menu_item_id].sold += it.qty;
+        menuSold[it.menu_item_id].revenue += it.price * it.qty;
+      });
+    });
+    const topItems = Object.values(menuSold)
+      .sort((a, b) => b.sold - a.sold)
+      .slice(0, 5);
+
+    res.json({
+      period,
+      data: result,
+      totalRevenue,
+      totalOrders,
+      avgOrder: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0,
+      topItems
+    });
+  } catch (e) {
+    console.error("REPORTS ERROR:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ SETTINGS ============
+app.get("/api/settings", auth(), (req, res) => {
+  const db = loadDB();
+  const defaults = {
+    bank: "VCB",
+    account: "1234567890",
+    accountName: "CANTEEN VWA",
+    hotline: "0328 866 959",
+    email: "admin@vwa.vn",
+    address: "68 Nguyen Chi Thanh, P. Lang, Ha Noi",
+    qrCustomImage: ""
+  };
+  res.json({ ...defaults, ...(db.settings || {}) });
+});
+
+app.put("/api/settings", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.settings) db.settings = {};
+    const allowed = ["bank", "account", "accountName", "hotline", "email", "address", "qrCustomImage"];
+    allowed.forEach(k => {
+      if (req.body[k] !== undefined) db.settings[k] = req.body[k];
+    });
+    saveDB(db);
+    res.json({ ok: true, settings: db.settings });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// ============ SHIFTS (QUAN LY CA) ============
+// Nhan vien: lay ca cua minh (gom approved + pending)
+app.get("/api/shifts/me", auth(), (req, res) => {
+  const db = loadDB();
+  const today = new Date().toISOString().slice(0, 10);
+  const list = (db.shifts || [])
+    .filter(s => s.employee_id === req.user.id && s.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  res.json(list);
+});
+
+// Admin: danh sach dang ky cho duyet
+app.get("/api/shifts/pending", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const list = (db.shifts || [])
+    .filter(s => s.status === "pending")
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+  res.json(list);
+});
+
+// Lay danh sach ca (mac dinh chi approved)
+app.get("/api/shifts", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+  const db = loadDB();
+  let list = db.shifts || [];
+  const { date, employee_id, shift, include_pending } = req.query;
+  if (!include_pending) {
+    list = list.filter(s => !s.status || s.status === "approved");
+  }
+  if (date) list = list.filter(s => s.date === date);
+  if (employee_id) list = list.filter(s => s.employee_id == employee_id);
+  if (shift) list = list.filter(s => s.shift === shift);
+  res.json(list);
+});
+
+// Nhan vien tu dang ky ca -> pending
+app.post("/api/shifts/register", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.shifts) db.shifts = [];
+    const { dates, shifts, note } = req.body;
+    if (!dates?.length || !shifts?.length) {
+      return res.status(400).json({ message: "Thiếu thông tin" });
+    }
+    const emp = db.users.find(u => u.id === req.user.id);
+    if (!emp) return res.status(404).json({ message: "Không tìm thấy nhân viên" });
+    let created = 0;
+    let skipped = 0;
+    let nextId = Math.max(0, ...db.shifts.map(s => s.id)) + 1;
+    dates.forEach(date => {
+      shifts.forEach(shift => {
+        const exists = db.shifts.find(s =>
+          s.employee_id === req.user.id && s.date === date && s.shift === shift
+        );
+        if (exists) { skipped++; return; }
+        db.shifts.push({
+          id: nextId++,
+          employee_id: req.user.id,
+          employee_name: emp.name,
+          date,
+          shift,
+          note: note || "",
+          status: "pending",
+          source: "employee",
+          created_by: emp.name,
+          created_at: new Date().toISOString()
+        });
+        created++;
+      });
+    });
+    saveDB(db);
+    res.status(201).json({ created, skipped, message: "Đã đăng ký " + created + " ca" });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// Admin duyet
+app.patch("/api/shifts/:id/approve", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const s = (db.shifts || []).find(x => x.id == req.params.id);
+    if (!s) return res.status(404).json({ message: "Không tìm thấy" });
+    s.status = "approved";
+    s.approved_by = req.user.name;
+    s.approved_at = new Date().toISOString();
+    saveDB(db);
+    res.json({ ok: true, shift: s });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// Admin tu choi
+app.delete("/api/shifts/:id/reject", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  const before = (db.shifts || []).length;
+  db.shifts = (db.shifts || []).filter(x => x.id != req.params.id);
+  saveDB(db);
+  res.json({ ok: true, removed: before - db.shifts.length });
+});
+
+// Bulk create (admin) - status approved
+app.post("/api/shifts/bulk", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.shifts) db.shifts = [];
+    const { employee_id, dates, shifts, note } = req.body;
+    if (!employee_id || !dates?.length || !shifts?.length) {
+      return res.status(400).json({ message: "Thiếu thông tin" });
+    }
+    const emp = db.users.find(u => u.id == employee_id);
+    if (!emp) return res.status(404).json({ message: "Không tìm thấy nhân viên" });
+    let created = 0;
+    let skipped = 0;
+    let nextId = Math.max(0, ...db.shifts.map(s => s.id)) + 1;
+    dates.forEach(date => {
+      shifts.forEach(shift => {
+        const exists = db.shifts.find(s =>
+          s.employee_id == employee_id && s.date === date && s.shift === shift
+        );
+        if (exists) { skipped++; return; }
+        db.shifts.push({
+          id: nextId++,
+          employee_id: +employee_id,
+          employee_name: emp.name,
+          date,
+          shift,
+          note: note || "",
+          status: "approved",
+          source: "admin",
+          created_by: req.user.name,
+          created_at: new Date().toISOString()
+        });
+        created++;
+      });
+    });
+    saveDB(db);
+    res.status(201).json({ created, skipped, message: "Đã phân " + created + " ca" });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.post("/api/shifts", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.shifts) db.shifts = [];
+    const { employee_id, date, shift, note } = req.body;
+    if (!employee_id || !date || !shift) {
+      return res.status(400).json({ message: "Thiếu thông tin" });
+    }
+    const emp = db.users.find(u => u.id == employee_id);
+    if (!emp) return res.status(404).json({ message: "Không tìm thấy nhân viên" });
+    const existing = db.shifts.find(s =>
+      s.employee_id == employee_id && s.date === date && s.shift === shift
+    );
+    if (existing) {
+      return res.status(400).json({ message: "Nhân viên đã được phân ca này rồi" });
+    }
+    const id = Math.max(0, ...db.shifts.map(s => s.id)) + 1;
+    const record = {
+      id,
+      employee_id: +employee_id,
+      employee_name: emp.name,
+      date,
+      shift,
+      note: note || "",
+      status: "approved",
+      source: "admin",
+      created_by: req.user.name,
+      created_at: new Date().toISOString()
+    };
+    db.shifts.push(record);
+    saveDB(db);
+    res.status(201).json(record);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.put("/api/shifts/:id", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const s = (db.shifts || []).find(x => x.id == req.params.id);
+    if (!s) return res.status(404).json({ message: "Không tìm thấy" });
+    if (req.body.date) s.date = req.body.date;
+    if (req.body.shift) s.shift = req.body.shift;
+    if (req.body.note !== undefined) s.note = req.body.note;
+    saveDB(db);
+    res.json(s);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.delete("/api/shifts/:id", auth(["ADMIN"]), (req, res) => {
+  const db = loadDB();
+  db.shifts = (db.shifts || []).filter(x => x.id != req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ============ HEALTH
+app.get("/", (_, res) => res.json({ ok: true, name: "Canteen VWA API (JSON)" }));
+
+const PORT = process.env.PORT || 3000;
+// ============ BACKUP RESET
+app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
+  try {
+    const { confirm } = req.body;
+    if (confirm !== "RESET") {
+      return res.status(400).json({ message: "Can xac nhan 'RESET' de thuc hien" });
+    }
+
+    const db = loadDB();
+
+    // 1. Backup truoc khi reset
+    const backupFile = path.join(__dirname, "canteen-db-auto-backup-" + Date.now() + ".json");
+    fs.writeFileSync(backupFile, JSON.stringify(db, null, 2), "utf-8");
+    console.log("💾 Auto backup: " + path.basename(backupFile));
+
+    // 2. Reset cac collection DONG (giu users, menu_items, inventory, categories, toppings, sizes, settings)
+    db.orders = [];
+    db.wallets = [];
+    db.wallet_transactions = [];
+    db.notifications = [];
+    db.messages = [];
+    db.attendances = [];
+    db.shifts = [];
+    db.imports = [];
+    db.price_history = [];
+    db.reviews = [];
+
+    // 3. Reset vouchers ve 0 (giu lai neu can)
+    // db.vouchers = [];
+
+    // 4. Reset diem user ve 0
+    (db.users || []).forEach(u => { u.points = 0; });
+
+    // 5. Reset stock menu_items ve mac dinh
+    (db.menu_items || []).forEach(m => {
+      if (m.stock !== undefined) m.stock = Math.max(m.stock, 30);
+      m.sold = 0;
+    });
+
+    saveDB(db);
+
+    res.json({
+      ok: true,
+      message: "Reset thanh cong",
+      auto_backup: path.basename(backupFile),
+      stats: {
+        users: db.users.length,
+        menu_items: db.menu_items.length,
+        orders: 0,
+        wallets: 0
+      }
+    });
+  } catch (e) {
+    console.error("RESET ERROR:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+
+app.listen(PORT, () => console.log("?? API (JSON): http://localhost:" + PORT));
