@@ -20,38 +20,39 @@ function initDBIfNeeded() {
   console.log("📦 DB chưa có → khởi tạo với 3 user mặc định...");
 
   const empty = {
-    users: [
+       users: [
       {
         id: 1,
-        name: "Admin",
+        name: "Quản trị viên",
         email: "admin@vwa.vn",
-        password: bcrypt.hashSync("admin123", 10),
+        password: bcrypt.hashSync("123456", 10),
         role: "ADMIN",
         status: "Hoạt động",
-        phone: "",
+        phone: "0900000001",
         points: 0,
-        created_at: new Date().toISOString(),
+        created_at: "2025-01-01T00:00:00.000Z",
       },
       {
         id: 2,
-        name: "Nhân viên Demo",
-        email: "employee@vwa.vn",
-        password: bcrypt.hashSync("employee123", 10),
+        name: "Trần Văn Trí",
+        email: "nhanvien@vwa.vn",
+        password: bcrypt.hashSync("123456", 10),
         role: "EMPLOYEE",
         status: "Hoạt động",
         phone: "",
-        created_at: new Date().toISOString(),
+        points: 50,
+        created_at: "2025-01-01T00:00:00.000Z",
       },
       {
         id: 3,
-        name: "Khách Demo",
-        email: "customer@vwa.vn",
-        password: bcrypt.hashSync("customer123", 10),
+        name: "Trần Văn Trí",
+        email: "sinhvien@vwa.vn",
+        password: bcrypt.hashSync("123456", 10),
         role: "CUSTOMER",
         status: "Hoạt động",
         phone: "",
-        points: 1000,
-        created_at: new Date().toISOString(),
+        points: 1959,
+        created_at: "2025-01-01T00:00:00.000Z",
       },
     ],
     menu_items: [],
@@ -91,9 +92,9 @@ function initDBIfNeeded() {
 
   fs.writeFileSync(DB_FILE, JSON.stringify(empty, null, 2), "utf-8");
   console.log("✅ Đã tạo DB với 3 user mặc định:");
-  console.log("   👤 admin@vwa.vn / admin123");
-  console.log("   👤 employee@vwa.vn / employee123");
-  console.log("   👤 customer@vwa.vn / customer123");
+  console.log("   👤 admin@vwa.vn / 123456");
+  console.log("   👤 nhanvien@vwa.vn / 123456");
+  console.log("   👤 sinhvien@vwa.vn / 123456");
 }
 
 // Gọi ngay khi khởi động server → đảm bảo DB tồn tại
