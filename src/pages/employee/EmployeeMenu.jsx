@@ -3,8 +3,8 @@
 // ============================================================
 // Nhân viên XEM thực đơn + có thể bật/tắt món (ẩn khi hết hàng).
 //
-// Fixes (so với bản gốc):
-//   - Render nút toggle active (function toggleActive trước đó bị dead-code)
+// Fixes:
+//   - Render nút toggle active
 //   - Thêm cột "Đang bán" với badge trạng thái
 //   - Error state + retry, loading state
 //   - Clear search button
@@ -12,13 +12,12 @@
 //   - Image fallback (SVG placeholder khi lỗi)
 //   - Memo filtered
 //   - Auto-refresh 30s (silent)
-//   - Bỏ unused imports (Eye, EyeOff)
+//   - ✅ FIX toggle: optimistic update, custom switch trượt mượt
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Search, X, Loader2, AlertCircle, RefreshCw,
-  ToggleLeft, ToggleRight,
 } from "lucide-react";
 import { api } from "../../api";
 import { money, StatusBadge } from "../../components/UI";
@@ -54,7 +53,7 @@ export default function EmployeeMenu() {
   // ---------- Filters ----------
   const [q, setQ] = useState("");
 
-  // Toggle active per-item (loading map)
+  // Toggle active per-item (dùng để disable button, không đổi icon)
   const [togglingId, setTogglingId] = useState(null);
 
   // ---------- Load ----------
@@ -84,24 +83,35 @@ export default function EmployeeMenu() {
     return () => clearInterval(timer);
   }, [load]);
 
-  // ---------- Toggle active ----------
+  // ---------- Toggle active (optimistic, không load full) ----------
 
   const toggleActive = async (item) => {
     const id = item._id || item.id;
-    if (togglingId !== null) return; // Chỉ cho 1 request tại 1 thời điểm
+    if (togglingId !== null) return;
+
+    const oldActive = item.active;
+    const newActive = oldActive ? 0 : 1;
+
     setTogglingId(id);
 
-    const newActive = item.active ? 0 : 1;
+    // Optimistic update NGAY → nút trượt mượt
+    setItems((list) =>
+      list.map((m) =>
+        (m._id || m.id) === id ? { ...m, active: newActive } : m
+      )
+    );
+
     try {
       await api.menu.update(id, { active: newActive });
-      // Update local state (không cần reload toàn bộ)
+      toast(newActive ? "Đã bật món" : "Đã tắt món", "success");
+      // ❌ KHÔNG gọi load() — giữ animation
+    } catch (e) {
+      // Revert nếu API fail
       setItems((list) =>
         list.map((m) =>
-          (m._id || m.id) === id ? { ...m, active: newActive } : m
+          (m._id || m.id) === id ? { ...m, active: oldActive } : m
         )
       );
-      toast(newActive ? "Đã bật món" : "Đã tắt món", "success");
-    } catch (e) {
       toast(e.message || "Không đổi được trạng thái", "error");
     } finally {
       setTogglingId(null);
@@ -120,7 +130,6 @@ export default function EmployeeMenu() {
     );
   }, [items, q]);
 
-  // Đếm nhanh
   const summary = useMemo(() => {
     const inactive = items.filter((m) => !m.active).length;
     const outOfStock = items.filter((m) => m.stock === 0).length;
@@ -366,6 +375,7 @@ export default function EmployeeMenu() {
                       style={{
                         borderBottom: "1px solid var(--border-color, #eef2f7)",
                         opacity: isActive ? 1 : 0.55,
+                        transition: "opacity 0.2s",
                       }}
                     >
                       {/* Ảnh */}
@@ -460,34 +470,48 @@ export default function EmployeeMenu() {
                         <StatusBadge status={statusLabel} />
                       </td>
 
-                      {/* Nút toggle */}
+                      {/* Toggle — custom switch trượt */}
                       <td style={{ ...tdBase, textAlign: "center" }}>
                         <button
                           onClick={() => toggleActive(m)}
                           disabled={isToggling}
                           title={isActive ? "Tắt món" : "Bật món"}
                           aria-label={isActive ? "Tắt món" : "Bật món"}
+                          aria-pressed={isActive}
+                          role="switch"
                           style={{
-                            background: "transparent",
+                            background: isActive ? "#18a967" : "#cbd5e1",
                             border: 0,
-                            cursor: isToggling ? "not-allowed" : "pointer",
-                            color: isActive ? "#18a967" : "#94a3b8",
-                            padding: 4,
-                            display: "grid",
-                            placeItems: "center",
-                            opacity: isToggling ? 0.5 : 1,
+                            cursor: isToggling ? "wait" : "pointer",
+                            width: 52,
+                            height: 28,
+                            borderRadius: 999,
+                            padding: 0,
+                            position: "relative",
+                            display: "inline-block",
+                            margin: "0 auto",
+                            verticalAlign: "middle",
+                            transition: "background-color 0.25s ease",
+                            boxShadow: isActive
+                              ? "0 2px 8px rgba(24, 169, 103, 0.35)"
+                              : "inset 0 1px 3px rgba(0, 0, 0, 0.08)",
+                            opacity: isToggling ? 0.7 : 1,
                           }}
                         >
-                          {isToggling ? (
-                            <Loader2
-                              size={20}
-                              style={{ animation: "spin 1s linear infinite" }}
-                            />
-                          ) : isActive ? (
-                            <ToggleRight size={24} />
-                          ) : (
-                            <ToggleLeft size={24} />
-                          )}
+                          <span
+                            style={{
+                              position: "absolute",
+                              top: 3,
+                              left: isActive ? 27 : 3,
+                              width: 22,
+                              height: 22,
+                              borderRadius: "50%",
+                              background: "#ffffff",
+                              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+                              transition:
+                                "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                            }}
+                          />
                         </button>
                       </td>
                     </tr>
