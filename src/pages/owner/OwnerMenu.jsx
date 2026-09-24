@@ -18,7 +18,7 @@ import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Plus, Search, Edit, Trash2, FolderPlus, Folder,
-  X, Save, Loader2, AlertCircle, ToggleLeft, ToggleRight,
+  X, Save, Loader2, AlertCircle,
   UtensilsCrossed,
 } from "lucide-react";
 import { api } from "../../api";
@@ -540,34 +540,38 @@ export default function OwnerMenu() {
   title={isActive ? "Tắt món" : "Bật món"}
   aria-label={isActive ? "Tắt món" : "Bật món"}
   aria-pressed={isActive}
+  role="switch"
   style={{
-    background: isActive
-      ? "rgba(24, 169, 103, 0.1)"
-      : "rgba(148, 163, 184, 0.12)",
+    background: isActive ? "#18a967" : "#cbd5e1",
     border: 0,
     cursor: "pointer",
-    color: isActive ? "#18a967" : "#94a3b8",
-    padding: 6,
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    display: "grid",
-    placeItems: "center",
+    width: 52,
+    height: 28,
+    borderRadius: 999,
+    padding: 3,
+    position: "relative",
+    display: "inline-flex",
+    alignItems: "center",
     margin: "0 auto",
-    transition: "all 0.2s",
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.transform = "scale(1.05)";
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.transform = "scale(1)";
+    transition: "background-color 0.25s ease",
+    boxShadow: isActive
+      ? "0 2px 8px rgba(24, 169, 103, 0.35)"
+      : "inset 0 1px 3px rgba(0, 0, 0, 0.08)",
   }}
 >
-  {isActive ? (
-    <ToggleRight size={30} strokeWidth={2.3} />
-  ) : (
-    <ToggleLeft size={30} strokeWidth={2.3} />
-  )}
+  <span
+    style={{
+      position: "absolute",
+      top: 3,
+      left: isActive ? 27 : 3,
+      width: 22,
+      height: 22,
+      borderRadius: "50%",
+      background: "#ffffff",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+      transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+    }}
+  />
 </button>
                         </td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
