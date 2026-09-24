@@ -4,15 +4,16 @@
 // Tính năng:
 //   - Danh sách món + search + filter theo danh mục
 //   - Thêm / Sửa / Xoá món
-//   - Bật / Tắt trạng thái active món
+//   - Bật / Tắt trạng thái active món (optimistic update)
 //   - Quản lý danh mục (CRUD trong modal)
 //
-// Fixes (so với bản gốc):
+// Fixes:
 //   - Fix bug `stock = 0` → dùng `??` thay vì `||`
 //   - Form layout chia rõ: 3 cột giá + cột số lượng
 //   - Image: ưu tiên ImageUploader > URL > ảnh cũ
-//   - ✅ Thay confirm() native bằng ConfirmDialog custom (2 chỗ:
-//     removeItem, removeCat)
+//   - Thay confirm() native bằng ConfirmDialog custom
+//   - ✅ FIX toggle: optimistic update, KHÔNG load() lại full list
+//     → nút trượt mượt, không bị remount reset animation
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -58,7 +59,7 @@ export default function OwnerMenu() {
   const [image, setImage] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // ---------- ✅ Confirm dialog ----------
+  // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -111,7 +112,7 @@ export default function OwnerMenu() {
     return result;
   }, [list, q, filterCat]);
 
-  // ---------- ✅ Confirm helpers ----------
+  // ---------- Confirm helpers ----------
 
   const closeConfirm = useCallback(() => {
     if (confirmBusy) return;
@@ -194,19 +195,45 @@ export default function OwnerMenu() {
     }
   };
 
+  // ============================================================
+  // ✅ TOGGLE ACTIVE — Optimistic update, KHÔNG load()
+  // ------------------------------------------------------------
+  // Vấn đề cũ: gọi load() sau khi update → fetch full list →
+  //   React unmount/remount các row → animation nút toggle bị
+  //   reset, không trượt.
+  //
+  // Fix: setList update local state NGAY → chỉ re-render 1 row
+  //   → nút trượt mượt. Nếu API fail → revert.
+  // ============================================================
   const toggleActive = async (item) => {
-    const newActive = item.active ? 0 : 1;
+    const id = item._id || item.id;
+    const oldActive = item.active;
+    const newActive = oldActive ? 0 : 1;
+
+    // Optimistic update — nút trượt ngay lập tức
+    setList((prev) =>
+      prev.map((m) =>
+        (m._id || m.id) === id ? { ...m, active: newActive } : m
+      )
+    );
+
     try {
-      await api.menu.update(item._id || item.id, { active: newActive });
+      await api.menu.update(id, { active: newActive });
       toast(newActive ? "Đã bật món" : "Đã tắt món", "success");
-      load();
+      // ❌ KHÔNG gọi load() — giữ animation
     } catch (e) {
+      // Revert nếu API fail
+      setList((prev) =>
+        prev.map((m) =>
+          (m._id || m.id) === id ? { ...m, active: oldActive } : m
+        )
+      );
       toast(e.message || "Không đổi được trạng thái", "error");
     }
   };
 
   /**
-   * ✅ Xoá món — dùng ConfirmDialog.
+   * Xoá món — dùng ConfirmDialog.
    */
   const removeItem = (item) => {
     setConfirm({
@@ -269,7 +296,7 @@ export default function OwnerMenu() {
   };
 
   /**
-   * ✅ Xoá danh mục — dùng ConfirmDialog.
+   * Xoá danh mục — dùng ConfirmDialog.
    */
   const removeCat = (cat) => {
     setConfirm({
@@ -396,7 +423,7 @@ export default function OwnerMenu() {
             padding: 20,
           }}
         >
-                    {loading && (
+          {loading && (
             <SkeletonTable
               columns={7}
               rows={5}
@@ -434,6 +461,7 @@ export default function OwnerMenu() {
                         style={{
                           borderBottom: "1px solid var(--border-color, #eef2f7)",
                           opacity: isActive ? 1 : 0.5,
+                          transition: "opacity 0.2s",
                         }}
                       >
                         <td style={tdStyle}>
@@ -535,44 +563,45 @@ export default function OwnerMenu() {
                           {m.stock}
                         </td>
                         <td style={{ ...tdStyle, textAlign: "center" }}>
- <button
-  onClick={() => toggleActive(m)}
-  title={isActive ? "Tắt món" : "Bật món"}
-  aria-label={isActive ? "Tắt món" : "Bật món"}
-  aria-pressed={isActive}
-  role="switch"
-  style={{
-    background: isActive ? "#18a967" : "#cbd5e1",
-    border: 0,
-    cursor: "pointer",
-    width: 52,
-    height: 28,
-    borderRadius: 999,
-    padding: 3,
-    position: "relative",
-    display: "inline-flex",
-    alignItems: "center",
-    margin: "0 auto",
-    transition: "background-color 0.25s ease",
-    boxShadow: isActive
-      ? "0 2px 8px rgba(24, 169, 103, 0.35)"
-      : "inset 0 1px 3px rgba(0, 0, 0, 0.08)",
-  }}
->
-  <span
-    style={{
-      position: "absolute",
-      top: 3,
-      left: isActive ? 27 : 3,
-      width: 22,
-      height: 22,
-      borderRadius: "50%",
-      background: "#ffffff",
-      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-      transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-    }}
-  />
-</button>
+                          <button
+                            onClick={() => toggleActive(m)}
+                            title={isActive ? "Tắt món" : "Bật món"}
+                            aria-label={isActive ? "Tắt món" : "Bật món"}
+                            aria-pressed={isActive}
+                            role="switch"
+                            style={{
+                              background: isActive ? "#18a967" : "#cbd5e1",
+                              border: 0,
+                              cursor: "pointer",
+                              width: 52,
+                              height: 28,
+                              borderRadius: 999,
+                              padding: 0,
+                              position: "relative",
+                              display: "inline-block",
+                              margin: "0 auto",
+                              verticalAlign: "middle",
+                              transition: "background-color 0.25s ease",
+                              boxShadow: isActive
+                                ? "0 2px 8px rgba(24, 169, 103, 0.35)"
+                                : "inset 0 1px 3px rgba(0, 0, 0, 0.08)",
+                            }}
+                          >
+                            <span
+                              style={{
+                                position: "absolute",
+                                top: 3,
+                                left: isActive ? 27 : 3,
+                                width: 22,
+                                height: 22,
+                                borderRadius: "50%",
+                                background: "#ffffff",
+                                boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+                                transition:
+                                  "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                              }}
+                            />
+                          </button>
                         </td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
                           <div
@@ -636,7 +665,7 @@ export default function OwnerMenu() {
           <Modal onClose={() => !catLoading && setShowCatModal(false)} maxWidth={520}>
             <div style={modalHeaderStyle}>
               <h3 style={modalTitleStyle}>
-                <Folder size={20} style={{ color: "#2634d5" }} /> Quản lý danh mục
+                <Folder size={20} style={{ color: "#0EA5E9" }} /> Quản lý danh mục
               </h3>
               <button
                 onClick={() => !catLoading && setShowCatModal(false)}
@@ -718,7 +747,7 @@ export default function OwnerMenu() {
                   style={{
                     padding: "10px 16px",
                     background:
-                      !catForm.name.trim() || catLoading ? "#94a3b8" : "#2634d5",
+                      !catForm.name.trim() || catLoading ? "#94a3b8" : "#0EA5E9",
                     color: "#fff",
                     border: 0,
                     borderRadius: 8,
@@ -840,7 +869,7 @@ export default function OwnerMenu() {
                   <IconButton
                     onClick={() => openEditCat(cat)}
                     title="Sửa"
-                    color="#2634d5"
+                    color="#0EA5E9"
                   >
                     <Edit size={14} />
                   </IconButton>
@@ -1092,7 +1121,7 @@ export default function OwnerMenu() {
       </div>
 
       {/* ============================================================
-          ✅ CONFIRM DIALOG (removeItem / removeCat)
+          CONFIRM DIALOG (removeItem / removeCat)
           ============================================================ */}
       {confirm && (
         <ConfirmDialog
@@ -1297,7 +1326,7 @@ const btnPrimaryStyle = {
   justifyContent: "center",
   gap: 8,
   padding: "10px 16px",
-  background: "#2634d5",
+  background: "#0EA5E9",
   color: "#fff",
   border: 0,
   borderRadius: 10,
@@ -1312,9 +1341,9 @@ const btnOutlineStyle = {
   alignItems: "center",
   gap: 8,
   background: "var(--card-bg, #fff)",
-  color: "#2634d5",
+  color: "#0EA5E9",
   padding: "10px 16px",
-  border: "1px solid #2634d5",
+  border: "1px solid #0EA5E9",
   borderRadius: 10,
   fontWeight: 600,
   cursor: "pointer",
