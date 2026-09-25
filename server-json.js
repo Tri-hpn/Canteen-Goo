@@ -138,7 +138,7 @@ function notifyNewOrder(db, order) {
     db.notifications.push({
       id, user_id: s.id,
       title: "Đơn hàng mới",
-      content: order.customer_name + " vừa đặt đơn " + order.code + " (" + order.total.toLocaleString("vi-VN") + "d)",
+      content: order.customer_name + " vừa đặt đơn " + order.code + " (" + order.total.toLocaleString("vi-VN") + "đ)",
       type: "order",
       link: s.role === "ADMIN" ? "/owner" : "/employee/orders",
       read: false, created_at: new Date().toISOString()
@@ -163,20 +163,26 @@ app.use(cors({
   origin: [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    /.vercel.app$/,
-    /.onrender.com$/
+    /\.vercel\.app$/,
+    /\.onrender\.com$/
   ],
   credentials: true
 }));
 app.use(express.json({ limit: "10mb" }));
 
-const JWT_SECRET = process.env.JWT_SECRET || "canteen_vwa_json_secret_2026";
+// ✅ FIX #7: JWT_SECRET bắt buộc — không fallback
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("❌ FATAL: JWT_SECRET chưa được set trong env!");
+  console.error("   Render: Settings → Environment Variables → Add JWT_SECRET");
+  process.exit(1);
+}
 
 function auth(roles = []) {
   return (req, res, next) => {
     const header = req.headers.authorization || "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-    if (!token) return res.status(401).json({ message: "Chua dang nh?p" });
+    if (!token) return res.status(401).json({ message: "Chưa đăng nhập" });
     try {
       const payload = jwt.verify(token, JWT_SECRET);
       if (roles.length && !roles.includes(payload.role))
@@ -232,19 +238,19 @@ app.put("/api/auth/password", auth(), (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: "Thieu thong tin" });
+      return res.status(400).json({ message: "Thiếu thông tin" });
     }
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: "Mat khau phai tu 6 ky tu" });
+      return res.status(400).json({ message: "Mật khẩu phải từ 6 ký tự" });
     }
     const db = loadDB();
     const u = db.users.find(x => x.id === req.user.id);
-    if (!u) return res.status(404).json({ message: "Khong tim thay user" });
+    if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
     const ok = bcrypt.compareSync(currentPassword, u.password);
-    if (!ok) return res.status(401).json({ message: "Mat khau hien tai khong dung" });
+    if (!ok) return res.status(401).json({ message: "Mật khẩu hiện tại không đúng" });
     u.password = bcrypt.hashSync(newPassword, 10);
     saveDB(db);
-    res.json({ ok: true, message: "Doi mat khau thanh cong" });
+    res.json({ ok: true, message: "Đổi mật khẩu thành công" });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -286,31 +292,53 @@ app.put("/api/auth/profile", auth(), (req, res) => {
 app.get("/api/menu", (req, res) => {
   const db = loadDB();
   const { q = "", category = "Tất cả", all } = req.query;
-  // all=1 → trả về TẤT CẢ món (kể cả đã tắt) — dùng cho Owner/Employee
-  // Không có all → chỉ món active — dùng cho Customer
   let items = all === "1" ? [...db.menu_items] : db.menu_items.filter(m => m.active);
   if (q) items = items.filter(m => m.name.toLowerCase().includes(q.toLowerCase()));
   if (category && category !== "Tất cả") items = items.filter(m => m.category === category);
   res.json(items);
 });
 
+// ✅ FIX #2: Validate discount_percent + price
 app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
-  const db = loadDB();
-  const id = Math.max(0, ...db.menu_items.map(m => m.id)) + 1;
-  const body = { ...req.body };
-  if (body.original_price && body.discount_percent !== undefined) {
-    if (body.discount_percent > 0) {
-      body.price = Math.round(body.original_price * (1 - body.discount_percent / 100));
-    } else {
-      body.price = body.original_price;
+  try {
+    const db = loadDB();
+    const id = Math.max(0, ...db.menu_items.map(m => m.id)) + 1;
+    const body = { ...req.body };
+
+    // Validate
+    if (!body.name || !body.name.trim()) {
+      return res.status(400).json({ message: "Tên món không được để trống" });
     }
+    if (body.price !== undefined && (isNaN(Number(body.price)) || Number(body.price) < 0)) {
+      return res.status(400).json({ message: "Giá không được âm" });
+    }
+    if (body.discount_percent !== undefined) {
+      const d = Number(body.discount_percent);
+      if (isNaN(d) || d < 0 || d > 90) {
+        return res.status(400).json({ message: "Giảm giá phải từ 0-90%" });
+      }
+    }
+    if (body.original_price !== undefined && (isNaN(Number(body.original_price)) || Number(body.original_price) < 0)) {
+      return res.status(400).json({ message: "Giá gốc không được âm" });
+    }
+
+    if (body.original_price && body.discount_percent !== undefined) {
+      if (body.discount_percent > 0) {
+        body.price = Math.round(body.original_price * (1 - body.discount_percent / 100));
+      } else {
+        body.price = body.original_price;
+      }
+    }
+    const item = { id, active: 1, sold: 0, ...body };
+    db.menu_items.push(item);
+    saveDB(db);
+    res.status(201).json(item);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
   }
-  const item = { id, active: 1, sold: 0, ...body };
-  db.menu_items.push(item);
-  saveDB(db);
-  res.status(201).json(item);
 });
 
+// ✅ FIX #2: Validate discount_percent + price cho PUT
 app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
@@ -318,6 +346,21 @@ app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     if (i < 0) return res.status(404).json({ message: "Không tìm thấy món" });
     const oldItem = db.menu_items[i];
     const newData = { ...req.body };
+
+    // Validate
+    if (newData.price !== undefined && (isNaN(Number(newData.price)) || Number(newData.price) < 0)) {
+      return res.status(400).json({ message: "Giá không được âm" });
+    }
+    if (newData.discount_percent !== undefined) {
+      const d = Number(newData.discount_percent);
+      if (isNaN(d) || d < 0 || d > 90) {
+        return res.status(400).json({ message: "Giảm giá phải từ 0-90%" });
+      }
+    }
+    if (newData.original_price !== undefined && (isNaN(Number(newData.original_price)) || Number(newData.original_price) < 0)) {
+      return res.status(400).json({ message: "Giá gốc không được âm" });
+    }
+
     if (newData.original_price && newData.discount_percent !== undefined) {
       if (newData.discount_percent > 0) {
         newData.price = Math.round(newData.original_price * (1 - newData.discount_percent / 100));
@@ -397,18 +440,17 @@ app.delete("/api/users/:id", auth(["ADMIN"]), (req, res) => {
   saveDB(db);
   res.json({ ok: true });
 });
-
 // ============ ORDERS ============
 app.post("/api/orders", auth(), (req, res) => {
   try {
     const db = loadDB();
-    const { items, payment = "Ti?n mật", note = "", discount = 0, voucherCode } = req.body;
+    const { items, payment = "Tiền mặt", note = "", discount = 0, voucherCode } = req.body;
     if (!items?.length) return res.status(400).json({ message: "Giỏ hàng trống" });
     let subtotal = 0;
     const detailed = items.map(it => {
       const m = db.menu_items.find(x => x.id == it.menuItem);
       if (!m) throw new Error("Món không tồn tại");
-      if (m.stock < it.qty) throw new Error(m.name + " không d? hàng");
+      if (m.stock < it.qty) throw new Error(m.name + " không đủ hàng");
       subtotal += m.price * it.qty;
       m.stock -= it.qty;
       m.sold += it.qty;
@@ -416,7 +458,6 @@ app.post("/api/orders", auth(), (req, res) => {
     });
     const total = Math.max(0, subtotal - discount);
 
-    // === WALLET PAYMENT: tru tien vi neu chon thanh toan bang Vi ===
     if (payment === "Ví Canteen" || payment === "WALLET") {
       if (!db.wallets) db.wallets = [];
       let wallet = db.wallets.find(w => w.user_id === req.user.id);
@@ -453,7 +494,6 @@ app.post("/api/orders", auth(), (req, res) => {
     if (customer) customer.points = (customer.points || 0) + pointsEarned;
     const id = Math.max(0, ...db.orders.map(o => o.id)) + 1;
     const code = "VWA-" + Date.now().toString().slice(-8);
-    // Cap nhat order_code vao wallet transaction vua tao (neu co)
     if ((payment === "Ví Canteen" || payment === "WALLET") && db.wallet_transactions) {
       const lastWTx = db.wallet_transactions[db.wallet_transactions.length - 1];
       if (lastWTx && lastWTx.user_id === req.user.id && lastWTx.type === "payment" && !lastWTx.order_code) {
@@ -501,22 +541,34 @@ app.get("/api/orders", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   const db = loadDB();
   const { status } = req.query;
   let list = db.orders;
-  if (status && status !== "T?t c?") {
+  if (status && status !== "Tất cả") {
     list = list.filter(o => o.status === status);
   }
   res.json(list.map(o => ({ ...o, _id: o.id })));
 });
 
+// ✅ FIX #5: Validate status
+const VALID_ORDER_STATUSES = ["Chờ xác nhận", "Đã xác nhận", "Đang chuẩn bị", "Sẵn sàng nhận", "Hoàn thành", "Đã hủy"];
+
 app.patch("/api/orders/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
-  const db = loadDB();
-  const o = db.orders.find(x => x.id == req.params.id);
-  if (o) {
-    o.status = req.body.status;
+  try {
+    const db = loadDB();
+    const o = db.orders.find(x => x.id == req.params.id);
+    if (!o) return res.status(404).json({ message: "Không tìm thấy đơn" });
+
+    const newStatus = req.body.status;
+    if (!VALID_ORDER_STATUSES.includes(newStatus)) {
+      return res.status(400).json({ message: "Trạng thái không hợp lệ: " + newStatus });
+    }
+
+    o.status = newStatus;
     o.updated_at = new Date().toISOString();
-    notifyOrderStatus(db, o, req.body.status);
+    notifyOrderStatus(db, o, newStatus);
+    saveDB(db);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
   }
-  saveDB(db);
-  res.json({ ok: true });
 });
 
 app.post("/api/orders/:id/received", auth(), (req, res) => {
@@ -581,7 +633,7 @@ app.post("/api/reviews", auth(), (req, res) => {
       r.user_id === req.user.id && r.menu_item_id == menuItemId
     );
     if (alreadyReviewed) {
-      return res.status(400).json({ message: "Ban da danh gia mon nay roi" });
+      return res.status(400).json({ message: "Bạn đã đánh giá món này rồi" });
     }
 
     const id = Math.max(0, ...db.reviews.map(r => r.id)) + 1;
@@ -618,19 +670,19 @@ app.post("/api/reviews", auth(), (req, res) => {
 app.get("/api/points/me", auth(), (req, res) => {
   const db = loadDB();
   const u = db.users.find(x => x.id === req.user.id);
-  if (!u) return res.status(404).json({ message: "Khong tim thay user" });
-  
+  if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
+
   const orderHistory = (db.orders || [])
     .filter(o => o.customer_id === req.user.id)
     .map(o => ({ code: o.code, total: o.total, points: o.points_earned || 0, date: o.created_at, type: "earn" }));
-  
+
   const voucherHistory = (db.vouchers || [])
     .filter(v => v.user_id === req.user.id)
     .map(v => ({ code: v.code, total: v.value, points: -(v.points_used || 0), date: v.created_at, type: "redeem", used: v.used || false }));
-  
+
   const history = [...orderHistory, ...voucherHistory]
     .sort((a, b) => new Date(b.date) - new Date(a.date));
-  
+
   res.json({ points: u.points || 0, history });
 });
 
@@ -641,7 +693,7 @@ app.post("/api/points/redeem", auth(), (req, res) => {
     if (!points || points < 100) return res.status(400).json({ message: "Cần ít nhất 100 điểm" });
     const u = db.users.find(x => x.id === req.user.id);
     if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
-    if ((u.points || 0) < points) return res.status(400).json({ message: "Không d? di?m" });
+    if ((u.points || 0) < points) return res.status(400).json({ message: "Không đủ điểm" });
     u.points -= points;
     const value = points * 100;
     if (!db.vouchers) db.vouchers = [];
@@ -667,7 +719,7 @@ app.post("/api/vouchers", auth(["ADMIN"]), (req, res) => {
     const db = loadDB();
     if (!db.vouchers) db.vouchers = [];
     const { code, value, user_id, points_used } = req.body;
-    if (!code || !value) return res.status(400).json({ message: "Thieu ma hoac gia tri" });
+    if (!code || !value) return res.status(400).json({ message: "Thiếu mã hoặc giá trị" });
     const id = Math.max(0, ...db.vouchers.map(v => v.id)) + 1;
     const voucher = {
       id,
@@ -687,7 +739,7 @@ app.post("/api/vouchers", auth(["ADMIN"]), (req, res) => {
 app.put("/api/vouchers/:id", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const v = (db.vouchers || []).find(x => x.id == req.params.id);
-  if (!v) return res.status(404).json({ message: "Khong tim thay" });
+  if (!v) return res.status(404).json({ message: "Không tìm thấy" });
   if (req.body.value !== undefined) v.value = +req.body.value;
   if (req.body.used !== undefined) v.used = req.body.used;
   if (req.body.code) v.code = req.body.code.toUpperCase();
@@ -720,7 +772,7 @@ app.post("/api/vouchers/validate", auth(), (req, res) => {
   }
 });
 
-// ============ PUBLIC VOUCHERS (uu dai toan he thong) ============
+// ============ PUBLIC VOUCHERS ============
 app.get("/api/vouchers/public", auth(), (req, res) => {
   const db = loadDB();
   const myVouchers = (db.vouchers || []).filter(v => v.user_id === req.user.id);
@@ -741,12 +793,12 @@ app.post("/api/vouchers/claim/:id", auth(), (req, res) => {
     const template = (db.vouchers || []).find(v =>
       v.id == req.params.id && !v.user_id
     );
-    if (!template) return res.status(404).json({ message: "Voucher khong ton tai hoac da het" });
+    if (!template) return res.status(404).json({ message: "Voucher không tồn tại hoặc đã hết" });
 
     const alreadyClaimed = (db.vouchers || []).find(v =>
       v.user_id === req.user.id && v.claimed_from === template.id
     );
-    if (alreadyClaimed) return res.status(400).json({ message: "Ban da nhan voucher nay roi" });
+    if (alreadyClaimed) return res.status(400).json({ message: "Bạn đã nhận voucher này rồi" });
 
     const id = Math.max(0, ...db.vouchers.map(v => v.id)) + 1;
     const newVoucher = {
@@ -767,7 +819,7 @@ app.post("/api/vouchers/claim/:id", auth(), (req, res) => {
   }
 });
 
-// ============ PROMOTIONS (mon giam gia) ============
+// ============ PROMOTIONS ============
 app.get("/api/promotions", (req, res) => {
   const db = loadDB();
   const list = (db.menu_items || []).filter(m =>
@@ -787,45 +839,48 @@ app.get("/api/promotions", (req, res) => {
   }));
   res.json(list);
 });
-// ============ CATEGORIES (DANH MUC MON AN) ============
+
+// ============ CATEGORIES ============
 const DEFAULT_CATEGORIES = [
-  { id: 1, name: "Com", icon: "??", order: 1 },
-  { id: 2, name: "Món mặn", icon: "??", order: 2 },
-  { id: 3, name: "Món chay", icon: "??", order: 3 },
-  { id: 4, name: "Món phụ", icon: "??", order: 4 },
-  { id: 5, name: "Đồ ăn nhanh", icon: "??", order: 5 },
-  { id: 6, name: "Đồ uống", icon: "??", order: 6 },
-  { id: 7, name: "Combo", icon: "??", order: 7 }
+  { id: 1, name: "Cơm", icon: "🍚", order: 1 },
+  { id: 2, name: "Món mặn", icon: "🥘", order: 2 },
+  { id: 3, name: "Món chay", icon: "🥗", order: 3 },
+  { id: 4, name: "Món phụ", icon: "🍲", order: 4 },
+  { id: 5, name: "Đồ ăn nhanh", icon: "🍔", order: 5 },
+  { id: 6, name: "Đồ uống", icon: "🥤", order: 6 },
+  { id: 7, name: "Combo", icon: "🍱", order: 7 }
 ];
 
+// ✅ FIX #3: Trả về {categories, changed} thay vì chỉ categories
 function ensureCategories(db) {
   if (!db.categories || !Array.isArray(db.categories) || db.categories.length === 0) {
     db.categories = [...DEFAULT_CATEGORIES];
+    return { categories: db.categories, changed: true };
   }
-  return db.categories;
+  return { categories: db.categories, changed: false };
 }
 
 app.get("/api/categories", (req, res) => {
   const db = loadDB();
-  const cats = ensureCategories(db);
-  saveDB(db);
-  res.json([...cats].sort((a, b) => (a.order || 0) - (b.order || 0)));
+  const { categories, changed } = ensureCategories(db);
+  if (changed) saveDB(db); // ✅ Chỉ save khi thật sự có thay đổi
+  res.json([...categories].sort((a, b) => (a.order || 0) - (b.order || 0)));
 });
 
 app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
-    ensureCategories(db);
+    const { categories } = ensureCategories(db);
     const { name, icon } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ message: "Thiếu tên danh mục" });
     const trimmed = name.trim();
-    if (db.categories.find(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+    if (categories.find(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
       return res.status(400).json({ message: "Danh mục đã tồn tại" });
     }
-    const id = Math.max(0, ...db.categories.map(c => c.id)) + 1;
-    const order = Math.max(0, ...db.categories.map(c => c.order || 0)) + 1;
-    const cat = { id, name: trimmed, icon: icon || "???", order };
-    db.categories.push(cat);
+    const id = Math.max(0, ...categories.map(c => c.id)) + 1;
+    const order = Math.max(0, ...categories.map(c => c.order || 0)) + 1;
+    const cat = { id, name: trimmed, icon: icon || "🍽️", order };
+    categories.push(cat);
     saveDB(db);
     res.status(201).json(cat);
   } catch (e) { res.status(500).json({ message: e.message }); }
@@ -834,14 +889,14 @@ app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
-    ensureCategories(db);
-    const cat = db.categories.find(c => c.id == req.params.id);
+    const { categories } = ensureCategories(db);
+    const cat = categories.find(c => c.id == req.params.id);
     if (!cat) return res.status(404).json({ message: "Không tìm thấy danh mục" });
     const oldName = cat.name;
     const { name, icon } = req.body;
     if (name && name.trim()) {
       const trimmed = name.trim();
-      if (db.categories.find(c => c.id != req.params.id && c.name.toLowerCase() === trimmed.toLowerCase())) {
+      if (categories.find(c => c.id != req.params.id && c.name.toLowerCase() === trimmed.toLowerCase())) {
         return res.status(400).json({ message: "Tên danh mục đã tồn tại" });
       }
       cat.name = trimmed;
@@ -860,8 +915,8 @@ app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 app.delete("/api/categories/:id", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
-    ensureCategories(db);
-    const cat = db.categories.find(c => c.id == req.params.id);
+    const { categories } = ensureCategories(db);
+    const cat = categories.find(c => c.id == req.params.id);
     if (!cat) return res.status(404).json({ message: "Không tìm thấy danh mục" });
     const usedCount = (db.menu_items || []).filter(m => m.category === cat.name).length;
     if (usedCount > 0) {
@@ -869,12 +924,13 @@ app.delete("/api/categories/:id", auth(["ADMIN"]), (req, res) => {
         message: "Không thể xóa — có " + usedCount + " món đang dùng danh mục này"
       });
     }
-    db.categories = db.categories.filter(c => c.id != req.params.id);
+    db.categories = categories.filter(c => c.id != req.params.id);
     saveDB(db);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
-// ============ WALLET (VI CANTEEN) ============
+
+// ============ WALLET ============
 function getOrCreateWallet(db, userId) {
   if (!db.wallets) db.wallets = [];
   let w = db.wallets.find(x => x.user_id === userId);
@@ -922,8 +978,8 @@ app.post("/api/wallet/deposit", auth(), (req, res) => {
     const { amount, method, note } = req.body;
     const amt = +amount;
     if (!amt || amt < 10000) return res.status(400).json({ message: "Số tiền tối thiểu 10.000đ" });
-    if (amt > 50000000) return res.status(400).json({ message: "S? ti?n t?i da 50.000.000d" });
-    if (!["QR", "CASH"].includes(method)) return res.status(400).json({ message: "Phuong th?c không h?p l?" });
+    if (amt > 50000000) return res.status(400).json({ message: "Số tiền tối đa 50.000.000đ" });
+    if (!["QR", "CASH"].includes(method)) return res.status(400).json({ message: "Phương thức không hợp lệ" });
 
     if (!db.wallet_transactions) db.wallet_transactions = [];
     const id = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
@@ -979,7 +1035,6 @@ app.post("/api/wallet/withdraw", auth(), (req, res) => {
       created_at: new Date().toISOString()
     };
     db.wallet_transactions.push(tx);
-    // Tru tam giu so du
     w.balance -= amt;
     w.updated_at = new Date().toISOString();
     saveDB(db);
@@ -1005,7 +1060,6 @@ app.post("/api/wallet/link-bank", auth(), (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// Admin: danh sach yeu cau cho duyet
 app.get("/api/wallet/requests", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const { status } = req.query;
@@ -1013,14 +1067,12 @@ app.get("/api/wallet/requests", auth(["ADMIN"]), (req, res) => {
   if (status && status !== "all") {
     list = list.filter(t => t.status === status);
   } else {
-    // mac dinh hien pending
     list = list.filter(t => t.status === "pending");
   }
   list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   res.json(list);
 });
 
-// Admin: tat ca giao dich (moi status)
 app.get("/api/wallet/all", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const list = [...(db.wallet_transactions || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -1047,14 +1099,12 @@ app.patch("/api/wallet/requests/:id/approve", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const tx = (db.wallet_transactions || []).find(t => t.id == req.params.id);
-    if (!tx) return res.status(404).json({ message: "Khách" });
-    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dich da xu ly" });
+    if (!tx) return res.status(404).json({ message: "Không tìm thấy giao dịch" });
+    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dịch đã xử lý" });
 
     const w = getOrCreateWallet(db, tx.user_id);
     if (tx.type === "deposit") {
       w.balance += tx.amount;
-    } else if (tx.type === "withdraw") {
-      // Da tru tam, khong lam gi them
     }
     w.updated_at = new Date().toISOString();
     tx.status = "approved";
@@ -1070,12 +1120,11 @@ app.patch("/api/wallet/requests/:id/reject", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const tx = (db.wallet_transactions || []).find(t => t.id == req.params.id);
-    if (!tx) return res.status(404).json({ message: "Khách" });
-    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dich da xu ly" });
+    if (!tx) return res.status(404).json({ message: "Không tìm thấy giao dịch" });
+    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dịch đã xử lý" });
 
     const w = getOrCreateWallet(db, tx.user_id);
     if (tx.type === "withdraw") {
-      // Hoan lai so du da tru tam
       w.balance += tx.amount;
       w.updated_at = new Date().toISOString();
     }
@@ -1088,15 +1137,14 @@ app.patch("/api/wallet/requests/:id/reject", auth(["ADMIN"]), (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// Thanh toan bang vi (dung tu checkout)
 app.post("/api/wallet/pay", auth(), (req, res) => {
   try {
     const db = loadDB();
     const { amount, order_code } = req.body;
     const amt = +amount;
-    if (!amt || amt <= 0) return res.status(400).json({ message: "So tien khong hop le" });
+    if (!amt || amt <= 0) return res.status(400).json({ message: "Số tiền không hợp lệ" });
     const w = getOrCreateWallet(db, req.user.id);
-    if (w.balance < amt) return res.status(400).json({ message: "So du vi khong du" });
+    if (w.balance < amt) return res.status(400).json({ message: "Số dư ví không đủ" });
 
     if (!db.wallet_transactions) db.wallet_transactions = [];
     const id = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
@@ -1109,7 +1157,7 @@ app.post("/api/wallet/pay", auth(), (req, res) => {
       amount: amt,
       method: "WALLET",
       status: "approved",
-      note: "Thanh toan don " + (order_code || ""),
+      note: "Thanh toán đơn " + (order_code || ""),
       order_code: order_code || "",
       created_at: new Date().toISOString(),
       approved_at: new Date().toISOString()
@@ -1121,6 +1169,7 @@ app.post("/api/wallet/pay", auth(), (req, res) => {
     res.status(201).json({ ok: true, transaction: tx, newBalance: w.balance });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
+
 // ============ VOUCHER STATS & ADMIN ============
 app.get("/api/vouchers/stats", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
@@ -1169,7 +1218,7 @@ app.get("/api/vouchers/user/:userId", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const userId = +req.params.userId;
   const user = db.users.find(u => u.id === userId);
-  if (!user) return res.status(404).json({ message: "Khong tim thay user" });
+  if (!user) return res.status(404).json({ message: "Không tìm thấy user" });
   const list = (db.vouchers || []).filter(v => v.user_id === userId);
   res.json({
     user: { id: user.id, name: user.name, email: user.email, phone: user.phone, points: user.points || 0 },
@@ -1186,12 +1235,13 @@ app.get("/api/vouchers/user/:userId", auth(["ADMIN"]), (req, res) => {
 app.delete("/api/vouchers/revoke/:id", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const v = (db.vouchers || []).find(x => x.id == req.params.id);
-  if (!v) return res.status(404).json({ message: "Khong tim thay voucher" });
-  if (v.used) return res.status(400).json({ message: "Khong the thu hoi voucher da dung" });
+  if (!v) return res.status(404).json({ message: "Không tìm thấy voucher" });
+  if (v.used) return res.status(400).json({ message: "Không thể thu hồi voucher đã dùng" });
   db.vouchers = db.vouchers.filter(x => x.id != req.params.id);
   saveDB(db);
   res.json({ ok: true });
 });
+
 // ============ CHAT ============
 function normalizeUserId(id) {
   if (id === undefined || id === null) return null;
@@ -1311,18 +1361,23 @@ app.get("/api/sizes", (req, res) => {
 
 // ============ STATS ============
 app.get("/api/stats", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
-  const db = loadDB();
-  const today = new Date().toISOString().slice(0, 10);
-  const todayOrders = db.orders.filter(o => o.created_at?.startsWith(today));
-  const byStatus = {};
-  db.orders.forEach(o => { byStatus[o.status] = (byStatus[o.status] || 0) + 1; });
-  res.json({
-    revenue: todayOrders.reduce((s, o) => s + o.total, 0),
-    orderCount: todayOrders.length,
-    customerCount: db.users.filter(u => u.role === "CUSTOMER").length,
-    lowStock: db.inventory.filter(i => i.qty < i.min).length,
-    byStatus: Object.entries(byStatus).map(([_id, count]) => ({ _id, count }))
-  });
+  try {
+    const db = loadDB();
+    const today = new Date().toISOString().slice(0, 10);
+    const todayOrders = db.orders.filter(o => o.created_at?.startsWith(today));
+    const byStatus = {};
+    db.orders.forEach(o => { byStatus[o.status] = (byStatus[o.status] || 0) + 1; });
+    res.json({
+      revenue: todayOrders.reduce((s, o) => s + o.total, 0),
+      orderCount: todayOrders.length,
+      customerCount: db.users.filter(u => u.role === "CUSTOMER").length,
+      // ✅ FIX #4: fallback mảng rỗng
+      lowStock: (db.inventory || []).filter(i => i.qty < i.min).length,
+      byStatus: Object.entries(byStatus).map(([_id, count]) => ({ _id, count }))
+    });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
 // ============ INVENTORY ============
@@ -1417,7 +1472,6 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
       else shift = "Ngoài giờ";
     }
 
-    // Kiem tra da check-in CA NAY chua (khong phai ca nao cung duoc)
     const existing = db.attendances.find(a =>
       a.employee_id === req.user.id &&
       a.date === today &&
@@ -1428,9 +1482,7 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
       return res.status(400).json({ message: "Bạn đã check-in " + shift + " hôm nay rồi" });
     }
 
-    // Tinh gio chuan cua ca
     const SHIFT_START = { "Ca sáng": 6, "Ca chiều": 12, "Ca tối": 18 };
-    const SHIFT_END = { "Ca sáng": 12, "Ca chiều": 18, "Ca tối": 22 };
     const startHour = SHIFT_START[shift] || 8;
     const late = hour > startHour || (hour === startHour && minute > 15);
 
@@ -1473,7 +1525,6 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
       else shift = "Ngoài giờ";
     }
 
-    // Tim attendance cua ca nay chua check-out
     const att = db.attendances?.find(a =>
       a.employee_id === req.user.id &&
       a.date === today &&
@@ -1525,26 +1576,26 @@ app.get("/api/attendance/employees", auth(["ADMIN"]), (req, res) => {
 
 // ============ PERMISSIONS ============
 const ALL_PERMISSIONS = [
-  { key: "menu.view", label: "Xem th?c don" },
+  { key: "menu.view", label: "Xem thực đơn" },
   { key: "menu.create", label: "Thêm món" },
-  { key: "menu.update", label: "S?a món" },
-  { key: "menu.toggle", label: "T?t / B?t món" },
+  { key: "menu.update", label: "Sửa món" },
+  { key: "menu.toggle", label: "Tắt / Bật món" },
   { key: "menu.delete", label: "Xóa món" },
-  { key: "orders.view", label: "Xem don hàng" },
+  { key: "orders.view", label: "Xem đơn hàng" },
   { key: "orders.process", label: "Xử lý đơn hàng" },
-  { key: "orders.cancel", label: "H?y don hàng" },
+  { key: "orders.cancel", label: "Hủy đơn hàng" },
   { key: "inventory.view", label: "Xem kho" },
-  { key: "inventory.import", label: "Nh?p kho" },
+  { key: "inventory.import", label: "Nhập kho" },
   { key: "inventory.manage", label: "Quản lý kho" },
   { key: "customers.view", label: "Xem khách hàng" },
   { key: "customers.manage", label: "Quản lý khách hàng" },
   { key: "employees.view", label: "Xem nhân viên" },
   { key: "employees.manage", label: "Quản lý nhân viên" },
-  { key: "attendance.view", label: "Xem chờm công" },
+  { key: "attendance.view", label: "Xem chấm công" },
   { key: "attendance.manage", label: "Quản lý chấm công" },
   { key: "reports.view", label: "Xem báo cáo" },
-  { key: "backup.export", label: "Xu?t backup" },
-  { key: "backup.import", label: "Nh?p backup" },
+  { key: "backup.export", label: "Xuất backup" },
+  { key: "backup.import", label: "Nhập backup" },
   { key: "backup.reset", label: "Reset database" },
   { key: "settings.view", label: "Xem cài đặt" },
   { key: "settings.manage", label: "Quản lý cài đặt" }
@@ -1585,7 +1636,7 @@ app.put("/api/permissions/:userId", auth(["ADMIN"]), (req, res) => {
     const db = loadDB();
     const u = db.users.find(x => x.id == req.params.userId);
     if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
-    if (u.role === "ADMIN") return res.status(400).json({ message: "Không th? s?a quyền ADMIN" });
+    if (u.role === "ADMIN") return res.status(400).json({ message: "Không thể sửa quyền ADMIN" });
     const { custom } = req.body;
     if (!Array.isArray(custom)) return res.status(400).json({ message: "custom phải là array" });
     u.permissions = custom.filter(p => ALL_PERMISSIONS.some(ap => ap.key === p));
@@ -1609,7 +1660,11 @@ app.post("/api/backup/import", auth(["ADMIN"]), (req, res) => {
     if (!data.users || !data.menu_items) return res.status(400).json({ message: "File backup thiếu dữ liệu cần thiết" });
     const current = loadDB();
     const backupFile = path.join(__dirname, "canteen-db-auto-backup-" + Date.now() + ".json");
-    fs.writeFileSync(backupFile, JSON.stringify(current, null, 2), "utf-8");
+    try {
+      fs.writeFileSync(backupFile, JSON.stringify(current, null, 2), "utf-8");
+    } catch {
+      // Bỏ qua nếu filesystem không ghi được (Render ephemeral)
+    }
     saveDB(data);
     res.json({ message: "Import thành công!", stats: { users: data.users?.length || 0, menu_items: data.menu_items?.length || 0, orders: data.orders?.length || 0, inventory: data.inventory?.length || 0 }, auto_backup_saved: path.basename(backupFile) });
   } catch (e) {
@@ -1650,7 +1705,7 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     const { period = "day" } = req.query;
     const now = new Date();
 
-    const completedOrders = (db.orders || []).filter(o => o.status === "Hoan thanh" || o.status === "Hoàn thành");
+    const completedOrders = (db.orders || []).filter(o => o.status === "Hoàn thành");
 
     let result = [];
     let totalRevenue = 0;
@@ -1680,7 +1735,7 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
         });
         const revenue = weekOrders.reduce((s, o) => s + (o.total || 0), 0);
         result.push({
-          label: "Tuan " + (4 - i),
+          label: "Tuần " + (4 - i),
           date: weekStart.toISOString().slice(0, 10) + " - " + weekEnd.toISOString().slice(0, 10),
           revenue,
           orders: weekOrders.length
@@ -1723,7 +1778,7 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 
     const menuSold = {};
     (db.orders || []).forEach(o => {
-      if (o.status !== "Hoan thanh" && o.status !== "Hoàn thành") return;
+      if (o.status !== "Hoàn thành") return;
       (o.items || []).forEach(it => {
         if (!menuSold[it.menu_item_id]) {
           menuSold[it.menu_item_id] = { id: it.menu_item_id, name: it.name, sold: 0, revenue: 0 };
@@ -1759,7 +1814,7 @@ app.get("/api/settings", auth(), (req, res) => {
     accountName: "CANTEEN VWA",
     hotline: "0328 866 959",
     email: "admin@vwa.vn",
-    address: "68 Nguyen Chi Thanh, P. Lang, Ha Noi",
+    address: "68 Nguyễn Chí Thanh, P. Láng, Hà Nội",
     qrCustomImage: ""
   };
   res.json({ ...defaults, ...(db.settings || {}) });
@@ -1780,8 +1835,7 @@ app.put("/api/settings", auth(["ADMIN"]), (req, res) => {
   }
 });
 
-// ============ SHIFTS (QUAN LY CA) ============
-// Nhan vien: lay ca cua minh (gom approved + pending)
+// ============ SHIFTS ============
 app.get("/api/shifts/me", auth(), (req, res) => {
   const db = loadDB();
   const today = new Date().toISOString().slice(0, 10);
@@ -1791,7 +1845,6 @@ app.get("/api/shifts/me", auth(), (req, res) => {
   res.json(list);
 });
 
-// Admin: danh sach dang ky cho duyet
 app.get("/api/shifts/pending", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const list = (db.shifts || [])
@@ -1800,7 +1853,6 @@ app.get("/api/shifts/pending", auth(["ADMIN"]), (req, res) => {
   res.json(list);
 });
 
-// Lay danh sach ca (mac dinh chi approved)
 app.get("/api/shifts", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   const db = loadDB();
   let list = db.shifts || [];
@@ -1814,7 +1866,6 @@ app.get("/api/shifts", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   res.json(list);
 });
 
-// Nhan vien tu dang ky ca -> pending
 app.post("/api/shifts/register", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
@@ -1854,7 +1905,6 @@ app.post("/api/shifts/register", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// Admin duyet
 app.patch("/api/shifts/:id/approve", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
@@ -1868,7 +1918,6 @@ app.patch("/api/shifts/:id/approve", auth(["ADMIN"]), (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// Admin tu choi
 app.delete("/api/shifts/:id/reject", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const before = (db.shifts || []).length;
@@ -1877,7 +1926,6 @@ app.delete("/api/shifts/:id/reject", auth(["ADMIN"]), (req, res) => {
   res.json({ ok: true, removed: before - db.shifts.length });
 });
 
-// Bulk create (admin) - status approved
 app.post("/api/shifts/bulk", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
@@ -1976,26 +2024,29 @@ app.delete("/api/shifts/:id", auth(["ADMIN"]), (req, res) => {
   res.json({ ok: true });
 });
 
-// ============ HEALTH
+// ============ HEALTH ============
 app.get("/", (_, res) => res.json({ ok: true, name: "Canteen VWA API (JSON)" }));
 
 const PORT = process.env.PORT || 3000;
-// ============ BACKUP RESET
+
+// ============ BACKUP RESET ============
 app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
   try {
     const { confirm } = req.body;
     if (confirm !== "RESET") {
-      return res.status(400).json({ message: "Can xac nhan 'RESET' de thuc hien" });
+      return res.status(400).json({ message: "Cần xác nhận 'RESET' để thực hiện" });
     }
 
     const db = loadDB();
 
-    // 1. Backup truoc khi reset
     const backupFile = path.join(__dirname, "canteen-db-auto-backup-" + Date.now() + ".json");
-    fs.writeFileSync(backupFile, JSON.stringify(db, null, 2), "utf-8");
-    console.log("💾 Auto backup: " + path.basename(backupFile));
+    try {
+      fs.writeFileSync(backupFile, JSON.stringify(db, null, 2), "utf-8");
+      console.log("💾 Auto backup: " + path.basename(backupFile));
+    } catch {
+      // Bỏ qua nếu filesystem không ghi được
+    }
 
-    // 2. Reset cac collection DONG (giu users, menu_items, inventory, categories, toppings, sizes, settings)
     db.orders = [];
     db.wallets = [];
     db.wallet_transactions = [];
@@ -2007,13 +2058,8 @@ app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
     db.price_history = [];
     db.reviews = [];
 
-    // 3. Reset vouchers ve 0 (giu lai neu can)
-    // db.vouchers = [];
-
-    // 4. Reset diem user ve 0
     (db.users || []).forEach(u => { u.points = 0; });
 
-    // 5. Reset stock menu_items ve mac dinh
     (db.menu_items || []).forEach(m => {
       if (m.stock !== undefined) m.stock = Math.max(m.stock, 30);
       m.sold = 0;
@@ -2023,7 +2069,7 @@ app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
 
     res.json({
       ok: true,
-      message: "Reset thanh cong",
+      message: "Reset thành công",
       auto_backup: path.basename(backupFile),
       stats: {
         users: db.users.length,
@@ -2037,7 +2083,6 @@ app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
     res.status(500).json({ message: e.message });
   }
 });
-
 
 initMongo().then(() => {
   app.listen(PORT, () =>
