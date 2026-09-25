@@ -138,11 +138,23 @@ export default function CustomerCheckout({ cart, setCart }) {
 
   // ---------- Derived (memo) ----------
 
-  const lines = useMemo(
-    () => Object.entries(cart).map(([key, item]) => ({ ...item, _key: key })),
-    [cart]
-  );
+ // ✅ FIX: Chỉ lấy các món user đã CHỌN trong Cart page
+//    (đọc từ localStorage canteen_cart_selected)
+const lines = useMemo(() => {
+  const selectedKeys = readSelectedKeys();
 
+  // Nếu không có selectedKeys (VD: user F5 trực tiếp vào /checkout)
+  // → fallback: lấy TẤT CẢ (tránh trang trắng)
+  if (!selectedKeys.length) {
+    return Object.entries(cart).map(([key, item]) => ({ ...item, _key: key }));
+  }
+
+  // Chỉ lấy các item có key trong selectedKeys
+  const selectedSet = new Set(selectedKeys);
+  return Object.entries(cart)
+    .filter(([key]) => selectedSet.has(key))
+    .map(([key, item]) => ({ ...item, _key: key }));
+}, [cart]);
   const subtotal = useMemo(
     () =>
       lines.reduce(
@@ -355,11 +367,10 @@ export default function CustomerCheckout({ cart, setCart }) {
         voucherCode: appliedVoucher?.code || "",
       });
 
-      // Loại các món đã đặt khỏi cart
-      const selectedKeys = readSelectedKeys();
-      const remainCart = removeOrderedItems(cart, selectedKeys);
-      setCart(remainCart);
-
+      // Loại các món đã đặt khỏi cart (dùng cùng selectedKeys đã filter ở `lines`)
+	const selectedKeys = lines.map((m) => m._key);
+	const remainCart = removeOrderedItems(cart, selectedKeys);
+	setCart(remainCart);
       toast(`Đặt hàng thành công! Mã: ${order.code}`, "success");
       setPaymentOrder(null);
 
