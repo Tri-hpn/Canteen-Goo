@@ -348,7 +348,7 @@ export default function Layout({
       </main>
 
       {/* ============ BOTTOM NAV (customer only) ============ */}
-      {role === "CUSTOMER" && <BottomNav />}
+	{role === "CUSTOMER" && <BottomNav onLogout={onLogout} />}
 
       {/* ============ ✅ CONFIRM LOGOUT MODAL (dùng chung) ============ */}
       <ConfirmDialog

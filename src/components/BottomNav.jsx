@@ -110,7 +110,7 @@ function isPathActive(currentPath, targetPath) {
 // MAIN COMPONENT
 // ============================================================
 
-export default function BottomNav() {
+export default function BottomNav({ onLogout }) {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
   const [showMore, setShowMore] = useState(false);
@@ -247,20 +247,24 @@ export default function BottomNav() {
    * Thực hiện logout (sau khi user xác nhận).
    */
   const performLogout = () => {
-    setLoggingOut(true);
+  setLoggingOut(true);
 
-    try {
-      setToken(null);
-      localStorage.removeItem(CART_KEY);
-      localStorage.removeItem(ORDERS_SEEN_KEY);
-      localStorage.removeItem("canteen_cart_selected");
-    } catch {}
+  // Xoá localStorage customer-specific (giữ cho App handleLogout lo phần cart)
+  try {
+    localStorage.removeItem(ORDERS_SEEN_KEY);
+    localStorage.removeItem("canteen_cart_selected");
+  } catch {}
 
-    // Không cần setLoggingOut(false) vì component sẽ unmount
-    // sau khi navigate("/") + App reset user về null
+  // ✅ Gọi onLogout từ App → setUser(null) + setToken(null) + navigate("/")
+  // → App re-render ngay về màn Login, không cần F5
+  if (onLogout) {
+    onLogout();
+  } else {
+    // Fallback nếu vì lý do nào đó không có onLogout
+    setToken(null);
     navigate("/");
-  };
-
+  }
+};
   const handleMoreToggle = () => setShowMore((s) => !s);
 
   // ---------- Render badge ----------
