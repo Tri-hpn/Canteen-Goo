@@ -1053,3 +1053,19 @@ html.dark-mode .app-stat-delta.down { color: #F87171 !important; }
     padding: 10px 12px !important;
   }
 }
+/* ============ MODAL FORM — Padding bottom đủ thoáng ============ */
+[role="dialog"] > div,
+.modal,
+.food-detail-content {
+  padding-bottom: 32px !important;
+}
+
+/* Form trong modal: nút cuối cách biên 24px */
+[role="dialog"] form {
+  padding-bottom: 8px;
+}
+
+/* Modal body scroll cuối cùng không dính đáy */
+[role="dialog"] > div:last-child {
+  margin-bottom: 0;
+}

@@ -2114,7 +2114,77 @@ html.dark-mode .inv-badge--out {
   height: 12px;
   stroke-width: 2.5;
 }
+/* ============ TOAST — Góc phải trên ============ */
+.toast-container {
+  position: fixed !important;
+  top: 80px !important;
+  right: 24px !important;
+  bottom: auto !important;
+  left: auto !important;
+  transform: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  z-index: 2147483600 !important;
+  pointer-events: none !important;
+  max-width: calc(100vw - 32px) !important;
+  width: auto !important;
+  align-items: flex-end !important;
+}
 
+.toast {
+  min-width: 300px !important;
+  max-width: 420px !important;
+  padding: 14px 16px !important;
+  border-radius: 12px !important;
+  font-size: 14px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18),
+              0 4px 8px rgba(0, 0, 0, 0.08) !important;
+  animation: toastSlideInRight 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.toast.toast-exit {
+  animation: toastSlideOutRight 0.2s ease forwards !important;
+}
+
+.toast__close {
+  width: 28px !important;
+  height: 28px !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+}
+
+.toast__close:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+.toast__close svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+@keyframes toastSlideInRight {
+  from { opacity: 0; transform: translateX(40px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes toastSlideOutRight {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(40px) scale(0.9); }
+}
+
+/* Mobile: vẫn trên, nhưng nhỏ hơn */
+@media (max-width: 768px) {
+  .toast-container {
+    top: 70px !important;
+    right: 12px !important;
+    left: 12px !important;
+    align-items: stretch !important;
+  }
+  .toast {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
 /* ============ TYPE VARIANTS ============ */
 
 .toast--success {

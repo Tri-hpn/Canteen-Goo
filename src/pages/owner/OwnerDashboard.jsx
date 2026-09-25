@@ -616,18 +616,22 @@ function KPI({ icon, label, value, trend, color, badge }) {
         >
           {label}
         </span>
-        <h2
-          style={{
-            margin: "4px 0",
-            fontSize: 18,
-            color: "var(--text-primary, #172033)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {value}
-        </h2>
+        <div
+  style={{
+    margin: "4px 0",
+    fontSize: 18,
+    fontWeight: 700,
+    lineHeight: 1.3,
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    color: "var(--text-primary, #172033)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  }}
+>
+  {value}
+</div>
 
         {/* Trend (chỉ khi có data) */}
         {trend && (
@@ -690,6 +694,7 @@ function OrderStatusBadge({ status }) {
         background: c.bg,
         color: c.fg,
         whiteSpace: "nowrap",
+	 fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
       }}
     >
       {status}
