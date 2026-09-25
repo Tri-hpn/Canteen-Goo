@@ -278,14 +278,16 @@ export default function Sidebar({ role, onLogout, user }) {
 
   // ---------- Body scroll lock khi sidebar mở ----------
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
+ useEffect(() => {
+  if (!open) return;
+  const prev = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  return () => {
+    if (document.body.style.overflow === "hidden") {
       document.body.style.overflow = prev;
-    };
-  }, [open]);
+    }
+  };
+}, [open]);
 
   // ---------- ESC đóng sidebar mobile ----------
 

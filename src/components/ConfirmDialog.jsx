@@ -57,14 +57,18 @@ export default function ConfirmDialog({
   }, [open]);
 
   // Body scroll lock
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
+ useEffect(() => {
+  if (!open) return;
+  const prev = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  return () => {
+    // Chỉ restore nếu body.overflow vẫn đang là "hidden" (do chính mình set)
+    // → tránh ghi đè giá trị của component khác
+    if (document.body.style.overflow === "hidden") {
       document.body.style.overflow = prev;
-    };
-  }, [open]);
+    }
+  };
+}, [open]);
 
   if (!open) return null;
 

@@ -162,13 +162,21 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setToken(null);
-    setUser(null);
-    setCart({});
-    localStorage.removeItem("canteen_cart");
-    navigate("/");
-  };
+  setToken(null);
+  setUser(null);
+  setCart({});
+  localStorage.removeItem("canteen_cart");
 
+  // ✅ Force clean body state — tránh scroll lock/class còn sót
+  // từ ConfirmDialog / Sidebar mobile / ChatBot chưa kịp cleanup
+  document.body.style.overflow = "";
+  document.body.style.paddingRight = "";
+  document.documentElement.style.overflow = "";
+  document.body.classList.remove("has-bottom-nav");
+  document.body.classList.remove("mobile-open");
+
+  navigate("/");
+};
   // ---------- Render: Loading ----------
   if (loading) {
     return (

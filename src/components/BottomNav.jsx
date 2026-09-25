@@ -248,19 +248,19 @@ export default function BottomNav({ onLogout }) {
    */
   const performLogout = () => {
   setLoggingOut(true);
-
-  // Xoá localStorage customer-specific (giữ cho App handleLogout lo phần cart)
   try {
     localStorage.removeItem(ORDERS_SEEN_KEY);
     localStorage.removeItem("canteen_cart_selected");
   } catch {}
 
-  // ✅ Gọi onLogout từ App → setUser(null) + setToken(null) + navigate("/")
-  // → App re-render ngay về màn Login, không cần F5
+  // ✅ Force clean body
+  document.body.style.overflow = "";
+  document.body.classList.remove("has-bottom-nav");
+  document.body.classList.remove("mobile-open");
+
   if (onLogout) {
     onLogout();
   } else {
-    // Fallback nếu vì lý do nào đó không có onLogout
     setToken(null);
     navigate("/");
   }
