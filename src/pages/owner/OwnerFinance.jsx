@@ -17,14 +17,21 @@
 //
 // Fixes:
 //   - ExpensesTab.remove: dùng ConfirmDialog custom
-//     (thay cho confirm() native → đồng bộ UX toàn app)
+//
+// Batch 4 fixes:
+//   - ✅ #7.1: Tab bar scroll ngang trên mobile (overflow-x auto)
+//   - ✅ #7.2: ExpensesTab — thêm filter category + sort (mới/cũ/số tiền)
+//   - ✅ #7.3: ExportTab — thêm quick range (7/30/90 ngày + tùy chọn)
+//   - ✅ #7.4: KPI number format đồng nhất qua helper local
+//   - ✅ #7.5: RevenueTab — tab chip scroll ngang mobile
 // ============================================================
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Wallet, CreditCard, TrendingUp, Receipt, DollarSign,
   BarChart3, CheckCircle2, Download, Save, Plus, Pencil, X,
-  Loader2, AlertCircle, Trash2,
+  Loader2, AlertCircle, Trash2, ArrowUpDown, Filter,
+  CalendarDays, CalendarRange, Calendar,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
@@ -70,6 +77,22 @@ const EXPENSE_CATEGORIES = [
   "Nguyên liệu", "Nhập hàng", "Vận hành", "Lương", "Khác",
 ];
 
+// ✅ #7.2: Sort options cho ExpensesTab
+const EXPENSE_SORTS = [
+  { id: "newest",      label: "Mới nhất" },
+  { id: "oldest",      label: "Cũ nhất" },
+  { id: "amount-desc", label: "Số tiền ↓" },
+  { id: "amount-asc",  label: "Số tiền ↑" },
+];
+
+// ✅ #7.3: Quick ranges cho ExportTab
+const EXPORT_RANGES = [
+  { id: "7d",   label: "7 ngày",   days: 7 },
+  { id: "30d",  label: "30 ngày",  days: 30 },
+  { id: "90d",  label: "90 ngày",  days: 90 },
+  { id: "custom", label: "Tùy chọn", days: null },
+];
+
 // Status → màu badge giao dịch
 const ORDER_STATUS_COLORS = {
   "Hoàn thành":  { bg: "#e8f9f1", fg: "#18a967" },
@@ -79,6 +102,21 @@ const ORDER_STATUS_COLORS = {
   "Đang chuẩn bị": { bg: "#ede9fe", fg: "#6d28d9" },
   "Sẵn sàng nhận": { bg: "#d1fae5", fg: "#065f46" },
 };
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+/** ✅ #7.4: format VNĐ đồng nhất (dùng money() từ UI, chỉ gọi qua đây) */
+const fmtMoney = (n) => money(n);
+
+/** "YYYY-MM-DD" theo local time */
+function getLocalDateStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dt = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dt}`;
+}
 
 // ============================================================
 // MAIN COMPONENT
@@ -91,17 +129,20 @@ export default function OwnerFinance() {
     <div>
       {/* ============================================================
           TAB BAR
+          ✅ #7.1: scroll ngang trên mobile, có min-width mỗi tab
           ============================================================ */}
       <div
         style={{
           display: "flex",
           gap: 6,
           marginBottom: 20,
-          flexWrap: "wrap",
+          overflowX: "auto",
           background: "var(--card-bg, #fff)",
           border: "1px solid var(--border-color, #e7ebf0)",
           borderRadius: 12,
           padding: 8,
+          scrollbarWidth: "none",
+          WebkitOverflowScrolling: "touch",
         }}
       >
         {TABS.map((t) => {
@@ -123,6 +164,8 @@ export default function OwnerFinance() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
                 transition: "all 0.2s",
               }}
             >
@@ -130,6 +173,9 @@ export default function OwnerFinance() {
             </button>
           );
         })}
+        <style>{`
+          div[style*="overflow-x: auto"]::-webkit-scrollbar { display: none; }
+        `}</style>
       </div>
 
       {/* ============================================================
@@ -159,7 +205,6 @@ function AccountTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // ---------- Load settings ----------
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -183,17 +228,13 @@ function AccountTab() {
     load();
   }, [load]);
 
-  // Cleanup: auto-hide "saved" badge sau 3s (có cleanup)
   useEffect(() => {
     if (!saved) return;
     const timer = setTimeout(() => setSaved(false), 3000);
     return () => clearTimeout(timer);
   }, [saved]);
 
-  // ---------- Handlers ----------
-
   const updateField = (key, value) => {
-    // Chỉ uppercase khi blur, không uppercase trong onChange (tránh cursor jump)
     setForm((f) => ({ ...f, [key]: value }));
   };
 
@@ -214,7 +255,6 @@ function AccountTab() {
   };
 
   const save = async () => {
-    // Validate
     if (!form.account.trim()) {
       return toast("Vui lòng nhập số tài khoản", "error");
     }
@@ -245,12 +285,9 @@ function AccountTab() {
     }
   };
 
-  // VietQR preview — chỉ tạo URL khi có account
   const qrPreview = form.account
     ? `https://img.vietqr.io/image/${form.bank}-${form.account}-compact2.png?amount=35000&accountName=${encodeURIComponent(form.accountName || "CANTEEN VWA")}`
     : null;
-
-  // ---------- Render ----------
 
   if (loading) {
     return (
@@ -262,9 +299,7 @@ function AccountTab() {
   }
 
   if (error) {
-    return (
-      <ErrorBox message={error} onRetry={load} />
-    );
+    return <ErrorBox message={error} onRetry={load} />;
   }
 
   return (
@@ -276,7 +311,6 @@ function AccountTab() {
       }}
       className="finance-account-grid"
     >
-      {/* ----- Cột trái: Form ----- */}
       <div style={cardStyle}>
         <div
           style={{
@@ -399,7 +433,6 @@ function AccountTab() {
         )}
       </div>
 
-      {/* ----- Cột phải: QR Preview ----- */}
       <div style={cardStyle}>
         <h3 style={h3Style}>Preview QR</h3>
         <div
@@ -479,20 +512,28 @@ function RevenueTab() {
 
   return (
     <div>
-      {/* Period selector */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      {/* ✅ #7.5: period chips scroll ngang mobile */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          overflowX: "auto",
+          paddingBottom: 4,
+          scrollbarWidth: "none",
+        }}
+      >
         {PERIODS.map((p) => (
           <button
             key={p.id}
             onClick={() => setPeriod(p.id)}
-            style={chipStyle(period === p.id)}
+            style={{ ...chipStyle(period === p.id), flexShrink: 0 }}
           >
             {p.label}
           </button>
         ))}
       </div>
 
-      {/* KPIs */}
       <div
         style={{
           display: "grid",
@@ -501,12 +542,11 @@ function RevenueTab() {
           marginBottom: 16,
         }}
       >
-        <KPI label="Tổng doanh thu" value={money(data?.totalRevenue || 0)} color="#18a967" />
+        <KPI label="Tổng doanh thu" value={fmtMoney(data?.totalRevenue || 0)} color="#18a967" />
         <KPI label="Số đơn"         value={data?.totalOrders || 0}       color="#2634d5" />
-        <KPI label="Giá trị TB/đơn" value={money(data?.avgOrder || 0)}    color="#f59e0b" />
+        <KPI label="Giá trị TB/đơn" value={fmtMoney(data?.avgOrder || 0)}    color="#f59e0b" />
       </div>
 
-      {/* Table */}
       <div style={cardStyle}>
         <h3 style={h3Style}>
           <TrendingUp size={18} /> Chi tiết doanh thu
@@ -517,33 +557,35 @@ function RevenueTab() {
         ) : error ? (
           <ErrorBox message={error} />
         ) : (
-          <table style={tableStyle}>
-            <thead>
-              <tr style={theadStyle}>
-                <th style={thStyle}>Kỳ</th>
-                <th style={thStyle}>Thời gian</th>
-                <th style={thStyle}>Số đơn</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Doanh thu</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data?.data || []).map((d, i) => (
-                <tr key={i} style={trStyle}>
-                  <td style={tdStyle}><b>{d.label}</b></td>
-                  <td style={tdStyle}>{d.date}</td>
-                  <td style={tdStyle}>{d.orders}</td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}>
-                    <b style={{ color: "#18a967" }}>{money(d.revenue)}</b>
-                  </td>
+          <div style={{ overflowX: "auto" }}>
+            <table style={tableStyle}>
+              <thead>
+                <tr style={theadStyle}>
+                  <th style={thStyle}>Kỳ</th>
+                  <th style={thStyle}>Thời gian</th>
+                  <th style={thStyle}>Số đơn</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Doanh thu</th>
                 </tr>
-              ))}
-              {!data?.data?.length && (
-                <tr>
-                  <td colSpan="4" style={emptyTdStyle}>Chưa có dữ liệu</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {(data?.data || []).map((d, i) => (
+                  <tr key={i} style={trStyle}>
+                    <td style={tdStyle}><b>{d.label}</b></td>
+                    <td style={tdStyle}>{d.date}</td>
+                    <td style={tdStyle}>{d.orders}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>
+                      <b style={{ color: "#18a967" }}>{fmtMoney(d.revenue)}</b>
+                    </td>
+                  </tr>
+                ))}
+                {!data?.data?.length && (
+                  <tr>
+                    <td colSpan="4" style={emptyTdStyle}>Chưa có dữ liệu</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
@@ -587,13 +629,22 @@ function TransactionsTab() {
 
   return (
     <div>
-      {/* Filter chips */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      {/* Filter chips scroll ngang mobile */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          overflowX: "auto",
+          paddingBottom: 4,
+          scrollbarWidth: "none",
+        }}
+      >
         {FILTERS.map((f) => (
           <button
             key={f.id}
             onClick={() => setFilter(f.id)}
-            style={chipStyle(filter === f.id)}
+            style={{ ...chipStyle(filter === f.id), flexShrink: 0 }}
           >
             {f.label}
           </button>
@@ -634,7 +685,7 @@ function TransactionsTab() {
                     </td>
                     <td style={tdStyle}>{o.payment || "Tiền mặt"}</td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <b>{money(o.total)}</b>
+                      <b>{fmtMoney(o.total)}</b>
                     </td>
                     <td style={tdStyle}>
                       <StatusBadge status={o.status} />
@@ -656,7 +707,7 @@ function TransactionsTab() {
 }
 
 // ============================================================
-// TAB 4: CHI PHÍ
+// TAB 4: CHI PHÍ (✅ #7.2: filter + sort)
 // ============================================================
 
 function ExpensesTab() {
@@ -671,11 +722,14 @@ function ExpensesTab() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // ✅ Confirm dialog state
+  // ✅ #7.2: Filter + sort state
+  const [filterCat, setFilterCat] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
+
+  // Confirm dialog
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
-  // ---------- Load ----------
   useEffect(() => {
     setLoading(true);
     api.settings
@@ -685,7 +739,6 @@ function ExpensesTab() {
       .finally(() => setLoading(false));
   }, []);
 
-  // ---------- ✅ Confirm helpers ----------
   const closeConfirm = () => {
     if (confirmBusy) return;
     setConfirm(null);
@@ -701,7 +754,6 @@ function ExpensesTab() {
     }
   };
 
-  // ---------- Add ----------
   const add = async () => {
     const title = form.title.trim();
     const amount = Number(form.amount);
@@ -732,7 +784,6 @@ function ExpensesTab() {
     }
   };
 
-  // ---------- ✅ Remove — dùng ConfirmDialog ----------
   const remove = (id) => {
     const target = expenses.find((e) => e.id === id);
     if (!target) return;
@@ -740,7 +791,7 @@ function ExpensesTab() {
     setConfirm({
       title: `Xóa khoản chi "${target.title}"?`,
       message:
-        `Khoản chi ${money(target.amount)} sẽ bị xóa vĩnh viễn. ` +
+        `Khoản chi ${fmtMoney(target.amount)} sẽ bị xóa vĩnh viễn. ` +
         "Hành động này không thể hoàn tác.",
       confirmText: "Xóa",
       cancelText: "Hủy",
@@ -764,10 +815,47 @@ function ExpensesTab() {
     [expenses]
   );
 
+  // ✅ #7.2: filter + sort memo
+  const filteredExpenses = useMemo(() => {
+    let result = [...expenses];
+
+    if (filterCat) {
+      result = result.filter((e) => e.category === filterCat);
+    }
+
+    switch (sortBy) {
+      case "oldest":
+        result.sort((a, b) => new Date(a.date) - new Date(b.date));
+        break;
+      case "amount-desc":
+        result.sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
+        break;
+      case "amount-asc":
+        result.sort((a, b) => (Number(a.amount) || 0) - (Number(b.amount) || 0));
+        break;
+      case "newest":
+      default:
+        result.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+
+    return result;
+  }, [expenses, filterCat, sortBy]);
+
+  const filteredTotal = useMemo(
+    () => filteredExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0),
+    [filteredExpenses]
+  );
+
+  const hasFilter = filterCat !== "" || sortBy !== "newest";
+
+  const clearFilters = () => {
+    setFilterCat("");
+    setSortBy("newest");
+  };
+
   return (
     <>
       <div>
-        {/* Header row */}
         <div
           style={{
             display: "grid",
@@ -776,7 +864,11 @@ function ExpensesTab() {
             marginBottom: 16,
           }}
         >
-          <KPI label="Tổng chi phí" value={money(totalExpense)} color="#ef4444" />
+          <KPI
+            label={hasFilter ? "Tổng lọc" : "Tổng chi phí"}
+            value={fmtMoney(hasFilter ? filteredTotal : totalExpense)}
+            color="#ef4444"
+          />
           <div
             style={{
               ...cardStyle,
@@ -794,7 +886,6 @@ function ExpensesTab() {
           </div>
         </div>
 
-        {/* Add form */}
         {showForm && (
           <div style={{ ...cardStyle, marginBottom: 16 }}>
             <h3 style={h3Style}>Thêm khoản chi</h3>
@@ -864,10 +955,81 @@ function ExpensesTab() {
           </div>
         )}
 
-        {/* Table */}
+        {/* ✅ #7.2: Filter + Sort bar */}
+        {expenses.length > 0 && (
+          <div
+            style={{
+              ...cardStyle,
+              marginBottom: 16,
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <Filter size={14} style={{ color: "var(--text-muted, #64748b)" }} />
+            <select
+              value={filterCat}
+              onChange={(e) => setFilterCat(e.target.value)}
+              style={{ ...selectStyle, minWidth: 150 }}
+            >
+              <option value="">Tất cả danh mục</option>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            <ArrowUpDown size={14} style={{ color: "var(--text-muted, #64748b)" }} />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              style={{ ...selectStyle, minWidth: 130 }}
+            >
+              {EXPENSE_SORTS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+
+            {hasFilter && (
+              <button
+                onClick={clearFilters}
+                style={{
+                  padding: "8px 14px",
+                  background: "transparent",
+                  border: "1px solid #ef4444",
+                  color: "#ef4444",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <X size={13} /> Xoá lọc
+              </button>
+            )}
+
+            <span
+              style={{
+                marginLeft: "auto",
+                fontSize: 12,
+                color: "var(--text-muted, #64748b)",
+              }}
+            >
+              Hiển thị <b>{filteredExpenses.length}</b> / {expenses.length}
+            </span>
+          </div>
+        )}
+
         <div style={cardStyle}>
           <h3 style={h3Style}>
-            <DollarSign size={18} /> Danh sách chi phí ({expenses.length})
+            <DollarSign size={18} /> Danh sách chi phí ({filteredExpenses.length})
           </h3>
 
           {loading ? (
@@ -886,7 +1048,7 @@ function ExpensesTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {expenses.map((e) => (
+                  {filteredExpenses.map((e) => (
                     <tr key={e.id} style={trStyle}>
                       <td style={tdStyle}>
                         {new Date(e.date).toLocaleDateString("vi-VN")}
@@ -895,7 +1057,7 @@ function ExpensesTab() {
                       <td style={tdStyle}>{e.category}</td>
                       <td style={tdStyle}>{e.note || "—"}</td>
                       <td style={{ ...tdStyle, textAlign: "right" }}>
-                        <b style={{ color: "#ef4444" }}>-{money(e.amount)}</b>
+                        <b style={{ color: "#ef4444" }}>-{fmtMoney(e.amount)}</b>
                       </td>
                       <td style={{ ...tdStyle, textAlign: "right" }}>
                         <button
@@ -918,9 +1080,13 @@ function ExpensesTab() {
                       </td>
                     </tr>
                   ))}
-                  {!expenses.length && (
+                  {!filteredExpenses.length && (
                     <tr>
-                      <td colSpan="6" style={emptyTdStyle}>Chưa có chi phí</td>
+                      <td colSpan="6" style={emptyTdStyle}>
+                        {hasFilter
+                          ? "Không có chi phí nào khớp bộ lọc"
+                          : "Chưa có chi phí"}
+                      </td>
                     </tr>
                   )}
                 </tbody>
@@ -930,7 +1096,6 @@ function ExpensesTab() {
         </div>
       </div>
 
-      {/* ✅ ConfirmDialog */}
       {confirm && (
         <ConfirmDialog
           open
@@ -985,20 +1150,27 @@ function StatsTab() {
 
   return (
     <div>
-      {/* Period selector */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          overflowX: "auto",
+          paddingBottom: 4,
+          scrollbarWidth: "none",
+        }}
+      >
         {PERIODS.map((p) => (
           <button
             key={p.id}
             onClick={() => setPeriod(p.id)}
-            style={chipStyle(period === p.id)}
+            style={{ ...chipStyle(period === p.id), flexShrink: 0 }}
           >
             {p.label}
           </button>
         ))}
       </div>
 
-      {/* KPIs */}
       <div
         style={{
           display: "grid",
@@ -1008,17 +1180,17 @@ function StatsTab() {
       >
         <KPI
           label="Tổng doanh thu"
-          value={loading ? "..." : money(totalRevenue)}
+          value={loading ? "..." : fmtMoney(totalRevenue)}
           color="#18a967"
         />
         <KPI
           label="Tổng chi phí"
-          value={loading ? "..." : money(totalExpense)}
+          value={loading ? "..." : fmtMoney(totalExpense)}
           color="#ef4444"
         />
         <KPI
           label="Lợi nhuận"
-          value={loading ? "..." : money(profit)}
+          value={loading ? "..." : fmtMoney(profit)}
           color={profit >= 0 ? "#2634d5" : "#ef4444"}
         />
       </div>
@@ -1062,11 +1234,11 @@ function ReconcileTab() {
           marginBottom: 16,
         }}
       >
-        <KPI label="Tiền hệ thống" value={money(systemTotal)} color="#2634d5" />
-        <KPI label="Tiền thực tế"  value={money(actual)}      color="#f59e0b" />
+        <KPI label="Tiền hệ thống" value={fmtMoney(systemTotal)} color="#2634d5" />
+        <KPI label="Tiền thực tế"  value={fmtMoney(actual)}      color="#f59e0b" />
         <KPI
           label="Chênh lệch"
-          value={money(diff)}
+          value={fmtMoney(diff)}
           color={diff === 0 ? "#18a967" : "#ef4444"}
         />
       </div>
@@ -1113,8 +1285,8 @@ function ReconcileTab() {
             {diff === 0
               ? "✅ Khớp chính xác!"
               : diff > 0
-              ? `⚠️ Thừa ${money(diff)}`
-              : `⚠️ Thiếu ${money(-diff)}`}
+              ? `⚠️ Thừa ${fmtMoney(diff)}`
+              : `⚠️ Thiếu ${fmtMoney(-diff)}`}
           </div>
         )}
       </div>
@@ -1123,10 +1295,9 @@ function ReconcileTab() {
 }
 
 // ============================================================
-// TAB 7: XUẤT BÁO CÁO
+// TAB 7: XUẤT BÁO CÁO (✅ #7.3: quick range)
 // ============================================================
 
-// Escape cell cho CSV: bọc trong "" và nhân đôi " bên trong
 function csvCell(v) {
   const s = String(v ?? "");
   if (s.includes(",") || s.includes('"') || s.includes("\n")) {
@@ -1136,14 +1307,26 @@ function csvCell(v) {
 }
 
 function ExportTab() {
+  const [rangeId, setRangeId] = useState("30d");
   const [from, setFrom] = useState(
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   );
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [to, setTo] = useState(getLocalDateStr());
   const [exporting, setExporting] = useState(false);
 
+  // ✅ #7.3: Chọn quick range → tự set from/to
+  const selectRange = (r) => {
+    setRangeId(r.id);
+    if (r.days) {
+      const toDate = new Date();
+      const fromDate = new Date();
+      fromDate.setDate(toDate.getDate() - r.days + 1);
+      setFrom(getLocalDateStr(fromDate));
+      setTo(getLocalDateStr(toDate));
+    }
+  };
+
   const handleExport = async () => {
-    // Validate khoảng thời gian
     if (new Date(from) > new Date(to)) {
       return toast("Ngày bắt đầu phải trước ngày kết thúc", "error");
     }
@@ -1163,7 +1346,6 @@ function ExportTab() {
         return d >= fromDate && d <= toDate;
       });
 
-      // Build CSV rows (escape từng cell)
       const rows = [
         ["CANTEEN VWA - BAO CAO TAI CHINH"],
         ["Tu ngay", from, "Den ngay", to],
@@ -1189,7 +1371,6 @@ function ExportTab() {
 
       const csv = rows.map((r) => r.map(csvCell).join(",")).join("\n");
 
-      // BOM để Excel đọc UTF-8 đúng
       const blob = new Blob(["\uFEFF" + csv], {
         type: "text/csv;charset=utf-8",
       });
@@ -1204,7 +1385,6 @@ function ExportTab() {
     } catch (e) {
       toast(e.message || "Không xuất được", "error");
     } finally {
-      // Cleanup kể cả khi throw
       if (a && a.parentNode) a.parentNode.removeChild(a);
       if (url) URL.revokeObjectURL(url);
       setExporting(false);
@@ -1226,6 +1406,47 @@ function ExportTab() {
         Xuất file CSV gồm: doanh thu, chi phí, giao dịch trong khoảng thời gian.
       </p>
 
+      {/* ✅ #7.3: Quick ranges */}
+      <label style={labelStyle}>Khoảng thời gian</label>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        {EXPORT_RANGES.map((r) => {
+          const active = rangeId === r.id;
+          const Icon =
+            r.id === "7d" ? Calendar : r.id === "30d" ? CalendarDays : CalendarRange;
+          return (
+            <button
+              key={r.id}
+              onClick={() => selectRange(r)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 16px",
+                background: active ? "#2634d5" : "var(--card-bg, #fff)",
+                color: active ? "#fff" : "var(--text-muted, #475569)",
+                border: "1px solid " + (active ? "#2634d5" : "var(--border-color, #e5e9ef)"),
+                borderRadius: 20,
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: active ? 700 : 500,
+                transition: "all 0.15s",
+              }}
+            >
+              {r.id !== "custom" && <Icon size={14} />}
+              {r.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Custom date range */}
       <div
         style={{
           display: "grid",
@@ -1239,7 +1460,10 @@ function ExportTab() {
             type="date"
             value={from}
             max={to}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={(e) => {
+              setFrom(e.target.value);
+              setRangeId("custom");
+            }}
             style={inputStyle}
           />
         </div>
@@ -1249,7 +1473,10 @@ function ExportTab() {
             type="date"
             value={to}
             min={from}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={(e) => {
+              setTo(e.target.value);
+              setRangeId("custom");
+            }}
             style={inputStyle}
           />
         </div>
@@ -1424,6 +1651,17 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 
+const selectStyle = {
+  padding: "9px 12px",
+  border: "1px solid var(--border-color, #e5e9ef)",
+  borderRadius: 8,
+  outline: "none",
+  background: "var(--bg-secondary, #fff)",
+  color: "var(--text-primary, #172033)",
+  fontSize: 13,
+  cursor: "pointer",
+};
+
 const tableStyle = { width: "100%", borderCollapse: "collapse" };
 const theadStyle = { background: "var(--bg-tertiary, #f5f7fb)" };
 const thStyle = {
@@ -1432,6 +1670,7 @@ const thStyle = {
   fontSize: 12,
   color: "var(--text-muted, #64748b)",
   fontWeight: 600,
+  whiteSpace: "nowrap",
 };
 const trStyle = {
   borderBottom: "1px solid var(--border-color, #eef2f7)",

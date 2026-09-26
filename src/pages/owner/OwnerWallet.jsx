@@ -4,8 +4,9 @@
 // Tính năng:
 //   - Dashboard stats: số dư tổng, đã nạp/rút/thanh toán
 //   - Danh sách giao dịch ví (nạp/rút/payment)
-//   - Filter theo status / type / search
+//   - Filter theo status / type / search / thời gian
 //   - Duyệt / Từ chối yêu cầu (nạp/rút pending)
+//   - Bulk approve (duyệt nhiều giao dịch 1 lúc)
 //   - Auto-refresh mỗi 20s
 //
 // Endpoints:
@@ -18,17 +19,26 @@
 //   - Duyệt tiền cần confirm (không thể undo)
 //   - Từ chối dùng modal thay prompt() native
 //   - Race-safe: dùng reqIdRef để bỏ qua response cũ
+//
+// Batch 4 fixes:
+//   - ✅ #8.1: Skeleton stats khi loading (thay vì "..." text)
+//   - ✅ #8.2: Bulk approve — chọn nhiều pending, duyệt 1 lúc
+//   - ✅ #8.3: Filter thời gian (hôm nay / 7 ngày / 30 ngày / tất cả)
+//   - ✅ #8.4: SkeletonList khi loading (đã có, giữ nguyên)
+//   - ✅ #8.5: Stats grid dùng SkeletonStats khi loading
 // ============================================================
 import { Skeleton, SkeletonList, SkeletonStats } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   Wallet, ArrowDownCircle, ArrowUpCircle, ShoppingBag,
   Check, Ban, Search, AlertTriangle, Eye, Building2, X,
-  Loader2, AlertCircle, RefreshCw,
+  Loader2, AlertCircle, RefreshCw, CheckSquare, Square,
+  Clock,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
 // CONSTANTS
@@ -49,6 +59,14 @@ const TYPE_OPTIONS = [
   { id: "deposit",  label: "Nạp tiền" },
   { id: "withdraw", label: "Rút tiền" },
   { id: "payment",  label: "Thanh toán" },
+];
+
+// ✅ #8.3: Time range filter
+const TIME_RANGES = [
+  { id: "today",  label: "Hôm nay", days: 1 },
+  { id: "7d",     label: "7 ngày",  days: 7 },
+  { id: "30d",    label: "30 ngày", days: 30 },
+  { id: "all",    label: "Tất cả",  days: null },
 ];
 
 const TX_CONFIG = {
@@ -77,6 +95,20 @@ const EMPTY_STATS = {
 };
 
 // ============================================================
+// HELPERS
+// ============================================================
+
+/** Ngưỡng thời gian bắt đầu của range (ms). null = không filter */
+function getRangeStart(rangeId) {
+  const r = TIME_RANGES.find((x) => x.id === rangeId);
+  if (!r || !r.days) return null;
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - (r.days - 1));
+  return d.getTime();
+}
+
+// ============================================================
 // MAIN COMPONENT
 // ============================================================
 
@@ -91,14 +123,23 @@ export default function OwnerWallet() {
   // ---------- Filters ----------
   const [tab, setTab] = useState("pending");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [rangeFilter, setRangeFilter] = useState("all"); // ✅ #8.3
   const [q, setQ] = useState("");
 
   // ---------- Processing state (per-transaction) ----------
   const [processing, setProcessing] = useState({}); // { [id]: "approve" | "reject" }
 
+  // ---------- ✅ #8.2: Bulk selection ----------
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   // ---------- Modals ----------
   const [detailTx, setDetailTx] = useState(null);
-  const [rejectModal, setRejectModal] = useState(null); // tx object
+  const [rejectModal, setRejectModal] = useState(null);
+
+  // Confirm dialog (bulk approve)
+  const [confirm, setConfirm] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   // Race-safe
   const reqIdRef = useRef(0);
@@ -132,12 +173,11 @@ export default function OwnerWallet() {
     }
   }, []);
 
-  // Load lần đầu
   useEffect(() => {
     load(false);
   }, [load]);
 
-  // Auto-refresh mỗi 20s (silent)
+  // Auto-refresh mỗi 20s
   useEffect(() => {
     const timer = setInterval(() => load(true), REFRESH_MS);
     return () => clearInterval(timer);
@@ -154,6 +194,11 @@ export default function OwnerWallet() {
     return () => window.removeEventListener("keydown", handler);
   }, [detailTx, rejectModal]);
 
+  // Reset selection khi đổi tab/type/range
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [tab, typeFilter, rangeFilter]);
+
   // ---------- Computed ----------
 
   const filtered = useMemo(() => {
@@ -161,6 +206,15 @@ export default function OwnerWallet() {
 
     if (tab !== "all") result = result.filter((t) => t.status === tab);
     if (typeFilter !== "all") result = result.filter((t) => t.type === typeFilter);
+
+    // ✅ #8.3: Time filter
+    const rangeStart = getRangeStart(rangeFilter);
+    if (rangeStart !== null) {
+      result = result.filter((t) => {
+        const ts = new Date(t.created_at || 0).getTime();
+        return ts >= rangeStart;
+      });
+    }
 
     if (q.trim()) {
       const s = q.toLowerCase().trim();
@@ -176,7 +230,7 @@ export default function OwnerWallet() {
       (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
     );
     return result;
-  }, [allTx, tab, typeFilter, q]);
+  }, [allTx, tab, typeFilter, rangeFilter, q]);
 
   const counts = useMemo(
     () => ({
@@ -188,35 +242,142 @@ export default function OwnerWallet() {
     [allTx]
   );
 
-  const hasFilter = tab !== "pending" || typeFilter !== "all" || q.trim();
+  const hasFilter =
+    tab !== "pending" || typeFilter !== "all" || rangeFilter !== "all" || q.trim();
+
+  // ✅ #8.2: Danh sách pending có thể bulk select
+  const selectableTxs = useMemo(
+    () => filtered.filter((t) => t.status === "pending"),
+    [filtered]
+  );
+
+  const allSelected =
+    selectableTxs.length > 0 &&
+    selectableTxs.every((t) => selectedIds.includes(t.id));
+
+  // ---------- Selection handlers ----------
+
+  const toggleSelect = (id) => {
+    setSelectedIds((s) =>
+      s.includes(id) ? s.filter((x) => x !== id) : [...s, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(selectableTxs.map((t) => t.id));
+    }
+  };
 
   // ---------- Actions ----------
 
-  const approve = async (tx) => {
-    // Confirm — duyệt tiền không thể undo
-    const amount = money(tx.amount);
-    const action = tx.type === "deposit" ? "nạp" : "rút";
-    if (
-      !confirm(
-        `Duyệt yêu cầu ${action} ${amount} của "${tx.user_name}"?\n\n` +
-        `Mã GD: ${tx.code}`
-      )
-    )
-      return;
+  /**
+   * ✅ Batch 4: Mở ConfirmDialog cho duyệt đơn lẻ
+   * (thay cho confirm() native → đồng bộ UX toàn app)
+   */
+  const openApprove = (tx) => {
+    if (processing[tx.id]) return;
 
-    setProcessing((p) => ({ ...p, [tx.id]: "approve" }));
+    const action = tx.type === "deposit" ? "nạp" : "rút";
+    const amount = money(tx.amount);
+
+    setConfirm({
+      title: `Duyệt yêu cầu ${action}?`,
+      message:
+        `Xác nhận duyệt ${action} ${amount} cho "${tx.user_name}".\n\n` +
+        `Mã GD: ${tx.code}\n` +
+        "Hành động này không thể hoàn tác.",
+      confirmText: "Duyệt",
+      cancelText: "Hủy",
+      danger: false,
+      onConfirm: async () => {
+        setProcessing((p) => ({ ...p, [tx.id]: "approve" }));
+        try {
+          await api.wallet.approve(tx.id);
+          toast(`Đã duyệt ${tx.code}`, "success");
+          setConfirm(null);
+          load(true);
+        } catch (e) {
+          toast(e.message || "Không duyệt được", "error");
+        } finally {
+          setProcessing((p) => {
+            const n = { ...p };
+            delete n[tx.id];
+            return n;
+          });
+        }
+      },
+    });
+  };
+
+  /**
+   * ✅ #8.2: Bulk approve — mở ConfirmDialog trước
+   */
+  const openBulkApprove = () => {
+    if (!selectedIds.length || bulkProcessing) return;
+
+    const txs = allTx.filter((t) => selectedIds.includes(t.id));
+    const depositCount = txs.filter((t) => t.type === "deposit").length;
+    const withdrawCount = txs.filter((t) => t.type === "withdraw").length;
+    const totalAmount = txs.reduce((s, t) => s + (t.amount || 0), 0);
+
+    setConfirm({
+      title: `Duyệt ${txs.length} giao dịch đã chọn?`,
+      message:
+        `Bao gồm ${depositCount} nạp và ${withdrawCount} rút. ` +
+        `Tổng giá trị ${money(totalAmount)}.\n\n` +
+        "Hành động này không thể hoàn tác.",
+      confirmText: `Duyệt ${txs.length}`,
+      cancelText: "Hủy",
+      danger: false,
+      onConfirm: async () => {
+        setBulkProcessing(true);
+        let success = 0;
+        let failed = 0;
+
+        for (const id of selectedIds) {
+          try {
+            await api.wallet.approve(id);
+            success++;
+          } catch {
+            failed++;
+          }
+        }
+
+        setBulkProcessing(false);
+        setConfirm(null);
+        setSelectedIds([]);
+
+        if (failed === 0) {
+          toast(`Đã duyệt thành công ${success} giao dịch`, "success");
+        } else if (success === 0) {
+          toast(`Không duyệt được giao dịch nào`, "error");
+        } else {
+          toast(
+            `Đã duyệt ${success}, thất bại ${failed} giao dịch`,
+            "warning"
+          );
+        }
+
+        load(true);
+      },
+    });
+  };
+
+  const closeConfirm = () => {
+    if (confirmBusy || bulkProcessing) return;
+    setConfirm(null);
+  };
+
+  const runConfirm = async () => {
+    if (!confirm || confirmBusy) return;
+    setConfirmBusy(true);
     try {
-      await api.wallet.approve(tx.id);
-      toast(`Đã duyệt ${tx.code}`, "success");
-      load(true);
-    } catch (e) {
-      toast(e.message || "Không duyệt được", "error");
+      await confirm.onConfirm();
     } finally {
-      setProcessing((p) => {
-        const n = { ...p };
-        delete n[tx.id];
-        return n;
-      });
+      setConfirmBusy(false);
     }
   };
 
@@ -243,6 +404,7 @@ export default function OwnerWallet() {
   const clearFilters = () => {
     setTab("pending");
     setTypeFilter("all");
+    setRangeFilter("all");
     setQ("");
   };
 
@@ -251,390 +413,604 @@ export default function OwnerWallet() {
   // ============================================================
 
   return (
-    <div>
-           {/* ============================================================
-          STATS
-          ============================================================ */}
-      {loading ? (
-        <div style={{ marginBottom: 20 }}>
-          <SkeletonStats count={4} columns="repeat(auto-fit, minmax(200px, 1fr))" />
-        </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: 14,
-            marginBottom: 20,
-          }}
-        >
-          <StatBox icon={<Wallet size={20} />} label="Tổng số dư ví" value={money(stats.totalBalance)} color="#2634d5" />
-          ...
-        </div>
-      )}
-
-      {/* ============================================================
-          PENDING ALERT
-          ============================================================ */}
-      {stats.pendingCount > 0 && (
-        <div
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(239, 68, 68, 0.08))",
-            border: "2px solid #f59e0b",
-            borderRadius: 12,
-            padding: "14px 18px",
-            marginBottom: 20,
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            flexWrap: "wrap",
-          }}
-        >
+    <>
+      <div>
+        {/* ============================================================
+            STATS
+            ✅ #8.1: Dùng SkeletonStats khi loading
+            ============================================================ */}
+        {loading ? (
+          <div style={{ marginBottom: 20 }}>
+            <SkeletonStats count={4} columns="repeat(auto-fit, minmax(200px, 1fr))" />
+          </div>
+        ) : (
           <div
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              background: "#f59e0b",
-              color: "#fff",
               display: "grid",
-              placeItems: "center",
-              flexShrink: 0,
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: 14,
+              marginBottom: 20,
             }}
           >
-            <AlertTriangle size={22} />
+            <StatBox
+              icon={<Wallet size={20} />}
+              label="Tổng số dư ví"
+              value={money(stats.totalBalance)}
+              color="#2634d5"
+            />
+            <StatBox
+              icon={<ArrowDownCircle size={20} />}
+              label="Đã nạp"
+              value={money(stats.totalDeposited)}
+              color="#18a967"
+            />
+            <StatBox
+              icon={<ArrowUpCircle size={20} />}
+              label="Đã rút"
+              value={money(stats.totalWithdrawn)}
+              color="#f59e0b"
+            />
+            <StatBox
+              icon={<ShoppingBag size={20} />}
+              label="Đã thanh toán"
+              value={money(stats.totalPaid)}
+              color="#8b5cf6"
+            />
           </div>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <b
+        )}
+
+        {/* ============================================================
+            PENDING ALERT
+            ============================================================ */}
+        {stats.pendingCount > 0 && (
+          <div
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(239, 68, 68, 0.08))",
+              border: "2px solid #f59e0b",
+              borderRadius: 12,
+              padding: "14px 18px",
+              marginBottom: 20,
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            <div
               style={{
-                fontSize: 14,
-                color: "#92400e",
-                display: "block",
-                marginBottom: 2,
+                width: 44,
+                height: 44,
+                borderRadius: "50%",
+                background: "#f59e0b",
+                color: "#fff",
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
               }}
             >
-              Có {stats.pendingCount} yêu cầu chờ duyệt
-            </b>
-            <span style={{ fontSize: 13, color: "#78350f" }}>
-              {stats.pendingDepositCount} nạp · {stats.pendingWithdrawCount} rút
-              — vui lòng xử lý sớm
-            </span>
+              <AlertTriangle size={22} />
+            </div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <b
+                style={{
+                  fontSize: 14,
+                  color: "#92400e",
+                  display: "block",
+                  marginBottom: 2,
+                }}
+              >
+                Có {stats.pendingCount} yêu cầu chờ duyệt
+              </b>
+              <span style={{ fontSize: 13, color: "#78350f" }}>
+                {stats.pendingDepositCount} nạp · {stats.pendingWithdrawCount} rút
+                — vui lòng xử lý sớm
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                setTab("pending");
+                setTypeFilter("all");
+                setRangeFilter("all");
+              }}
+              style={{
+                padding: "9px 16px",
+                background: "#f59e0b",
+                color: "#fff",
+                border: 0,
+                borderRadius: 8,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              Xem ngay
+            </button>
           </div>
-          <button
-            onClick={() => {
-              setTab("pending");
-              setTypeFilter("all");
-            }}
+        )}
+
+        {/* ============================================================
+            ERROR BANNER
+            ============================================================ */}
+        {error && (
+          <div
             style={{
-              padding: "9px 16px",
-              background: "#f59e0b",
-              color: "#fff",
-              border: 0,
-              borderRadius: 8,
-              fontWeight: 700,
-              cursor: "pointer",
+              background: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+              borderRadius: 10,
+              padding: "12px 16px",
+              marginBottom: 16,
+              color: "#ef4444",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
               fontSize: 13,
             }}
           >
-            Xem ngay
-          </button>
-        </div>
-      )}
+            <AlertCircle size={18} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>{error}</span>
+            <button
+              onClick={() => load(false)}
+              style={{
+                padding: "6px 12px",
+                background: "#ef4444",
+                color: "#fff",
+                border: 0,
+                borderRadius: 6,
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 12,
+              }}
+            >
+              Thử lại
+            </button>
+          </div>
+        )}
 
-      {/* ============================================================
-          ERROR BANNER
-          ============================================================ */}
-      {error && (
+        {/* ============================================================
+            FILTERS
+            ============================================================ */}
         <div
           style={{
-            background: "rgba(239, 68, 68, 0.08)",
-            border: "1px solid rgba(239, 68, 68, 0.2)",
-            borderRadius: 10,
-            padding: "12px 16px",
+            background: "var(--card-bg, #fff)",
+            border: "1px solid var(--border-color, #e7ebf0)",
+            borderRadius: 12,
+            padding: 16,
             marginBottom: 16,
-            color: "#ef4444",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            fontSize: 13,
           }}
         >
-          <AlertCircle size={18} style={{ flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>{error}</span>
-          <button
-            onClick={() => load(false)}
-            style={{
-              padding: "6px 12px",
-              background: "#ef4444",
-              color: "#fff",
-              border: 0,
-              borderRadius: 6,
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 12,
-            }}
-          >
-            Thử lại
-          </button>
-        </div>
-      )}
-
-      {/* ============================================================
-          FILTERS
-          ============================================================ */}
-      <div
-        style={{
-          background: "var(--card-bg, #fff)",
-          border: "1px solid var(--border-color, #e7ebf0)",
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 16,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            flexWrap: "wrap",
-            alignItems: "center",
-            marginBottom: 12,
-          }}
-        >
-          {/* Search */}
           <div
             style={{
               display: "flex",
+              gap: 12,
+              flexWrap: "wrap",
               alignItems: "center",
-              gap: 8,
-              background: "var(--bg-tertiary, #f5f7fb)",
-              border: "1px solid var(--border-color, #e5e9ef)",
-              borderRadius: 8,
-              padding: "8px 12px",
-              flex: 1,
-              minWidth: 200,
+              marginBottom: 12,
             }}
           >
-            <Search size={16} style={{ color: "var(--text-light, #8993a3)" }} />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm theo tên, email, mã GD..."
+            {/* Search */}
+            <div
               style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: "var(--bg-tertiary, #f5f7fb)",
+                border: "1px solid var(--border-color, #e5e9ef)",
+                borderRadius: 8,
+                padding: "8px 12px",
                 flex: 1,
-                border: 0,
-                outline: "none",
-                background: "transparent",
-                color: "var(--text-primary, #172033)",
-                fontSize: 13,
-                minWidth: 0,
+                minWidth: 200,
               }}
-            />
-            {q && (
+            >
+              <Search size={16} style={{ color: "var(--text-light, #8993a3)" }} />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Tìm theo tên, email, mã GD..."
+                style={{
+                  flex: 1,
+                  border: 0,
+                  outline: "none",
+                  background: "transparent",
+                  color: "var(--text-primary, #172033)",
+                  fontSize: 13,
+                  minWidth: 0,
+                }}
+              />
+              {q && (
+                <button
+                  onClick={() => setQ("")}
+                  style={clearBtnStyle}
+                  aria-label="Xoá tìm kiếm"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Type filter */}
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              style={selectStyle}
+            >
+              {TYPE_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Refresh */}
+            <button
+              onClick={() => load(false)}
+              disabled={refreshing}
+              title="Làm mới"
+              style={{
+                padding: "9px 14px",
+                background: "var(--bg-tertiary, #f5f7fb)",
+                border: "1px solid var(--border-color, #e5e9ef)",
+                borderRadius: 8,
+                cursor: refreshing ? "not-allowed" : "pointer",
+                fontSize: 13,
+                color: "var(--text-primary, #172033)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                opacity: refreshing ? 0.7 : 1,
+              }}
+            >
+              {refreshing ? (
+                <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+              Làm mới
+            </button>
+
+            {/* Clear */}
+            {hasFilter && (
               <button
-                onClick={() => setQ("")}
-                style={clearBtnStyle}
-                aria-label="Xoá tìm kiếm"
+                onClick={clearFilters}
+                style={{
+                  padding: "9px 14px",
+                  background: "transparent",
+                  border: "1px solid #ef4444",
+                  color: "#ef4444",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
               >
-                <X size={14} />
+                <X size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
+                Xoá lọc
               </button>
             )}
           </div>
 
-          {/* Type filter */}
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            style={selectStyle}
-          >
-            {TYPE_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-
-          {/* Refresh */}
-          <button
-            onClick={() => load(false)}
-            disabled={refreshing}
-            title="Làm mới"
+          {/* ✅ #8.3: Time range chips */}
+          <div
             style={{
-              padding: "9px 14px",
-              background: "var(--bg-tertiary, #f5f7fb)",
-              border: "1px solid var(--border-color, #e5e9ef)",
-              borderRadius: 8,
-              cursor: refreshing ? "not-allowed" : "pointer",
-              fontSize: 13,
-              color: "var(--text-primary, #172033)",
-              display: "inline-flex",
-              alignItems: "center",
+              display: "flex",
               gap: 6,
-              opacity: refreshing ? 0.7 : 1,
+              marginBottom: 12,
+              flexWrap: "wrap",
             }}
           >
-            {refreshing ? (
-              <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
-            ) : (
-              <RefreshCw size={14} />
-            )}
-            Làm mới
-          </button>
-
-          {/* Clear */}
-          {hasFilter && (
-            <button
-              onClick={clearFilters}
+            <span
               style={{
-                padding: "9px 14px",
-                background: "transparent",
-                border: "1px solid #ef4444",
-                color: "#ef4444",
-                borderRadius: 8,
                 fontSize: 12,
-                fontWeight: 600,
-                cursor: "pointer",
+                color: "var(--text-muted, #64748b)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                marginRight: 4,
               }}
             >
-              <X size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
-              Xoá lọc
-            </button>
-          )}
+              <Clock size={12} /> Thời gian:
+            </span>
+            {TIME_RANGES.map((r) => {
+              const active = rangeFilter === r.id;
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => setRangeFilter(r.id)}
+                  style={{
+                    padding: "6px 12px",
+                    background: active ? "#2634d5" : "var(--bg-tertiary, #f5f7fb)",
+                    color: active ? "#fff" : "var(--text-muted, #475569)",
+                    border: "1px solid " + (active ? "#2634d5" : "var(--border-color, #e5e9ef)"),
+                    borderRadius: 16,
+                    fontSize: 12,
+                    fontWeight: active ? 700 : 500,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {r.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Status tabs */}
+          <div
+            style={{
+              display: "flex",
+              gap: 4,
+              background: "var(--bg-tertiary, #f5f7fb)",
+              padding: 4,
+              borderRadius: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            {STATUS_TABS.map((t) => {
+              const active = tab === t.id;
+              const count = counts[t.id] || 0;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  style={{
+                    padding: "9px 14px",
+                    background: active ? t.color : "transparent",
+                    color: active ? "#fff" : "var(--text-muted, #475569)",
+                    border: 0,
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {t.label}
+                  {count > 0 && (
+                    <span
+                      style={{
+                        background: active
+                          ? "rgba(255,255,255,0.3)"
+                          : t.id === "pending"
+                          ? "#ef4444"
+                          : "var(--card-bg, #e2e8f0)",
+                        color: active
+                          ? "#fff"
+                          : t.id === "pending"
+                          ? "#fff"
+                          : "var(--text-muted, #64748b)",
+                        minWidth: 20,
+                        height: 18,
+                        padding: "0 6px",
+                        borderRadius: 9,
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Status tabs */}
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            background: "var(--bg-tertiary, #f5f7fb)",
-            padding: 4,
-            borderRadius: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          {STATUS_TABS.map((t) => {
-            const active = tab === t.id;
-            const count = counts[t.id] || 0;
-            return (
+        {/* ============================================================
+            ✅ #8.2: BULK ACTION BAR
+            ============================================================ */}
+        {selectedIds.length > 0 && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "12px 16px",
+              background:
+                "linear-gradient(135deg, rgba(24, 169, 103, 0.12), rgba(38, 52, 213, 0.08))",
+              border: "1px solid rgba(24, 169, 103, 0.3)",
+              borderRadius: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#18a967",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <CheckSquare size={16} />
+              Đã chọn <b>{selectedIds.length}</b> giao dịch
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
               <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => setSelectedIds([])}
+                disabled={bulkProcessing}
                 style={{
-                  padding: "9px 14px",
-                  background: active ? t.color : "transparent",
-                  color: active ? "#fff" : "var(--text-muted, #475569)",
+                  padding: "8px 14px",
+                  background: "transparent",
+                  border: "1px solid var(--border-color, #e5e9ef)",
+                  color: "var(--text-muted, #64748b)",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: bulkProcessing ? "not-allowed" : "pointer",
+                }}
+              >
+                Bỏ chọn
+              </button>
+              <button
+                onClick={openBulkApprove}
+                disabled={bulkProcessing}
+                style={{
+                  padding: "8px 16px",
+                  background: bulkProcessing ? "#94a3b8" : "#18a967",
+                  color: "#fff",
                   border: 0,
                   borderRadius: 8,
-                  cursor: "pointer",
                   fontSize: 12,
                   fontWeight: 700,
+                  cursor: bulkProcessing ? "not-allowed" : "pointer",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 6,
-                  whiteSpace: "nowrap",
                 }}
               >
-                {t.label}
-                {count > 0 && (
-                  <span
-                    style={{
-                      background: active
-                        ? "rgba(255,255,255,0.3)"
-                        : t.id === "pending"
-                        ? "#ef4444"
-                        : "var(--card-bg, #e2e8f0)",
-                      color: active
-                        ? "#fff"
-                        : t.id === "pending"
-                        ? "#fff"
-                        : "var(--text-muted, #64748b)",
-                      minWidth: 20,
-                      height: 18,
-                      padding: "0 6px",
-                      borderRadius: 9,
-                      fontSize: 10.5,
-                      fontWeight: 800,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {count}
-                  </span>
+                {bulkProcessing ? (
+                  <>
+                    <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+                    Đang duyệt...
+                  </>
+                ) : (
+                  <>
+                    <Check size={13} /> Duyệt {selectedIds.length}
+                  </>
                 )}
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ============================================================
-          TRANSACTIONS LIST
-          ============================================================ */}
-      <div
-        style={{
-          background: "var(--card-bg, #fff)",
-          border: "1px solid var(--border-color, #e7ebf0)",
-          borderRadius: 12,
-          padding: 20,
-        }}
-      >
-                {loading ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <SkeletonList key={i} />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={emptyBoxStyle}>
-            <Wallet size={40} style={{ opacity: 0.3, marginBottom: 8 }} />
-            <p style={{ margin: 0, fontSize: 13 }}>
-              {hasFilter
-                ? "Không có giao dịch nào khớp bộ lọc"
-                : tab === "pending"
-                ? "Không có yêu cầu nào chờ duyệt"
-                : "Chưa có giao dịch nào"}
-            </p>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {filtered.map((tx) => (
-              <TxRow
-                key={tx.id}
-                tx={tx}
-                processing={processing[tx.id]}
-                onApprove={() => approve(tx)}
-                onReject={() => openReject(tx)}
-                onView={() => setDetailTx(tx)}
-              />
-            ))}
+            </div>
           </div>
         )}
+
+        {/* ============================================================
+            TRANSACTIONS LIST
+            ============================================================ */}
+        <div
+          style={{
+            background: "var(--card-bg, #fff)",
+            border: "1px solid var(--border-color, #e7ebf0)",
+            borderRadius: 12,
+            padding: 20,
+          }}
+        >
+          {/* ✅ #8.2: Select all header (chỉ khi tab pending) */}
+          {tab === "pending" && selectableTxs.length > 0 && !loading && (
+            <div
+              style={{
+                marginBottom: 12,
+                paddingBottom: 12,
+                borderBottom: "1px dashed var(--border-color, #eef2f7)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <button
+                onClick={toggleSelectAll}
+                style={{
+                  background: "transparent",
+                  border: 0,
+                  cursor: "pointer",
+                  padding: 4,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  color: "var(--text-muted, #64748b)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                {allSelected ? (
+                  <CheckSquare size={18} color="#18a967" />
+                ) : (
+                  <Square size={18} />
+                )}
+                {allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+              </button>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-light, #8993a3)",
+                }}
+              >
+                ({selectableTxs.length} giao dịch chờ duyệt trong view này)
+              </span>
+            </div>
+          )}
+
+          {loading ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <SkeletonList key={i} />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={emptyBoxStyle}>
+              <Wallet size={40} style={{ opacity: 0.3, marginBottom: 8 }} />
+              <p style={{ margin: 0, fontSize: 13 }}>
+                {hasFilter
+                  ? "Không có giao dịch nào khớp bộ lọc"
+                  : tab === "pending"
+                  ? "Không có yêu cầu nào chờ duyệt"
+                  : "Chưa có giao dịch nào"}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {filtered.map((tx) => (
+                <TxRow
+                  key={tx.id}
+                  tx={tx}
+                  processing={processing[tx.id]}
+                  selected={selectedIds.includes(tx.id)}
+                  onToggleSelect={() => toggleSelect(tx.id)}
+                  onApprove={() => openApprove(tx)}
+                  onReject={() => openReject(tx)}
+                  onView={() => setDetailTx(tx)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ============================================================
+            MODALS
+            ============================================================ */}
+        {detailTx && (
+          <DetailModal tx={detailTx} onClose={() => setDetailTx(null)} />
+        )}
+
+        {rejectModal && (
+          <RejectModal
+            tx={rejectModal}
+            onClose={() => setRejectModal(null)}
+            onConfirm={(note) => confirmReject(rejectModal, note)}
+          />
+        )}
+
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
 
-      {/* ============================================================
-          MODALS
-          ============================================================ */}
-      {detailTx && (
-        <DetailModal tx={detailTx} onClose={() => setDetailTx(null)} />
-      )}
-
-      {rejectModal && (
-        <RejectModal
-          tx={rejectModal}
-          onClose={() => setRejectModal(null)}
-          onConfirm={(note) => confirmReject(rejectModal, note)}
+      {/* ✅ #8.2: ConfirmDialog cho bulk approve */}
+      {confirm && (
+        <ConfirmDialog
+          open
+          title={confirm.title}
+          message={confirm.message}
+          confirmText={confirm.confirmText}
+          cancelText={confirm.cancelText}
+          danger={confirm.danger}
+          loading={confirmBusy || bulkProcessing}
+          onConfirm={runConfirm}
+          onClose={closeConfirm}
         />
       )}
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
+    </>
   );
 }
 
@@ -642,7 +1018,7 @@ export default function OwnerWallet() {
 // SUB-COMPONENT: TxRow
 // ============================================================
 
-function TxRow({ tx, processing, onApprove, onReject, onView }) {
+function TxRow({ tx, processing, selected, onToggleSelect, onApprove, onReject, onView }) {
   const config = TX_CONFIG[tx.type] || {
     icon: Wallet,
     color: "#2634d5",
@@ -660,6 +1036,7 @@ function TxRow({ tx, processing, onApprove, onReject, onView }) {
   const Icon = config.icon;
   const isPending = tx.status === "pending";
   const isProcessing = !!processing;
+  const canSelect = isPending;
 
   return (
     <div
@@ -668,15 +1045,43 @@ function TxRow({ tx, processing, onApprove, onReject, onView }) {
         alignItems: "center",
         gap: 12,
         padding: 14,
-        background: "var(--bg-tertiary, #f8fafc)",
+        background: selected
+          ? "rgba(24, 169, 103, 0.06)"
+          : "var(--bg-tertiary, #f8fafc)",
         borderRadius: 10,
-        border: isPending
+        border: selected
+          ? "1px solid #18a967"
+          : isPending
           ? `1px solid ${config.color}40`
           : "1px solid var(--border-color, #eef2f7)",
         opacity: isProcessing ? 0.6 : 1,
-        transition: "opacity 0.2s",
+        transition: "all 0.2s",
       }}
     >
+      {/* ✅ #8.2: Checkbox khi pending */}
+      {canSelect && (
+        <button
+          onClick={onToggleSelect}
+          disabled={isProcessing}
+          title={selected ? "Bỏ chọn" : "Chọn để duyệt hàng loạt"}
+          style={{
+            background: "transparent",
+            border: 0,
+            cursor: isProcessing ? "not-allowed" : "pointer",
+            padding: 0,
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          {selected ? (
+            <CheckSquare size={22} color="#18a967" />
+          ) : (
+            <Square size={22} color="#94a3b8" />
+          )}
+        </button>
+      )}
+
       {/* Icon */}
       <div
         style={{
@@ -1017,7 +1422,7 @@ function DetailModal({ tx, onClose }) {
 }
 
 // ============================================================
-// SUB-COMPONENT: RejectModal (thay prompt() native)
+// SUB-COMPONENT: RejectModal
 // ============================================================
 
 function RejectModal({ tx, onClose, onConfirm }) {
@@ -1330,12 +1735,6 @@ const btnCancelStyle = {
   color: "var(--text-primary, #172033)",
   fontWeight: 600,
   fontSize: 13,
-};
-
-const loadingBoxStyle = {
-  textAlign: "center",
-  padding: 40,
-  color: "var(--text-light, #8993a3)",
 };
 
 const emptyBoxStyle = {

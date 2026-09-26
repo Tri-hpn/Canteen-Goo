@@ -1,50 +1,137 @@
 // ============================================================
 // OWNERDASHBOARD.JSX — Tổng quan hoạt động Canteen (Admin)
 // ============================================================
-// Hiển thị:
-//   - 4 KPI cards: doanh thu, đơn, KH, sắp hết hàng
-//   - Bar chart: doanh thu 7 ngày (lấy từ api.reports.revenue)
-//   - Pie chart: trạng thái đơn (lấy từ api.stats.byStatus)
-//   - Bảng 5 đơn hàng mới nhất (link sang trang orders)
+// Tách nhiệm vụ với OwnerReports:
+//   - Dashboard: OPERATIONAL (cần xử lý gì hôm nay, trend nhanh)
+//   - Reports: ANALYTICAL (báo cáo chuyên sâu, so sánh kỳ)
 //
-// Auto-refresh mỗi 30s. Có loading + error state + nút refresh thủ công.
+// Hiển thị:
+//   - 4 KPI cards với trend % so hôm qua
+//   - Cần xử lý hôm nay (đơn chờ, kho sắp hết)
+//   - Quick actions (link nhanh các trang)
+//   - Bar chart doanh thu 7 ngày (at-a-glance)
+//   - Đơn hàng gần đây + quick status update
+//
+// Auto-refresh mỗi 30s. Có loading + error + nút refresh thủ công.
+//
+// Batch 4C:
+//   - ✅ Bỏ pie chart (đã có ở Reports) → thay "Cần xử lý hôm nay"
+//   - ✅ Thêm Quick Actions grid
+//   - ✅ KPI cards có trend % so hôm qua
+//   - ✅ Recent orders có quick action "Xác nhận"
+//   - ✅ Skeleton loading
 // ============================================================
 
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   DollarSign, ShoppingBag, Users, AlertTriangle,
   Loader2, AlertCircle, RefreshCw, TrendingUp, TrendingDown,
+  Check, ChevronRight, Package, Ticket, Utensils, BarChart3,
+  ClipboardList, Warehouse, Wallet, ArrowRight,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
-  PieChart, Pie, Cell, CartesianGrid,
+  CartesianGrid,
 } from "recharts";
 import { api } from "../../api";
 import { money } from "../../components/UI";
+import { toast } from "../../components/Effects";
 
 // ============================================================
 // CONSTANTS
 // ============================================================
 
-// Màu cho Pie chart theo từng status
-const STATUS_COLORS = ["#18a967", "#f59e0b", "#2634d5", "#8b5cf6", "#ef4444"];
+const REFRESH_MS = 30000;
+const RECENT_ORDERS_LIMIT = 5;
 
-// Mapping trạng thái → key CSS (dùng cho badge)
-const STATUS_KEY = {
-  "Chờ xác nhận": "pending",
-  "Đã xác nhận": "confirmed",
-  "Đang chuẩn bị": "preparing",
-  "Sẵn sàng nhận": "ready",
-  "Hoàn thành": "done",
-  "Đã hủy": "cancelled",
+// Quick action buttons
+const QUICK_ACTIONS = [
+  {
+    key: "orders",
+    label: "Đơn hàng",
+    icon: ClipboardList,
+    to: "/owner/orders",
+    color: "#2634d5",
+  },
+  {
+    key: "menu",
+    label: "Thực đơn",
+    icon: Utensils,
+    to: "/owner/menu",
+    color: "#0EA5E9",
+  },
+  {
+    key: "inventory",
+    label: "Kho hàng",
+    icon: Warehouse,
+    to: "/owner/inventory",
+    color: "#18a967",
+  },
+  {
+    key: "vouchers",
+    label: "Voucher",
+    icon: Ticket,
+    to: "/owner/vouchers",
+    color: "#ec4899",
+  },
+  {
+    key: "finance",
+    label: "Tài chính",
+    icon: Wallet,
+    to: "/owner/finance",
+    color: "#f59e0b",
+  },
+  {
+    key: "reports",
+    label: "Báo cáo",
+    icon: BarChart3,
+    to: "/owner/reports",
+    color: "#8b5cf6",
+  },
+];
+
+// Next status flow
+const NEXT_STATUS = {
+  "Chờ xác nhận": "Đã xác nhận",
+  "Đã xác nhận": "Đang chuẩn bị",
 };
 
-// Auto-refresh interval (ms) — 30 giây
-const REFRESH_MS = 30000;
+const STATUS_COLORS = {
+  "Chờ xác nhận": { bg: "#fef3c7", fg: "#92400e" },
+  "Đã xác nhận": { bg: "#dbeafe", fg: "#1e40af" },
+  "Đang chuẩn bị": { bg: "#ede9fe", fg: "#6d28d9" },
+  "Sẵn sàng nhận": { bg: "#d1fae5", fg: "#065f46" },
+  "Hoàn thành": { bg: "#e8f9f1", fg: "#18a967" },
+  "Đã hủy": { bg: "#fee2e2", fg: "#991b1b" },
+};
 
-// Số đơn gần nhất hiển thị
-const RECENT_ORDERS_LIMIT = 5;
+// ============================================================
+// HELPERS
+// ============================================================
+
+function getLocalDateStr(input) {
+  if (!input) return "";
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dt = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dt}`;
+}
+
+function fmtTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function calcDelta(current, previous) {
+  if (previous === 0) return current > 0 ? { pct: 100, isUp: true } : null;
+  const pct = ((current - previous) / previous) * 100;
+  return { pct: Math.abs(pct), isUp: pct >= 0 };
+}
 
 // ============================================================
 // MAIN COMPONENT
@@ -59,10 +146,15 @@ export default function OwnerDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [advancingId, setAdvancingId] = useState(null);
 
-  // ---------- Load data ----------
+  const reqIdRef = useRef(0);
+  const navigate = useNavigate();
+
+  // ---------- Load ----------
 
   const loadAll = useCallback(async (silent = false) => {
+    const myReqId = ++reqIdRef.current;
     if (!silent) setLoading(true);
     setRefreshing(true);
     setError("");
@@ -74,38 +166,42 @@ export default function OwnerDashboard() {
         api.orders.all("Tất cả"),
       ]);
 
+      if (myReqId !== reqIdRef.current) return;
+
       setStats(statsRes);
       setReports(reportsRes);
 
-      // Sắp xếp đơn mới nhất trước, lấy N đơn đầu
       const sortedOrders = [...(ordersRes || [])].sort(
         (a, b) =>
           new Date(b.created_at || 0) - new Date(a.created_at || 0)
       );
-      setOrders(sortedOrders.slice(0, RECENT_ORDERS_LIMIT));
+      setOrders(sortedOrders);
       setLastUpdated(new Date());
     } catch (e) {
-      setError(e.message || "Không tải được dữ liệu dashboard");
+      if (myReqId === reqIdRef.current) {
+        setError(e.message || "Không tải được dữ liệu dashboard");
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (myReqId === reqIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
-  // Load lần đầu
   useEffect(() => {
     loadAll();
   }, [loadAll]);
 
-  // Auto-refresh mỗi 30s
+  // Auto-refresh 30s
   useEffect(() => {
     const timer = setInterval(() => loadAll(true), REFRESH_MS);
     return () => clearInterval(timer);
   }, [loadAll]);
 
-  // ---------- Computed (memo) ----------
+  // ---------- Computed ----------
 
-  // Doanh thu 7 ngày từ reports API
+  // Bar chart data 7 ngày
   const revenueData = useMemo(() => {
     if (!reports?.data) return [];
     return reports.data.map((d) => ({
@@ -115,28 +211,64 @@ export default function OwnerDashboard() {
     }));
   }, [reports]);
 
-  // Trend doanh thu: so sánh ngày cuối vs ngày kế cuối
+  // Trend doanh thu hôm nay vs hôm qua
   const revenueTrend = useMemo(() => {
     if (revenueData.length < 2) return null;
     const today = revenueData[revenueData.length - 1].value;
     const yesterday = revenueData[revenueData.length - 2].value;
-    if (yesterday === 0) return null;
-    const pct = ((today - yesterday) / yesterday) * 100;
-    return {
-      pct: Math.abs(pct).toFixed(1),
-      isUp: pct >= 0,
-      raw: pct,
-    };
+    return calcDelta(today, yesterday);
   }, [revenueData]);
 
-  // Pie data từ stats.byStatus — không dùng fallback fake
-  const statusData = useMemo(() => {
-    if (!stats?.byStatus?.length) return [];
-    return stats.byStatus.map((s) => ({
-      name: s._id,
-      value: s.count,
-    }));
-  }, [stats]);
+  // Trend đơn hàng
+  const orderTrend = useMemo(() => {
+    if (revenueData.length < 2) return null;
+    const today = revenueData[revenueData.length - 1].orders;
+    const yesterday = revenueData[revenueData.length - 2].orders;
+    return calcDelta(today, yesterday);
+  }, [revenueData]);
+
+  // Đơn cần xử lý
+  const needAction = useMemo(() => {
+    return orders.filter(
+      (o) => o.status === "Chờ xác nhận" || o.status === "Đã xác nhận"
+    );
+  }, [orders]);
+
+  // Đếm đơn chờ xác nhận (chỉ pending)
+  const pendingCount = useMemo(
+    () => orders.filter((o) => o.status === "Chờ xác nhận").length,
+    [orders]
+  );
+
+  // Low stock
+  const lowStockCount = stats?.lowStock ?? 0;
+
+  // Recent orders (5 mới nhất)
+  const recentOrders = useMemo(
+    () => orders.slice(0, RECENT_ORDERS_LIMIT),
+    [orders]
+  );
+
+  // ---------- Actions ----------
+
+  const advanceOrder = async (o) => {
+    const id = o._id || o.id;
+    if (advancingId !== null) return;
+
+    const next = NEXT_STATUS[o.status];
+    if (!next) return;
+
+    setAdvancingId(id);
+    try {
+      await api.orders.setStatus(id, next);
+      toast(`"${o.code}" → "${next}"`, "success");
+      await loadAll(true);
+    } catch (e) {
+      toast(e.message || "Không chuyển được trạng thái", "error");
+    } finally {
+      setAdvancingId(null);
+    }
+  };
 
   // ============================================================
   // RENDER
@@ -144,21 +276,7 @@ export default function OwnerDashboard() {
 
   // Loading lần đầu
   if (loading && !stats) {
-    return (
-      <div
-        style={{
-          textAlign: "center",
-          padding: 60,
-          color: "var(--text-light, #8993a3)",
-        }}
-      >
-        <Loader2
-          size={32}
-          style={{ animation: "spin 1s linear infinite", marginBottom: 14 }}
-        />
-        <div>Đang tải dashboard...</div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   // Error toàn trang
@@ -206,7 +324,7 @@ export default function OwnerDashboard() {
   return (
     <div>
       {/* ============================================================
-          HEADER — Refresh indicator
+          HEADER — Realtime indicator + refresh
           ============================================================ */}
       <div
         style={{
@@ -295,6 +413,7 @@ export default function OwnerDashboard() {
           icon={<ShoppingBag />}
           label="Đơn hàng hôm nay"
           value={(stats?.orderCount || 0) + " đơn"}
+          trend={orderTrend}
           color="#2634d5"
         />
         <KPI
@@ -306,10 +425,10 @@ export default function OwnerDashboard() {
         <KPI
           icon={<AlertTriangle />}
           label="Sắp hết hàng"
-          value={(stats?.lowStock || 0) + " món"}
+          value={lowStockCount + " món"}
           color="#ef4444"
           badge={
-            (stats?.lowStock || 0) > 0
+            lowStockCount > 0
               ? { text: "Cần nhập", color: "#ef4444" }
               : null
           }
@@ -317,158 +436,267 @@ export default function OwnerDashboard() {
       </div>
 
       {/* ============================================================
-          CHARTS ROW
+          CẦN XỬ LÝ HÔM NAY
           ============================================================ */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
-          gap: 18,
-          marginBottom: 18,
-        }}
-        className="dashboard-2col"
-      >
-        {/* ---------- Bar chart: Doanh thu 7 ngày ---------- */}
-        <div style={cardStyle}>
-          <div style={{ marginBottom: 16 }}>
-            <h3 style={cardTitleStyle}>Doanh thu 7 ngày</h3>
-            <span style={cardSubtitleStyle}>Đơn vị: triệu đồng</span>
+      {(pendingCount > 0 || lowStockCount > 0 || needAction.length > 0) && (
+        <div
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(239, 68, 68, 0.06))",
+            border: "1px solid rgba(245, 158, 11, 0.3)",
+            borderRadius: 12,
+            padding: 18,
+            marginBottom: 20,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 14,
+            }}
+          >
+            <AlertTriangle size={18} style={{ color: "#f59e0b" }} />
+            <b
+              style={{
+                fontSize: 14,
+                color: "var(--text-primary, #172033)",
+              }}
+            >
+              Cần xử lý hôm nay
+            </b>
           </div>
 
-          {revenueData.length === 0 ? (
-            <EmptyChart message="Chưa có dữ liệu doanh thu" />
-          ) : (
-            <div style={{ height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="var(--border-color, #eef2f7)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="day"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{
-                      fontSize: 12,
-                      fill: "var(--text-muted, #64748b)",
-                    }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{
-                      fontSize: 12,
-                      fill: "var(--text-muted, #64748b)",
-                    }}
-                    tickFormatter={(v) =>
-                      v >= 1000000
-                        ? (v / 1000000).toFixed(1) + "M"
-                        : (v / 1000).toFixed(0) + "k"
-                    }
-                  />
-                  <Tooltip
-                    formatter={(v) => [money(v), "Doanh thu"]}
-                    contentStyle={{
-                      background: "var(--card-bg, #fff)",
-                      border: "1px solid var(--border-color, #e5e9ef)",
-                      borderRadius: 8,
-                      fontSize: 13,
-                    }}
-                  />
-                  <Bar
-                    dataKey="value"
-                    fill="#2634d5"
-                    radius={[6, 6, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: 12,
+            }}
+          >
+            {pendingCount > 0 && (
+              <ActionCard
+                icon={<ClipboardList size={18} />}
+                label="Đơn chờ xác nhận"
+                value={pendingCount}
+                color="#f59e0b"
+                to="/owner/orders"
+              />
+            )}
+            {needAction.length > pendingCount && (
+              <ActionCard
+                icon={<Utensils size={18} />}
+                label="Đơn đang xử lý"
+                value={needAction.length - pendingCount}
+                color="#2634d5"
+                to="/owner/orders"
+              />
+            )}
+            {lowStockCount > 0 && (
+              <ActionCard
+                icon={<Package size={18} />}
+                label="Nguyên liệu sắp hết"
+                value={lowStockCount}
+                color="#ef4444"
+                to="/owner/inventory"
+              />
+            )}
+          </div>
         </div>
+      )}
 
-        {/* ---------- Pie chart: Trạng thái đơn ---------- */}
-        <div style={cardStyle}>
-          <h3 style={{ ...cardTitleStyle, marginBottom: 16 }}>
-            Trạng thái đơn
-          </h3>
+      {/* ============================================================
+          QUICK ACTIONS
+          ============================================================ */}
+      <div style={cardStyle}>
+        <h3 style={{ ...cardTitleStyle, marginBottom: 14 }}>
+          Truy cập nhanh
+        </h3>
 
-          {statusData.length === 0 ? (
-            <EmptyChart message="Chưa có đơn hàng" />
-          ) : (
-            <>
-              <div style={{ height: 200 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      dataKey="value"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={3}
-                    >
-                      {statusData.map((_, i) => (
-                        <Cell
-                          key={i}
-                          fill={STATUS_COLORS[i % STATUS_COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: "var(--card-bg, #fff)",
-                        border: "1px solid var(--border-color, #e5e9ef)",
-                        borderRadius: 8,
-                        fontSize: 13,
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+            gap: 10,
+          }}
+        >
+          {QUICK_ACTIONS.map((a) => {
+            const Icon = a.icon;
+            // Badge cho orders nếu có pending
+            const badge = a.key === "orders" && pendingCount > 0
+              ? pendingCount
+              : a.key === "inventory" && lowStockCount > 0
+              ? lowStockCount
+              : null;
 
-              <div style={{ marginTop: 10 }}>
-                {statusData.map((s, i) => (
-                  <div
-                    key={s.name}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "3px 0",
-                      fontSize: 12,
-                    }}
-                  >
+            return (
+              <Link
+                key={a.key}
+                to={a.to}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: 14,
+                  background: "var(--bg-tertiary, #f8fafc)",
+                  border: "1px solid var(--border-color, #e5e9ef)",
+                  borderRadius: 10,
+                  textDecoration: "none",
+                  transition: "all 0.2s",
+                  position: "relative",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = a.color + "12";
+                  e.currentTarget.style.borderColor = a.color;
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background =
+                    "var(--bg-tertiary, #f8fafc)";
+                  e.currentTarget.style.borderColor =
+                    "var(--border-color, #e5e9ef)";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
+              >
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: a.color + "18",
+                    color: a.color,
+                    display: "grid",
+                    placeItems: "center",
+                    position: "relative",
+                  }}
+                >
+                  <Icon size={20} />
+                  {badge && (
                     <span
                       style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: "50%",
-                        background: STATUS_COLORS[i % STATUS_COLORS.length],
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span
-                      style={{
-                        flex: 1,
-                        color: "var(--text-muted, #64748b)",
+                        position: "absolute",
+                        top: -4,
+                        right: -4,
+                        minWidth: 18,
+                        height: 18,
+                        padding: "0 5px",
+                        borderRadius: 9,
+                        background: "#ef4444",
+                        color: "#fff",
+                        fontSize: 10,
+                        fontWeight: 800,
+                        display: "grid",
+                        placeItems: "center",
+                        border: "2px solid var(--card-bg, #fff)",
+                        lineHeight: 1,
                       }}
                     >
-                      {s.name}
+                      {badge > 99 ? "99+" : badge}
                     </span>
-                    <b style={{ color: "var(--text-primary, #172033)" }}>
-                      {s.value}
-                    </b>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
+                  )}
+                </div>
+                <b
+                  style={{
+                    fontSize: 12.5,
+                    color: "var(--text-primary, #172033)",
+                    textAlign: "center",
+                  }}
+                >
+                  {a.label}
+                </b>
+              </Link>
+            );
+          })}
         </div>
       </div>
 
       {/* ============================================================
-          RECENT ORDERS TABLE
+          BAR CHART — Doanh thu 7 ngày
+          ============================================================ */}
+      <div style={{ ...cardStyle, marginTop: 18, marginBottom: 18 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: 16,
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <div>
+            <h3 style={cardTitleStyle}>Doanh thu 7 ngày</h3>
+            <span style={cardSubtitleStyle}>Đơn vị: triệu đồng</span>
+          </div>
+          <Link
+            to="/owner/reports"
+            style={{
+              fontSize: 12.5,
+              color: "#2634d5",
+              fontWeight: 600,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            Báo cáo chi tiết <ArrowRight size={12} />
+          </Link>
+        </div>
+
+        {revenueData.length === 0 ? (
+          <EmptyChart message="Chưa có dữ liệu doanh thu" />
+        ) : (
+          <div style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={revenueData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--border-color, #eef2f7)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="day"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{
+                    fontSize: 12,
+                    fill: "var(--text-muted, #64748b)",
+                  }}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{
+                    fontSize: 12,
+                    fill: "var(--text-muted, #64748b)",
+                  }}
+                  tickFormatter={(v) =>
+                    v >= 1000000
+                      ? (v / 1000000).toFixed(1) + "M"
+                      : (v / 1000).toFixed(0) + "k"
+                  }
+                />
+                <Tooltip
+                  formatter={(v) => [money(v), "Doanh thu"]}
+                  contentStyle={{
+                    background: "var(--card-bg, #fff)",
+                    border: "1px solid var(--border-color, #e5e9ef)",
+                    borderRadius: 8,
+                    fontSize: 13,
+                  }}
+                />
+                <Bar dataKey="value" fill="#2634d5" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* ============================================================
+          RECENT ORDERS TABLE — với quick action
           ============================================================ */}
       <div style={cardStyle}>
         <div
@@ -495,7 +723,7 @@ export default function OwnerDashboard() {
           </Link>
         </div>
 
-        {orders.length === 0 ? (
+        {recentOrders.length === 0 ? (
           <div
             style={{
               textAlign: "center",
@@ -517,42 +745,118 @@ export default function OwnerDashboard() {
                 <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
                   <th style={thStyle}>Mã đơn</th>
                   <th style={thStyle}>Khách</th>
-                  <th style={thStyle}>Tổng tiền</th>
+                  <th style={thStyle}>Giờ</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Tổng tiền</th>
                   <th style={thStyle}>Trạng thái</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.map((o) => (
-                  <tr
-                    key={o._id || o.id}
-                    style={{
-                      borderBottom:
-                        "1px solid var(--border-color, #eef2f7)",
-                    }}
-                  >
-                    <td style={tdStyle}>
-                      <Link
-                        to="/owner/orders"
+                {recentOrders.map((o) => {
+                  const id = o._id || o.id;
+                  const next = NEXT_STATUS[o.status];
+                  const isAdvancing = advancingId === id;
+
+                  return (
+                    <tr
+                      key={id}
+                      style={{
+                        borderBottom:
+                          "1px solid var(--border-color, #eef2f7)",
+                        opacity: isAdvancing ? 0.6 : 1,
+                        transition: "opacity 0.15s",
+                      }}
+                    >
+                      <td style={tdStyle}>
+                        <Link
+                          to="/owner/orders"
+                          style={{
+                            color: "#2634d5",
+                            textDecoration: "none",
+                            fontWeight: 700,
+                            fontFamily: "monospace",
+                            fontSize: 12,
+                          }}
+                        >
+                          {o.code}
+                        </Link>
+                      </td>
+                      <td style={tdStyle}>{o.customer_name}</td>
+                      <td
                         style={{
-                          color: "#2634d5",
-                          textDecoration: "none",
-                          fontWeight: 700,
-                          fontFamily: "monospace",
+                          ...tdStyle,
                           fontSize: 12,
+                          color: "var(--text-muted, #64748b)",
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        {o.code}
-                      </Link>
-                    </td>
-                    <td style={tdStyle}>{o.customer_name}</td>
-                    <td style={tdStyle}>
-                      <b>{money(o.total)}</b>
-                    </td>
-                    <td style={tdStyle}>
-                      <OrderStatusBadge status={o.status} />
-                    </td>
-                  </tr>
-                ))}
+                        {fmtTime(o.created_at)}
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        <b>{money(o.total)}</b>
+                      </td>
+                      <td style={tdStyle}>
+                        <OrderStatusBadge status={o.status} />
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        {next ? (
+                          <button
+                            onClick={() => advanceOrder(o)}
+                            disabled={advancingId !== null}
+                            style={{
+                              padding: "6px 12px",
+                              background:
+                                advancingId !== null ? "#94a3b8" : "#18a967",
+                              color: "#fff",
+                              border: 0,
+                              borderRadius: 6,
+                              cursor:
+                                advancingId !== null
+                                  ? "not-allowed"
+                                  : "pointer",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {isAdvancing ? (
+                              <>
+                                <Loader2
+                                  size={12}
+                                  style={{
+                                    animation: "spin 1s linear infinite",
+                                  }}
+                                />
+                                Đang xử lý
+                              </>
+                            ) : (
+                              <>
+                                <Check size={12} /> Xác nhận
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <Link
+                            to="/owner/orders"
+                            style={{
+                              fontSize: 12,
+                              color: "var(--text-light, #8993a3)",
+                              textDecoration: "none",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 2,
+                            }}
+                          >
+                            Xem <ChevronRight size={12} />
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -617,23 +921,22 @@ function KPI({ icon, label, value, trend, color, badge }) {
           {label}
         </span>
         <div
-  style={{
-    margin: "4px 0",
-    fontSize: 18,
-    fontWeight: 700,
-    lineHeight: 1.3,
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-    color: "var(--text-primary, #172033)",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  }}
->
-  {value}
-</div>
+          style={{
+            margin: "4px 0",
+            fontSize: 18,
+            fontWeight: 700,
+            lineHeight: 1.3,
+            fontFamily:
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            color: "var(--text-primary, #172033)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {value}
+        </div>
 
-        {/* Trend (chỉ khi có data) */}
         {trend && (
           <small
             style={{
@@ -647,11 +950,10 @@ function KPI({ icon, label, value, trend, color, badge }) {
           >
             {trend.isUp ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
             {trend.isUp ? "+" : "-"}
-            {trend.pct}% so với hôm qua
+            {trend.pct.toFixed(1)}% so hôm qua
           </small>
         )}
 
-        {/* Badge (chỉ khi có) */}
         {!trend && badge && (
           <small
             style={{
@@ -669,19 +971,80 @@ function KPI({ icon, label, value, trend, color, badge }) {
 }
 
 // ============================================================
+// SUB-COMPONENT: ActionCard (Cần xử lý)
+// ============================================================
+
+function ActionCard({ icon, label, value, color, to }) {
+  return (
+    <Link
+      to={to}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: 12,
+        background: "var(--card-bg, #fff)",
+        border: "1px solid " + color + "40",
+        borderRadius: 10,
+        textDecoration: "none",
+        transition: "all 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = "translateY(-2px)";
+        e.currentTarget.style.boxShadow = `0 6px 16px ${color}30`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = "translateY(0)";
+        e.currentTarget.style.boxShadow = "none";
+      }}
+    >
+      <div
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 10,
+          background: color + "18",
+          color,
+          display: "grid",
+          placeItems: "center",
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            fontSize: 11.5,
+            color: "var(--text-muted, #64748b)",
+            display: "block",
+          }}
+        >
+          {label}
+        </span>
+        <b
+          style={{
+            fontSize: 18,
+            color,
+            fontWeight: 800,
+            display: "block",
+            lineHeight: 1.2,
+          }}
+        >
+          {value}
+        </b>
+      </div>
+      <ChevronRight size={16} style={{ color, flexShrink: 0 }} />
+    </Link>
+  );
+}
+
+// ============================================================
 // SUB-COMPONENT: Order Status Badge
 // ============================================================
 
 function OrderStatusBadge({ status }) {
-  const colorMap = {
-    "Chờ xác nhận": { bg: "#fef3c7", fg: "#92400e" },
-    "Đã xác nhận": { bg: "#dbeafe", fg: "#1e40af" },
-    "Đang chuẩn bị": { bg: "#ede9fe", fg: "#6d28d9" },
-    "Sẵn sàng nhận": { bg: "#d1fae5", fg: "#065f46" },
-    "Hoàn thành": { bg: "#e8f9f1", fg: "#18a967" },
-    "Đã hủy": { bg: "#fee2e2", fg: "#991b1b" },
-  };
-  const c = colorMap[status] || { bg: "#e2e8f0", fg: "#475569" };
+  const c = STATUS_COLORS[status] || { bg: "#e2e8f0", fg: "#475569" };
 
   return (
     <span
@@ -694,7 +1057,8 @@ function OrderStatusBadge({ status }) {
         background: c.bg,
         color: c.fg,
         whiteSpace: "nowrap",
-	 fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
       }}
     >
       {status}
@@ -703,7 +1067,7 @@ function OrderStatusBadge({ status }) {
 }
 
 // ============================================================
-// SUB-COMPONENT: Empty Chart placeholder
+// SUB-COMPONENT: Empty Chart
 // ============================================================
 
 function EmptyChart({ message }) {
@@ -723,6 +1087,109 @@ function EmptyChart({ message }) {
     >
       <div style={{ fontSize: 36, opacity: 0.35, marginBottom: 8 }}>📊</div>
       <div>{message}</div>
+    </div>
+  );
+}
+
+// ============================================================
+// SUB-COMPONENT: Dashboard Skeleton
+// ============================================================
+
+function DashboardSkeleton() {
+  return (
+    <div>
+      {/* KPI skeleton */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: 16,
+          marginBottom: 20,
+        }}
+      >
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              background: "var(--card-bg, #fff)",
+              border: "1px solid var(--border-color, #e7ebf0)",
+              borderRadius: 12,
+              padding: 18,
+              display: "flex",
+              gap: 12,
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{
+                width: 46,
+                height: 46,
+                borderRadius: 12,
+                background: "var(--bg-tertiary, #f5f7fb)",
+                animation: "pulse 1.5s ease-in-out infinite",
+              }}
+            />
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  width: "60%",
+                  height: 10,
+                  borderRadius: 4,
+                  background: "var(--bg-tertiary, #f5f7fb)",
+                  marginBottom: 8,
+                  animation: "pulse 1.5s ease-in-out infinite",
+                }}
+              />
+              <div
+                style={{
+                  width: "80%",
+                  height: 16,
+                  borderRadius: 4,
+                  background: "var(--bg-tertiary, #f5f7fb)",
+                  animation: "pulse 1.5s ease-in-out infinite",
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Chart skeleton */}
+      <div
+        style={{
+          background: "var(--card-bg, #fff)",
+          border: "1px solid var(--border-color, #e7ebf0)",
+          borderRadius: 12,
+          padding: 20,
+          marginBottom: 18,
+        }}
+      >
+        <div
+          style={{
+            width: 150,
+            height: 16,
+            borderRadius: 4,
+            background: "var(--bg-tertiary, #f5f7fb)",
+            marginBottom: 16,
+            animation: "pulse 1.5s ease-in-out infinite",
+          }}
+        />
+        <div
+          style={{
+            height: 260,
+            background: "var(--bg-tertiary, #f8fafc)",
+            borderRadius: 10,
+            animation: "pulse 1.5s ease-in-out infinite",
+          }}
+        />
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50%      { opacity: 0.5; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -755,6 +1222,7 @@ const thStyle = {
   fontSize: 12,
   color: "var(--text-muted, #64748b)",
   fontWeight: 600,
+  whiteSpace: "nowrap",
 };
 
 const tdStyle = {
