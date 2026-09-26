@@ -46,6 +46,18 @@ async function req(path, options = {}) {
     cache: "no-store",
   });
 
+  // ✅ FIX M2: bắt 401 (token hết hạn / không hợp lệ)
+  //   - Clear token khỏi sessionStorage
+  //   - Phát event "auth-expired" để App cleanup user + cart
+  //   KHÔNG tự navigate ở đây vì api.js là module thuần,
+  //   không có React Router context.
+  if (res.status === 401 && token) {
+    setToken(null);
+    try {
+      window.dispatchEvent(new CustomEvent("auth-expired"));
+    } catch {}
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
   return data;

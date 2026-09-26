@@ -123,6 +123,36 @@ export default function App() {
     return () => window.removeEventListener("refresh-user", handler);
   }, []);
 
+  // ✅ FIX M2: Lắng nghe "auth-expired" từ api.js khi gặp 401
+  //    → clear user + cart, đá về trang login.
+  //    Tránh user kẹt ở trang trắng / lỗi khi token hết hạn.
+  useEffect(() => {
+    const handler = () => {
+      setToken(null);
+      setUser(null);
+      setCart({});
+      try {
+        localStorage.removeItem("canteen_cart");
+        localStorage.removeItem("canteen_cart_selected");
+        localStorage.removeItem("orders_last_seen");
+        localStorage.removeItem("points_last_seen");
+      } catch {}
+
+      // Clean body state (giống handleLogout)
+      document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
+      document.documentElement.style.overflow = "";
+      document.body.classList.remove("has-bottom-nav");
+      document.body.classList.remove("mobile-open");
+
+      toast("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", "warning");
+      navigate("/", { replace: true });
+    };
+
+    window.addEventListener("auth-expired", handler);
+    return () => window.removeEventListener("auth-expired", handler);
+  }, [navigate]);
+
   // 4. Redirect nếu user đang ở path không khớp với role
   //    VD: ADMIN vào /customer → tự chuyển sang /owner
   useEffect(() => {
@@ -162,21 +192,22 @@ export default function App() {
   };
 
   const handleLogout = () => {
-  setToken(null);
-  setUser(null);
-  setCart({});
-  localStorage.removeItem("canteen_cart");
+    setToken(null);
+    setUser(null);
+    setCart({});
+    localStorage.removeItem("canteen_cart");
 
-  // ✅ Force clean body state — tránh scroll lock/class còn sót
-  // từ ConfirmDialog / Sidebar mobile / ChatBot chưa kịp cleanup
-  document.body.style.overflow = "";
-  document.body.style.paddingRight = "";
-  document.documentElement.style.overflow = "";
-  document.body.classList.remove("has-bottom-nav");
-  document.body.classList.remove("mobile-open");
+    // ✅ Force clean body state — tránh scroll lock/class còn sót
+    // từ ConfirmDialog / Sidebar mobile / ChatBot chưa kịp cleanup
+    document.body.style.overflow = "";
+    document.body.style.paddingRight = "";
+    document.documentElement.style.overflow = "";
+    document.body.classList.remove("has-bottom-nav");
+    document.body.classList.remove("mobile-open");
 
-  navigate("/");
-};
+    navigate("/");
+  };
+
   // ---------- Render: Loading ----------
   if (loading) {
     return (

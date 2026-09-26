@@ -30,11 +30,29 @@ function toLocalDateStr(iso) {
 }
 
 // ============================================================
+// ✅ FIX M5: helper sinh mã đơn unique (an toàn hơn)
+// ============================================================
+function generateOrderCode(db) {
+  let code;
+  let attempts = 0;
+  do {
+    const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
+    code = "VWA-" + Date.now().toString().slice(-8) + "-" + rand;
+    attempts++;
+  } while ((db.orders || []).some((o) => o.code === code) && attempts < 10);
+  return code;
+}
+
+// ============================================================
 // MONGODB — Lưu DB dưới dạng 1 document JSON
 // ============================================================
 const MONGO_URI = process.env.MONGO_URI;
 let MongoModel = null;
 let dbCache = null;
+
+// ✅ FIX M1/L10: flag xác nhận Mongo đã connect thành công
+// Tránh saveDB() cố ghi Mongo khi connect fail → mỗi write bị treo ~10s.
+let mongoReady = false;
 
 if (MONGO_URI) {
   const dbSchema = new mongoose.Schema(
@@ -121,10 +139,13 @@ async function initMongo() {
           (dbCache.users?.length || 0) + " users"
       );
     }
+    // ✅ FIX M1/L10: đánh dấu Mongo đã sẵn sàng
+    mongoReady = true;
     return true;
   } catch (e) {
     console.error("❌ MongoDB lỗi:", e.message);
     console.log("⚠️ Fallback sang file JSON local");
+    mongoReady = false;
     return false;
   }
 }
@@ -136,14 +157,19 @@ function loadDB() {
 
 function saveDB(data) {
   dbCache = data;
-  if (MONGO_URI && MongoModel) {
+  // ✅ FIX M1/L10: chỉ ghi Mongo khi đã connect thành công
+  if (mongoReady && MongoModel) {
     MongoModel.updateOne(
       { _id: "main" },
       { $set: { data: data } },
       { upsert: true }
     ).catch((e) => console.error("Mongo save error:", e.message));
   } else {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+    } catch (e) {
+      console.error("File save error:", e.message);
+    }
   }
 }
 
@@ -173,6 +199,40 @@ function notifyOrderStatus(db, order, newStatus) {
     type: "status", link: "/customer/orders", read: false,
     created_at: new Date().toISOString()
   });
+}
+
+// ============================================================
+// ✅ FIX H1: Hoàn kho + hoàn điểm khi hủy đơn
+// ============================================================
+/**
+ * Rollback đơn hàng đã hủy:
+ *   - Hoàn stock cho từng món
+ *   - Trừ lại sold
+ *   - Trừ lại points_earned của customer
+ *   - Đánh dấu _stock_rolled_back = true để không chạy 2 lần
+ */
+function rollbackCancelledOrder(db, order) {
+  if (!order || order._stock_rolled_back) return;
+
+  // 1. Hoàn kho + sold
+  (order.items || []).forEach((it) => {
+    const m = (db.menu_items || []).find((x) => x.id == it.menu_item_id);
+    if (!m) return;
+    m.stock = (m.stock || 0) + (it.qty || 0);
+    m.sold = Math.max(0, (m.sold || 0) - (it.qty || 0));
+  });
+
+  // 2. Trừ lại điểm đã cộng khi tạo đơn
+  const earned = Number(order.points_earned) || 0;
+  if (earned > 0) {
+    const customer = (db.users || []).find((u) => u.id === order.customer_id);
+    if (customer) {
+      customer.points = Math.max(0, (customer.points || 0) - earned);
+    }
+    order.points_earned = 0;
+  }
+
+  order._stock_rolled_back = true;
 }
 
 const app = express();
@@ -380,12 +440,14 @@ app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
         newData.price = newData.original_price;
       }
     }
-    if (newData.price && newData.price !== oldItem.price) {
+
+    // ✅ FIX L2: ghi price_history khi giá THAY ĐỔI (kể cả khi giá mới = 0)
+    if (newData.price !== undefined && Number(newData.price) !== Number(oldItem.price)) {
       if (!db.price_history) db.price_history = [];
       const historyId = Math.max(0, ...db.price_history.map(h => h.id)) + 1;
       db.price_history.push({
         id: historyId, menu_item_id: oldItem.id, menu_item_name: oldItem.name,
-        old_price: oldItem.price, new_price: newData.price,
+        old_price: oldItem.price, new_price: Number(newData.price),
         changed_by: req.user.name, changed_by_id: req.user.id,
         reason: newData.reason || "", created_at: new Date().toISOString()
       });
@@ -485,37 +547,93 @@ app.delete("/api/users/:id", auth(["ADMIN"]), (req, res) => {
   res.json({ ok: true });
 });
 
-// ============ ORDERS ============
+// ============================================================
+// ✅ FIX H2/H3/H4/M5: POST /api/orders — validate TRƯỚC, mutate SAU
+// ============================================================
 app.post("/api/orders", auth(), (req, res) => {
   try {
     const db = loadDB();
     const { items, payment = "Tiền mặt", note = "", discount = 0, voucherCode } = req.body;
-    if (!items?.length) return res.status(400).json({ message: "Giỏ hàng trống" });
-    let subtotal = 0;
-    const detailed = items.map(it => {
-      const m = db.menu_items.find(x => x.id == it.menuItem);
-      if (!m) throw new Error("Món không tồn tại");
-      if (m.stock < it.qty) throw new Error(m.name + " không đủ hàng");
-      subtotal += m.price * it.qty;
-      m.stock -= it.qty;
-      m.sold += it.qty;
-      return { menu_item_id: m.id, name: m.name, price: m.price, qty: it.qty };
-    });
-    const total = Math.max(0, subtotal - discount);
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "Giỏ hàng trống" });
+    }
 
-    if (payment === "Ví Canteen" || payment === "WALLET") {
-      if (!db.wallets) db.wallets = [];
-      let wallet = db.wallets.find(w => w.user_id === req.user.id);
-      if (!wallet) {
-        wallet = { user_id: req.user.id, balance: 0, created_at: new Date().toISOString() };
-        db.wallets.push(wallet);
+    // ---------- BƯỚC 1: Validate toàn bộ, KHÔNG mutate ----------
+    let subtotal = 0;
+    const detailed = [];
+    const touchedItems = []; // { m, q } để mutate sau
+
+    for (const it of items) {
+      const q = Number(it.qty);
+
+      // ✅ FIX H4: chặn qty <= 0 hoặc NaN
+      if (!Number.isFinite(q) || q <= 0 || !Number.isInteger(q)) {
+        return res.status(400).json({ message: "Số lượng món không hợp lệ" });
       }
+
+      const m = db.menu_items.find(x => x.id == it.menuItem);
+      if (!m) {
+        return res.status(400).json({ message: "Món không tồn tại (id=" + it.menuItem + ")" });
+      }
+
+      // ✅ FIX H3: chặn đặt món đã tắt
+      if (!m.active) {
+        return res.status(400).json({ message: `${m.name} đã tạm ngừng bán` });
+      }
+
+      if ((m.stock || 0) < q) {
+        return res.status(400).json({
+          message: `${m.name} không đủ hàng (còn ${m.stock || 0}, cần ${q})`,
+        });
+      }
+
+      subtotal += m.price * q;
+      detailed.push({ menu_item_id: m.id, name: m.name, price: m.price, qty: q });
+      touchedItems.push({ m, q });
+    }
+
+    const total = Math.max(0, subtotal - Number(discount) || 0);
+
+    // ---------- BƯỚC 2: Validate ví (nếu cần) — KHÔNG trừ ----------
+    const isWalletPay = payment === "Ví Canteen" || payment === "WALLET";
+    let wallet = null;
+
+    if (isWalletPay) {
+      wallet = getOrCreateWallet(db, req.user.id);
       if (wallet.balance < total) {
-        throw new Error("Số dư ví không đủ. Vui lòng nạp thêm " + (total - wallet.balance).toLocaleString("vi-VN") + "đ");
+        return res.status(400).json({
+          message:
+            "Số dư ví không đủ. Vui lòng nạp thêm " +
+            (total - wallet.balance).toLocaleString("vi-VN") + "đ",
+        });
       }
+    }
+
+    // ---------- BƯỚC 3: Mọi thứ OK → mutate stock ----------
+    touchedItems.forEach(({ m, q }) => {
+      m.stock = (m.stock || 0) - q;
+      m.sold = (m.sold || 0) + q;
+    });
+
+    // ---------- BƯỚC 4: Trừ ví + tạo wallet transaction ----------
+    if (isWalletPay) {
       wallet.balance -= total;
       wallet.updated_at = new Date().toISOString();
+    }
 
+    // ---------- BƯỚC 5: Cộng điểm ----------
+    const pointsEarned = Math.floor(total * 0.01);
+    const customer = db.users.find(u => u.id === req.user.id);
+    if (customer) customer.points = (customer.points || 0) + pointsEarned;
+
+    // ---------- BƯỚC 6: Tạo đơn ----------
+    const id = Math.max(0, ...db.orders.map(o => o.id)) + 1;
+
+    // ✅ FIX M5: dùng helper generateOrderCode (10 lần retry, 5 char random)
+    const code = generateOrderCode(db);
+
+    // Wallet transaction — gắn order_code sau khi có code
+    if (isWalletPay) {
       if (!db.wallet_transactions) db.wallet_transactions = [];
       const wtxId = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
       db.wallet_transactions.push({
@@ -528,33 +646,31 @@ app.post("/api/orders", auth(), (req, res) => {
         amount: total,
         method: "WALLET",
         status: "approved",
-        note: "Thanh toán đơn hàng",
-        order_code: "",
+        note: "Thanh toán đơn " + code,
+        order_code: code,
         created_at: new Date().toISOString(),
         approved_at: new Date().toISOString()
       });
     }
-    const pointsEarned = Math.floor(total * 0.01);
-    const customer = db.users.find(u => u.id === req.user.id);
-    if (customer) customer.points = (customer.points || 0) + pointsEarned;
-    const id = Math.max(0, ...db.orders.map(o => o.id)) + 1;
-    // ✅ Batch 7 / N3: unique code — tránh trùng khi 2 đơn cùng millisecond
-    let code;
-    let attempts = 0;
-    do {
-      code = "VWA-" + Date.now().toString().slice(-8) + "-" + Math.random().toString(36).slice(2, 5).toUpperCase();
-      attempts++;
-    } while (db.orders.some(o => o.code === code) && attempts < 5);
-    if ((payment === "Ví Canteen" || payment === "WALLET") && db.wallet_transactions) {
-      const lastWTx = db.wallet_transactions[db.wallet_transactions.length - 1];
-      if (lastWTx && lastWTx.user_id === req.user.id && lastWTx.type === "payment" && !lastWTx.order_code) {
-        lastWTx.order_code = code;
-        lastWTx.note = "Thanh toán đơn " + code;
-      }
-    }
-    const order = { id, code, customer_id: req.user.id, customer_name: req.user.name, subtotal, discount, total, points_earned: pointsEarned, status: "Chờ xác nhận", payment, note, items: detailed, created_at: new Date().toISOString() };
+
+    const order = {
+      id,
+      code,
+      customer_id: req.user.id,
+      customer_name: req.user.name,
+      subtotal,
+      discount: Number(discount) || 0,
+      total,
+      points_earned: pointsEarned,
+      status: "Chờ xác nhận",
+      payment,
+      note,
+      items: detailed,
+      created_at: new Date().toISOString()
+    };
     db.orders.push(order);
 
+    // ---------- BƯỚC 7: Áp voucher ----------
     if (voucherCode) {
       const vc = (db.vouchers || []).find(v =>
         v.code.toUpperCase() === voucherCode.toUpperCase() &&
@@ -575,7 +691,6 @@ app.post("/api/orders", auth(), (req, res) => {
     res.status(400).json({ message: e.message });
   }
 });
-
 app.get("/api/orders/me", auth(), (req, res) => {
   const db = loadDB();
   const enrich = (o) => {
@@ -600,6 +715,9 @@ app.get("/api/orders", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 
 const VALID_ORDER_STATUSES = ["Chờ xác nhận", "Đã xác nhận", "Đang chuẩn bị", "Sẵn sàng nhận", "Hoàn thành", "Đã hủy"];
 
+// ============================================================
+// ✅ FIX H1: PATCH status — rollback khi chuyển sang "Đã hủy"
+// ============================================================
 app.patch("/api/orders/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
@@ -609,6 +727,12 @@ app.patch("/api/orders/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     const newStatus = req.body.status;
     if (!VALID_ORDER_STATUSES.includes(newStatus)) {
       return res.status(400).json({ message: "Trạng thái không hợp lệ: " + newStatus });
+    }
+
+    // ✅ FIX H1: nếu chuyển sang "Đã hủy" → hoàn kho + hoàn điểm
+    //    (chỉ rollback 1 lần, có guard _stock_rolled_back bên trong)
+    if (newStatus === "Đã hủy" && o.status !== "Đã hủy") {
+      rollbackCancelledOrder(db, o);
     }
 
     o.status = newStatus;
@@ -636,13 +760,21 @@ app.post("/api/orders/:id/received", auth(), (req, res) => {
   res.json({ ok: true, order: o });
 });
 
+// ============================================================
+// ✅ FIX H1: Customer tự hủy đơn — rollback kho + điểm
+// ============================================================
 app.post("/api/orders/:id/cancel", auth(), (req, res) => {
   const db = loadDB();
   const o = db.orders.find(x => x.id == req.params.id);
   if (!o) return res.status(404).json({ message: "Không tìm thấy đơn" });
   if (o.customer_id !== req.user.id) return res.status(403).json({ message: "Không có quyền" });
   if (o.status !== "Chờ xác nhận") return res.status(400).json({ message: "Chỉ hủy được đơn chờ xác nhận" });
+
+  // ✅ FIX H1: hoàn kho + trừ lại điểm đã cộng
+  rollbackCancelledOrder(db, o);
+
   o.status = "Đã hủy";
+  o.updated_at = new Date().toISOString();
   notifyOrderStatus(db, o, "Đã hủy");
   saveDB(db);
   res.json({ ok: true });
@@ -1550,6 +1682,10 @@ function todayStr() {
   return getLocalDateStr();
 }
 
+// ✅ FIX M3: map giờ kết thúc ca để tính "Về sớm" chính xác
+const SHIFT_START_HOUR = { "Ca sáng": 6, "Ca chiều": 12, "Ca tối": 18 };
+const SHIFT_END_HOUR   = { "Ca sáng": 12, "Ca chiều": 18, "Ca tối": 22 };
+
 app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
@@ -1578,8 +1714,7 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
       return res.status(400).json({ message: "Bạn đã check-in " + shift + " hôm nay rồi" });
     }
 
-    const SHIFT_START = { "Ca sáng": 6, "Ca chiều": 12, "Ca tối": 18 };
-    const startHour = SHIFT_START[shift] || 8;
+    const startHour = SHIFT_START_HOUR[shift] || 8;
     const late = hour > startHour || (hour === startHour && minute > 15);
 
     const status = late ? "Đi muộn" : "Đúng giờ";
@@ -1605,6 +1740,9 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
   }
 });
 
+// ============================================================
+// ✅ FIX M3: dùng SHIFT_END_HOUR thay vì hardcode 17h
+// ============================================================
 app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
@@ -1632,7 +1770,12 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
 
     att.checkOut = now.toISOString();
     att.hours = Math.round(((now - new Date(att.checkIn)) / 3600000) * 100) / 100;
-    if (now.getHours() < 17 && att.status === "Đúng giờ") att.status = "Về sớm";
+
+    // ✅ FIX M3: so với giờ kết thúc của ca, không hardcode 17
+    const endHour = SHIFT_END_HOUR[shift];
+    if (endHour !== undefined && now.getHours() < endHour && att.status === "Đúng giờ") {
+      att.status = "Về sớm";
+    }
     saveDB(db);
     res.json({ message: "Check-out " + shift + " thành công", attendance: att });
   } catch (e) {
