@@ -45,3 +45,5 @@ Makefile
 nginx.conf
 
 .dockerignore
+
+render.yaml
