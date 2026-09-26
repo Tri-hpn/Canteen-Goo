@@ -3,7 +3,7 @@
 // ============================================================
 // - Hiển thị menu theo role
 // - Badge động cho Orders (đơn mới), Vouchers
-// - Mobile: hamburger toggle + overlay + close button
+// - Mobile: hamburger toggle + overlay + auto-close khi click nav
 // - Auto-close khi click nav
 //
 // Fixes:
@@ -12,7 +12,7 @@
 //   - Badge cart cho customer
 //   - Guard Invalid Date
 //   - Extract ProfileLink component (bỏ ~150 dòng duplicate)
-//   - Nút X đóng sidebar mobile
+//   - ✅ BỎ nút X đóng sidebar mobile (đã có overlay bấm ra ngoài)
 //   - Body scroll lock khi sidebar mở
 //   - Dùng useTranslation hook
 //   - aria-label cho nav
@@ -26,7 +26,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { NavLink, Link } from "react-router-dom";
 import {
   LayoutDashboard, Utensils, ShoppingBag, Users, UserCog, Warehouse,
-  BarChart3, LogOut, ClipboardList, Bell, UserRound, X, CreditCard,
+  BarChart3, LogOut, ClipboardList, Bell, UserRound, CreditCard,
   MessageCircle, CalendarCheck, Database, TrendingUp, Shield, Wallet, Ticket,
 } from "lucide-react";
 import { api } from "../api";
@@ -278,25 +278,26 @@ export default function Sidebar({ role, onLogout, user }) {
 
   // ---------- Body scroll lock khi sidebar mở ----------
 
- useEffect(() => {
-  if (!open) return;
-  const prev = document.body.style.overflow;
-  document.body.style.overflow = "hidden";
-  return () => {
-    if (document.body.style.overflow === "hidden") {
-      document.body.style.overflow = prev;
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      if (document.body.style.overflow === "hidden") {
+        document.body.style.overflow = prev;
+      }
+    };
+  }, [open]);
+
+  // ✅ FIX: Toggle body class để CSS biết sidebar đang mở
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add("sidebar-open");
+    } else {
+      document.body.classList.remove("sidebar-open");
     }
-  };
-}, [open]);
-// ✅ FIX: Toggle body class để CSS biết sidebar đang mở
-useEffect(() => {
-  if (open) {
-    document.body.classList.add("sidebar-open");
-  } else {
-    document.body.classList.remove("sidebar-open");
-  }
-  return () => document.body.classList.remove("sidebar-open");
-}, [open]);
+    return () => document.body.classList.remove("sidebar-open");
+  }, [open]);
 
   // ---------- ESC đóng sidebar mobile ----------
 
@@ -441,32 +442,13 @@ useEffect(() => {
         className={"sidebar " + (open ? "mobile-open" : "")}
         aria-label="Menu điều hướng"
       >
-        {/* ============ BRAND + CLOSE ============ */}
+        {/* ============ BRAND ============ */}
         <div className="brand">
           <div className="brand-mark">C</div>
           <div className="brand-text">
             <strong>CANTEEN</strong>
             <small>VWA</small>
           </div>
-          <button
-            type="button"
-            className="close-sidebar"
-            onClick={closeSidebar}
-            aria-label="Đóng menu"
-            style={{
-              marginLeft: "auto",
-              padding: 6,
-              background: "transparent",
-              border: 0,
-              cursor: "pointer",
-              color: "#94a3b8",
-              borderRadius: 8,
-              display: "grid",
-              placeItems: "center",
-            }}
-          >
-            <X size={18} />
-          </button>
         </div>
 
         {/* ============ ROLE CHIP ============ */}

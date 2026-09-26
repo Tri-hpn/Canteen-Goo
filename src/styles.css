@@ -246,6 +246,7 @@ main, .main {
 }
 .logout-btn:hover { background: #2b0f0f; color: #ef4444; }
 
+/* ✅ Nút X đã bị xóa khỏi Sidebar.jsx → ẩn vĩnh viễn nếu còn sót */
 .close-sidebar { display: none !important; }
 .mobile-overlay { display: none; }
 
@@ -2031,10 +2032,7 @@ html.dark-mode .inv-badge--out {
 }
 
 /* ============================================================
-   PHẦN 20: TOAST (nâng cấp — container + queue + icon)
-   ============================================================
-   Container chứa nhiều toast, xếp chồng từ dưới lên.
-   Mỗi toast có icon + message + close button.
+   PHẦN 20: TOAST
    ============================================================ */
 
 .toast-container {
@@ -2051,7 +2049,6 @@ html.dark-mode .inv-badge--out {
   width: max-content;
 }
 
-/* Mobile: đẩy lên trên bottom-nav */
 @media (max-width: 768px) {
   body.has-bottom-nav .toast-container {
     bottom: calc(90px + env(safe-area-inset-bottom, 0px));
@@ -2130,6 +2127,7 @@ html.dark-mode .inv-badge--out {
   height: 12px;
   stroke-width: 2.5;
 }
+
 /* ============ TOAST — Góc phải trên ============ */
 .toast-container {
   position: fixed !important;
@@ -2188,7 +2186,6 @@ html.dark-mode .inv-badge--out {
   to   { opacity: 0; transform: translateX(40px) scale(0.9); }
 }
 
-/* Mobile: vẫn trên, nhưng nhỏ hơn */
 @media (max-width: 768px) {
   .toast-container {
     top: 70px !important;
@@ -2201,6 +2198,7 @@ html.dark-mode .inv-badge--out {
     width: 100% !important;
   }
 }
+
 /* ============ TYPE VARIANTS ============ */
 
 .toast--success {
@@ -2222,25 +2220,13 @@ html.dark-mode .inv-badge--out {
 /* ============ ANIMATIONS ============ */
 
 @keyframes toastSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes toastSlideOut {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(20px) scale(0.9);
-  }
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(20px) scale(0.9); }
 }
 
 /* ============================================================
@@ -2611,38 +2597,47 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
 
   .topbar-right::before { display: none; }
 
-  /* ✅ FIX: Sidebar mobile — chỉ chiếm ~30% màn hình */
+  /* ✅ Auto-fit sidebar — clamp theo viewport, chống wrap text */
   .sidebar, aside {
-    width: 30vw !important;
-    max-width: 180px !important;
-    min-width: 140px !important;
-    padding: 14px 8px !important;
+    width: clamp(190px, 52vw, 240px) !important;
+    padding: 14px 10px !important;
   }
   .sidebar nav a, aside nav a, .nav-link {
-    padding: 9px 8px !important;
-    font-size: 11.5px !important;
-    gap: 8px !important;
+    padding: 10px 10px !important;
+    font-size: 12.5px !important;
+    gap: 10px !important;
   }
-  .sidebar nav a svg, aside nav a svg, .nav-link svg {
-    width: 15px !important;
-    height: 15px !important;
+  .sidebar nav a > span,
+  aside nav a > span,
+  .nav-link > span {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    min-width: 0 !important;
+  }
+  .sidebar nav a svg,
+  aside nav a svg,
+  .nav-link svg {
+    width: 16px !important;
+    height: 16px !important;
+    flex-shrink: 0 !important;
   }
   .sidebar .brand, aside > div:first-child {
     padding: 6px 2px 14px !important;
-    gap: 8px !important;
+    gap: 10px !important;
   }
   .brand-mark {
-    width: 30px !important;
-    height: 30px !important;
-    font-size: 15px !important;
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 16px !important;
     border-radius: 8px !important;
   }
-  .brand-text strong { font-size: 11px !important; letter-spacing: 0.5px !important; }
-  .brand-text small { font-size: 8px !important; letter-spacing: 1.5px !important; }
+  .brand-text strong { font-size: 12px !important; letter-spacing: 0.5px !important; }
+  .brand-text small { font-size: 9px !important; letter-spacing: 1.5px !important; }
   .role-chip {
-    font-size: 9px !important;
-    padding: 3px 8px !important;
-    margin-bottom: 8px !important;
+    font-size: 10px !important;
+    padding: 4px 10px !important;
+    margin-bottom: 10px !important;
   }
   .nav-badge {
     font-size: 9px !important;
@@ -2651,28 +2646,17 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
     padding: 0 4px !important;
   }
   .logout-btn {
-    padding: 9px 8px !important;
-    font-size: 11.5px !important;
-    gap: 8px !important;
+    padding: 10px 10px !important;
+    font-size: 12.5px !important;
+    gap: 10px !important;
   }
 
+  /* ✅ Nút X đã xóa — ẩn nếu có render sót */
   .sidebar.mobile-open .close-sidebar,
-  aside.mobile-open .close-sidebar {
-    display: grid !important;
-    place-items: center;
-    width: 26px; height: 26px;
-    border-radius: 6px;
-    background: transparent;
-    border: 0;
-    color: #94a3b8;
-    cursor: pointer;
-    margin-left: auto;
-    padding: 0;
-  }
-  .sidebar.mobile-open .close-sidebar:hover,
-  aside.mobile-open .close-sidebar:hover {
-    background: #334155;
-    color: #fff;
+  aside.mobile-open .close-sidebar,
+  body.sidebar-open .sidebar .close-sidebar,
+  body.sidebar-open aside .close-sidebar {
+    display: none !important;
   }
 
   .mobile-overlay.active {
@@ -3169,8 +3153,6 @@ button svg, .primary-btn svg, .outline-btn svg, .small-btn svg {
    PHẦN 29: BỔ SUNG CHO CÁC COMPONENT MỚI
    ============================================================ */
 
-/* ---------- ChatBot: Pulse animation cho FAB ---------- */
-
 .chatbot-pulse {
   position: absolute;
   inset: 0;
@@ -3185,8 +3167,6 @@ button svg, .primary-btn svg, .outline-btn svg, .small-btn svg {
   0%   { transform: scale(1);   opacity: 1; }
   100% { transform: scale(1.5); opacity: 0; }
 }
-
-/* ---------- ChatBot: Typing indicator (3 chấm) ---------- */
 
 .dot-typing {
   display: inline-block;
@@ -3331,7 +3311,7 @@ html.dark-mode .bottom-nav-more-item.active {
 }
 
 
-/* ---------- Profile: layout 2 cột + avatar + form ---------- */
+/* ---------- Profile ---------- */
 
 .profile-grid {
   display: grid;
@@ -3439,7 +3419,7 @@ html.dark-mode .bottom-nav-more-item.active {
 }
 
 
-/* ---------- Orders: card + filter box + rainbow badge ---------- */
+/* ---------- Orders ---------- */
 
 .order-card {
   background: var(--card-bg, #fff);
@@ -3535,7 +3515,7 @@ html.dark-mode .success-state {
 }
 
 
-/* ---------- Wallet: stats grid responsive ---------- */
+/* ---------- Wallet ---------- */
 
 .wallet-hero-btns {
   display: flex;
@@ -3557,7 +3537,7 @@ html.dark-mode .success-state {
 }
 
 
-/* ---------- Utilities: skip cho hover trên touch ---------- */
+/* ---------- Utilities ---------- */
 
 @media (hover: none) {
   .food-card-clickable:hover {
@@ -3636,9 +3616,7 @@ html.dark-mode .bg-particles {
    PHẦN 30 (bổ sung): PAYMENT SELECTOR
    ============================================================ */
 
-.payment-selector {
-  margin-bottom: 16px;
-}
+.payment-selector { margin-bottom: 16px; }
 
 .payment-selector h4 {
   margin: 0 0 12px;
@@ -3647,10 +3625,7 @@ html.dark-mode .bg-particles {
   color: var(--text-primary, #172033);
 }
 
-.payment-grid {
-  display: grid;
-  gap: 10px;
-}
+.payment-grid { display: grid; gap: 10px; }
 
 .payment-card {
   display: flex;
@@ -3690,9 +3665,7 @@ html.dark-mode .bg-particles {
   transition: transform 0.18s ease;
 }
 
-.payment-card:hover .pm-icon {
-  transform: scale(1.05);
-}
+.payment-card:hover .pm-icon { transform: scale(1.05); }
 
 .payment-card .pm-body {
   flex: 1;
@@ -3759,42 +3732,17 @@ html.dark-mode .payment-card {
   border-color: #334155;
 }
 
-html.dark-mode .payment-card:hover:not(.active) {
-  background: #334155;
-}
-
-html.dark-mode .payment-card .pm-head b {
-  color: #f1f5f9;
-}
-
-html.dark-mode .payment-card .pm-body > span {
-  color: #94a3b8;
-}
+html.dark-mode .payment-card:hover:not(.active) { background: #334155; }
+html.dark-mode .payment-card .pm-head b { color: #f1f5f9; }
+html.dark-mode .payment-card .pm-body > span { color: #94a3b8; }
 
 @media (max-width: 480px) {
-  .payment-card {
-    padding: 12px;
-    gap: 10px;
-  }
-  .payment-card .pm-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-  }
-  .payment-card .pm-icon svg {
-    width: 22px;
-    height: 22px;
-  }
-  .payment-card .pm-head b {
-    font-size: 13px;
-  }
-  .payment-card .pm-body > span {
-    font-size: 11px;
-  }
-  .payment-card .pm-badge {
-    font-size: 9px;
-    padding: 2px 6px;
-  }
+  .payment-card { padding: 12px; gap: 10px; }
+  .payment-card .pm-icon { width: 40px; height: 40px; border-radius: 10px; }
+  .payment-card .pm-icon svg { width: 22px; height: 22px; }
+  .payment-card .pm-head b { font-size: 13px; }
+  .payment-card .pm-body > span { font-size: 11px; }
+  .payment-card .pm-badge { font-size: 9px; padding: 2px 6px; }
 }
 
 /* ============================================================
@@ -3837,9 +3785,7 @@ html.dark-mode .payment-card .pm-body > span {
   margin-left: auto !important;
 }
 
-.topbar-right::before {
-  display: none !important;
-}
+.topbar-right::before { display: none !important; }
 
 .topbar-profile-btn {
   margin-left: 8px !important;
@@ -3862,32 +3808,18 @@ html.dark-mode .payment-card .pm-body > span {
 }
 
 @media (max-width: 1400px) {
-  .global-search {
-    max-width: 560px !important;
-  }
+  .global-search { max-width: 560px !important; }
 }
 
 @media (max-width: 1200px) {
-  .topbar-profile-btn .profile-info {
-    display: none !important;
-  }
-  .topbar-profile-btn {
-    padding: 4px 8px 4px 12px !important;
-  }
+  .topbar-profile-btn .profile-info { display: none !important; }
+  .topbar-profile-btn { padding: 4px 8px 4px 12px !important; }
 }
 
 @media (max-width: 768px) {
-  .topbar {
-    padding: 0 12px !important;
-    gap: 8px !important;
-  }
-  .topbar-left {
-    gap: 8px !important;
-  }
-  .global-search {
-    max-width: 100% !important;
-    min-width: 0 !important;
-  }
+  .topbar { padding: 0 12px !important; gap: 8px !important; }
+  .topbar-left { gap: 8px !important; }
+  .global-search { max-width: 100% !important; min-width: 0 !important; }
   .topbar-profile-btn {
     border-left: 0 !important;
     padding-left: 4px !important;
@@ -3896,7 +3828,7 @@ html.dark-mode .payment-card .pm-body > span {
 }
 
 /* ============================================================
-   PHẦN 32: BANNER IMAGE FIX — object-position để ảnh đẹp
+   PHẦN 32: BANNER IMAGE FIX
    ============================================================ */
 
 .banner-carousel > div > div {
@@ -3905,17 +3837,9 @@ html.dark-mode .payment-card .pm-body > span {
   background-repeat: no-repeat !important;
 }
 
-.banner-carousel > div > div:nth-child(1) {
-  background-position: center 30% !important;
-}
-
-.banner-carousel > div > div:nth-child(2) {
-  background-position: center 45% !important;
-}
-
-.banner-carousel > div > div:nth-child(3) {
-  background-position: center 50% !important;
-}
+.banner-carousel > div > div:nth-child(1) { background-position: center 30% !important; }
+.banner-carousel > div > div:nth-child(2) { background-position: center 45% !important; }
+.banner-carousel > div > div:nth-child(3) { background-position: center 50% !important; }
 
 .banner-carousel > div > div::after {
   content: "" !important;
@@ -3935,10 +3859,7 @@ html.dark-mode .payment-card .pm-body > span {
    PHẦN 33: HEADER NAV FIX — Tab gọn hơn
    ============================================================ */
 
-.header-nav-inner {
-  gap: 2px !important;
-  justify-content: center !important;
-}
+.header-nav-inner { gap: 2px !important; justify-content: center !important; }
 
 .header-nav-item {
   padding: 14px 20px !important;
@@ -3976,10 +3897,6 @@ html.dark-mode .payment-card .pm-body > span {
   object-fit: cover !important;
   object-position: center !important;
 }
-
-/* ============================================================
-   KẾT THÚC PHẦN 31-35
-   ============================================================ */
 
 /* ============================================================
    PHẦN 36: BANNER DOTS + CTA FIX
@@ -4066,26 +3983,12 @@ html.dark-mode .payment-card .pm-body > span {
 .banner-nav-right { right: 16px !important; }
 
 @media (max-width: 768px) {
-  .banner-dots {
-    bottom: 12px !important;
-    gap: 6px !important;
-  }
-  .banner-dots button {
-    width: 8px !important;
-    height: 8px !important;
-  }
+  .banner-dots { bottom: 12px !important; gap: 6px !important; }
+  .banner-dots button { width: 8px !important; height: 8px !important; }
   .banner-dots button[aria-current="true"],
-  .banner-dots button[aria-selected="true"] {
-    width: 22px !important;
-  }
-  .banner-btn {
-    padding: 10px 22px !important;
-    font-size: 12.5px !important;
-  }
-  .banner-nav {
-    width: 36px !important;
-    height: 36px !important;
-  }
+  .banner-dots button[aria-selected="true"] { width: 22px !important; }
+  .banner-btn { padding: 10px 22px !important; font-size: 12.5px !important; }
+  .banner-nav { width: 36px !important; height: 36px !important; }
 }
 
 /* ============================================================
@@ -4230,15 +4133,8 @@ main.v8-login-right {
   border-top: 1px solid rgba(38, 52, 213, 0.12);
   flex-shrink: 0;
 }
-.v8-left-caption b {
-  font-size: 15px;
-  color: #172033;
-  font-weight: 800;
-}
-.v8-left-caption span {
-  font-size: 13px;
-  color: #64748b;
-}
+.v8-left-caption b { font-size: 15px; color: #172033; font-weight: 800; }
+.v8-left-caption span { font-size: 13px; color: #64748b; }
 
 main.v8-login-right {
   grid-column: 2 !important;
@@ -4654,24 +4550,12 @@ html.dark-mode .v8-label { color: #cbd5e1; }
 
 html.dark-mode .v8-tabs { background: #1e293b !important; }
 html.dark-mode .v8-tab { color: #94a3b8 !important; }
-html.dark-mode .v8-tab.active {
-  background: #f1f5f9 !important;
-  color: #0f172a !important;
-}
+html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !important; }
 
 @media (max-width: 480px) {
-  .v8-form-top {
-    margin-bottom: 20px !important;
-  }
-  .v8-form-logo-mark {
-    width: 40px !important;
-    height: 40px !important;
-    font-size: 20px !important;
-  }
-  .v8-tab {
-    padding: 5px 10px !important;
-    font-size: 11.5px !important;
-  }
+  .v8-form-top { margin-bottom: 20px !important; }
+  .v8-form-logo-mark { width: 40px !important; height: 40px !important; font-size: 20px !important; }
+  .v8-tab { padding: 5px 10px !important; font-size: 11.5px !important; }
 }
 
 /* ============================================================
@@ -4692,9 +4576,7 @@ html.dark-mode .v8-tab.active {
    ============================================================ */
 
 @media (max-width: 768px) {
-  .shifts-stats-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
+  .shifts-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .shifts-tabs {
     overflow-x: auto !important;
     flex-wrap: nowrap !important;
@@ -4705,31 +4587,22 @@ html.dark-mode .v8-tab.active {
     flex-direction: column !important;
     align-items: stretch !important;
   }
-
-  .finance-account-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .dashboard-quick-actions {
-    grid-template-columns: repeat(3, 1fr) !important;
-  }
-  .dashboard-recent-table .col-time {
-    display: none !important;
-  }
+  .finance-account-grid { grid-template-columns: 1fr !important; }
+  .dashboard-quick-actions { grid-template-columns: repeat(3, 1fr) !important; }
+  .dashboard-recent-table .col-time { display: none !important; }
 }
 
 @media (max-width: 480px) {
-  .dashboard-quick-actions {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
+  .dashboard-quick-actions { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
 /* ============================================================
-   PHẦN 39: SIDEBAR PUSH/FULL-SCREEN (bulletproof)
+   PHẦN 39: SIDEBAR PUSH/AUTO-FIT (bulletproof)
    ============================================================
    Dùng body.sidebar-open → đảm bảo match DOM dù React Fragment.
    Fix z-index: sidebar phải > topbar (100) khi mở trên mobile.
-   ✅ PATCH: Mobile sidebar chỉ chiếm ~30% màn hình, phần còn lại overlay đen mờ.
+   ✅ PATCH: Mobile sidebar dùng clamp() để auto-fit mọi màn hình.
+   ✅ PATCH: Bỏ nút X (đã xóa khỏi JSX) — chỉ đóng qua overlay.
    ============================================================ */
 
 /* Main có transition mượt */
@@ -4748,38 +4621,33 @@ html.dark-mode .v8-tab.active {
   }
 }
 
-/* ===== MOBILE (≤768px): SIDEBAR ~30% ===== */
+/* ===== MOBILE (≤768px): SIDEBAR AUTO-FIT ===== */
 @media (max-width: 768px) {
-  /* 1. Sidebar chỉ chiếm ~30% màn hình */
+  /* 1. Sidebar auto-fit theo viewport */
   body.sidebar-open .sidebar,
   body.sidebar-open aside {
-    width: 30vw !important;
-    max-width: 180px !important;
-    min-width: 140px !important;
+    width: clamp(190px, 52vw, 240px) !important;
     z-index: 9999 !important;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35) !important;
     border-right: 0 !important;
   }
 
-  /* 2. Content không push (sidebar nổi bên trên) */
+  /* 2. Content không push */
   body.sidebar-open .main {
     margin-left: 0 !important;
     width: 100% !important;
   }
 
-  /* 3. Overlay đen mờ phần còn lại (~70%) */
+  /* 3. Overlay đen mờ phần còn lại */
   body.sidebar-open .mobile-overlay.active {
     display: block !important;
     z-index: 9998 !important;
   }
 
-  /* 4. Nút close (X) */
+  /* 4. Không còn nút X */
   body.sidebar-open .sidebar .close-sidebar,
   body.sidebar-open aside .close-sidebar {
-    display: grid !important;
-    z-index: 10000 !important;
-    width: 26px !important;
-    height: 26px !important;
+    display: none !important;
   }
 }
 
