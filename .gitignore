@@ -37,3 +37,9 @@ pnpm-debug.log*
 
 # Backup files
 *canteen-db-auto-backup-*.json
+
+# Unused configs (keep on disk, not in Git)
+Dockerfile
+Dockerfile.backend
+Makefile
+nginx.conf
