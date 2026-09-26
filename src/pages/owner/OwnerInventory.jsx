@@ -15,11 +15,16 @@
 //
 // Lưu ý:
 //   - Mã nguyên liệu tự sinh dựa trên mã lớn nhất + 1
-//     (không dùng list.length vì có thể trùng)
 //   - Badge trạng thái dùng CSS class .inv-badge--xxx
-//     → dark mode tự đổi màu
 //   - removeItem: dùng ConfirmDialog custom
-//     (thay cho confirm() native → đồng bộ UX toàn app)
+//
+// Batch 3A fixes:
+//   - ✅ I1: Nút "Nhập kho" — đổi icon trắng để không bị chìm nền xanh
+//   - ✅ I2: Tách "Sắp hết" (qty > 0 && qty < min) khỏi "Hết hàng"
+//   - ✅ I3: Alert tách rõ "X đã hết, Y sắp hết" thay vì cộng dồn
+//   - ✅ I5: Xóa dead code loadingBoxStyle
+//   - ✅ I6: Generate code match TẤT CẢ số trong code (không chỉ nhóm đầu)
+//   - ✅ Bonus: Modal nhập kho luôn đọc fresh data từ list (tránh stale)
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -62,7 +67,7 @@ export default function OwnerInventory() {
   const [importModal, setImportModal] = useState(null); // Import stock
   const [saving, setSaving] = useState(false);
 
-  // ---------- ✅ Confirm dialog ----------
+  // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -107,6 +112,13 @@ export default function OwnerInventory() {
     return () => window.removeEventListener("keydown", handler);
   }, [modal, importModal, saving]);
 
+  // ---------- ✅ Bonus: derive import item fresh từ list ----------
+  // Đảm bảo modal luôn đọc data mới nhất, không bị stale sau khi load() lại
+  const importItem = useMemo(() => {
+    if (!importModal) return null;
+    return list.find((x) => x.code === importModal.code) || importModal;
+  }, [importModal, list]);
+
   // ---------- Computed (memo) ----------
 
   const filtered = useMemo(() => {
@@ -119,35 +131,47 @@ export default function OwnerInventory() {
     );
   }, [list, q]);
 
+  // ✅ I2: Tách 3 trạng thái độc lập (không overlap)
   const stats = useMemo(() => {
-    const low = list.filter((x) => x.qty < x.min);
     const out = list.filter((x) => x.qty === 0);
+    const low = list.filter((x) => x.qty > 0 && x.qty < x.min);
+    const ok = list.filter((x) => x.qty >= x.min);
+
     return {
       total: list.length,
       lowCount: low.length,
       outCount: out.length,
-      okCount: list.length - low.length,
+      okCount: ok.length,
       lowItems: low,
+      outItems: out,
     };
   }, [list]);
+
+  // Tổng số cần chú ý (chỉ alert khi > 0)
+  const alertCount = stats.lowCount + stats.outCount;
 
   // ---------- Code generation ----------
 
   /**
-   * Sinh mã nguyên liệu mới dựa trên mã LỚN NHẤT hiện có + 1
-   * Tránh trùng khi list có mã không liên tục (VD: NL001, NL003, NL005 → NL006)
+   * ✅ I6: Sinh mã từ MAX của TẤT CẢ số trong code (không chỉ nhóm đầu).
+   * VD: NL002-X1, NL010 → max=10 → NL011
    */
   const generateNextCode = () => {
     if (!list.length) return "NL001";
+
     const maxNum = list.reduce((max, x) => {
-      const match = String(x.code || "").match(/(\d+)/);
-      const n = match ? parseInt(match[1], 10) : 0;
+      const matches = String(x.code || "").match(/\d+/g) || [];
+      const n = matches.reduce(
+        (m, s) => Math.max(m, parseInt(s, 10) || 0),
+        0
+      );
       return n > max ? n : max;
     }, 0);
+
     return "NL" + String(maxNum + 1).padStart(3, "0");
   };
 
-  // ---------- ✅ Confirm helpers ----------
+  // ---------- Confirm helpers ----------
 
   const closeConfirm = () => {
     if (confirmBusy) return;
@@ -204,7 +228,7 @@ export default function OwnerInventory() {
   };
 
   /**
-   * ✅ Xoá nguyên liệu — dùng ConfirmDialog custom.
+   * Xoá nguyên liệu — dùng ConfirmDialog custom.
    */
   const removeItem = (code) => {
     const item = list.find((x) => x.code === code);
@@ -245,13 +269,13 @@ export default function OwnerInventory() {
 
     setSaving(true);
     try {
-      const res = await api.inventory.import(importModal.code, {
+      const res = await api.inventory.import(importItem.code, {
         qty,
         supplier: f.get("supplier")?.trim(),
         note: f.get("note")?.trim(),
       });
       toast(
-        `Đã nhập ${res?.record?.qty ?? qty} ${importModal.unit}`,
+        `Đã nhập ${res?.record?.qty ?? qty} ${importItem.unit}`,
         "success"
       );
       setImportModal(null);
@@ -286,9 +310,10 @@ export default function OwnerInventory() {
     <>
       <div>
         {/* ============================================================
-            ALERT — Tồn kho thấp
+            ALERT — Tồn kho cần chú ý
+            ✅ I3: Tách rõ "đã hết" và "sắp hết"
             ============================================================ */}
-        {stats.lowCount > 0 && (
+        {alertCount > 0 && (
           <div
             style={{
               display: "flex",
@@ -305,11 +330,21 @@ export default function OwnerInventory() {
             <AlertTriangle size={20} style={{ flexShrink: 0 }} />
             <div>
               <b style={{ fontSize: 13, display: "block", marginBottom: 2 }}>
-                ⚠️ Cảnh báo tồn kho thấp
+                ⚠️ Cảnh báo tồn kho
               </b>
               <div style={{ fontSize: 12.5, opacity: 0.9 }}>
-                {stats.lowCount} nguyên liệu dưới mức tối thiểu
-                {stats.outCount > 0 && ` (${stats.outCount} đã hết)`}.
+                {stats.outCount > 0 && (
+                  <span>
+                    <b>{stats.outCount}</b> nguyên liệu đã hết hàng
+                  </span>
+                )}
+                {stats.outCount > 0 && stats.lowCount > 0 && " · "}
+                {stats.lowCount > 0 && (
+                  <span>
+                    <b>{stats.lowCount}</b> nguyên liệu sắp hết
+                  </span>
+                )}
+                .
               </div>
             </div>
           </div>
@@ -413,6 +448,7 @@ export default function OwnerInventory() {
 
         {/* ============================================================
             STATS
+            ✅ I2: 4 ô độc lập, không overlap
             ============================================================ */}
         <div
           style={{
@@ -515,10 +551,11 @@ export default function OwnerInventory() {
                               justifyContent: "flex-end",
                             }}
                           >
+                            {/* ✅ I1: icon trắng để không bị chìm nền xanh */}
                             <IconButton
                               onClick={() => setImportModal(x)}
                               title="Nhập kho"
-                              color="#18a967"
+                              color="#ffffff"
                               bg="#18a967"
                             >
                               <Package size={15} />
@@ -790,8 +827,9 @@ export default function OwnerInventory() {
 
         {/* ============================================================
             IMPORT STOCK MODAL
+            ✅ Dùng `importItem` (fresh từ list) thay vì `importModal` (stale)
             ============================================================ */}
-        {importModal && (
+        {importItem && (
           <Modal onClose={() => !saving && setImportModal(null)} maxWidth={480}>
             <div style={modalHeaderStyle}>
               <h3 style={modalTitleStyle}>
@@ -817,22 +855,22 @@ export default function OwnerInventory() {
               }}
             >
               <div style={{ marginBottom: 4 }}>
-                <b>{importModal.name}</b>{" "}
+                <b>{importItem.name}</b>{" "}
                 <span style={{ color: "var(--text-light, #94a3b8)", fontFamily: "monospace", fontSize: 11 }}>
-                  ({importModal.code})
+                  ({importItem.code})
                 </span>
               </div>
               <div style={{ color: "var(--text-muted, #64748b)" }}>
                 Tồn hiện tại:{" "}
                 <b style={{ color: "var(--text-primary, #172033)" }}>
-                  {importModal.qty} {importModal.unit}
+                  {importItem.qty} {importItem.unit}
                 </b>
               </div>
             </div>
 
             <form onSubmit={doImport} autoComplete="off">
               <label style={labelStyle}>
-                Số lượng nhập ({importModal.unit}) *
+                Số lượng nhập ({importItem.unit}) *
               </label>
               <input
                 name="qty"
@@ -902,7 +940,7 @@ export default function OwnerInventory() {
         `}</style>
       </div>
 
-      {/* ✅ ConfirmDialog */}
+      {/* ConfirmDialog */}
       {confirm && (
         <ConfirmDialog
           open
@@ -1160,10 +1198,4 @@ const btnCancelStyle = {
   alignItems: "center",
   justifyContent: "center",
   gap: 6,
-};
-
-const loadingBoxStyle = {
-  textAlign: "center",
-  padding: 40,
-  color: "var(--text-light, #8993a3)",
 };

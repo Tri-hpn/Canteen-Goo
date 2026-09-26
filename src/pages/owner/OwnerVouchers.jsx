@@ -17,6 +17,14 @@
 //   - Customer lookup dùng Map thay vì find() → O(1)
 //   - CSV escape đúng: dấu " được nhân đôi, cell được bọc trong ""
 //   - copyCode + exportCSV có cleanup
+//
+// Batch 3B fixes:
+//   - ✅ V1: Validate trùng mã voucher (case-insensitive)
+//     bỏ qua chính nó khi edit
+//   - ✅ V2: Đổi label "Chưa dùng" → "Khả dụng (cá nhân)" cho rõ
+//   - ✅ V3: Persist filter (source/status/sort) vào localStorage
+//     - Restore khi mount
+//     - Reset về default khi bấm "Xoá lọc"
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -29,12 +37,14 @@ import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
 import ConfirmDialog from "../../components/ConfirmDialog";
+
 // ============================================================
 // CONSTANTS
 // ============================================================
 
 const MODAL_Z = 2147483600;
 const COPY_FEEDBACK_MS = 1500;
+const FILTER_STORAGE_KEY = "vouchers_filter";
 
 const SOURCE_FILTERS = [
   { id: "all",      label: "Tất cả" },
@@ -57,6 +67,14 @@ const SORT_OPTIONS = [
 
 const QUICK_VALUES = [10000, 20000, 50000, 100000];
 
+// Default filter state
+const DEFAULT_FILTERS = {
+  q: "",
+  source: "all",
+  status: "all",
+  sortBy: "newest",
+};
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -74,6 +92,33 @@ function csvCell(v) {
   return s;
 }
 
+/** ✅ V3: Đọc filter đã lưu từ localStorage (an toàn). */
+function readStoredFilters() {
+  if (typeof window === "undefined") return DEFAULT_FILTERS;
+  try {
+    const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+    if (!raw) return DEFAULT_FILTERS;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return DEFAULT_FILTERS;
+
+    // Chỉ nhận các giá trị hợp lệ
+    return {
+      q: typeof parsed.q === "string" ? parsed.q : DEFAULT_FILTERS.q,
+      source: SOURCE_FILTERS.some((f) => f.id === parsed.source)
+        ? parsed.source
+        : DEFAULT_FILTERS.source,
+      status: STATUS_FILTERS.some((f) => f.id === parsed.status)
+        ? parsed.status
+        : DEFAULT_FILTERS.status,
+      sortBy: SORT_OPTIONS.some((f) => f.id === parsed.sortBy)
+        ? parsed.sortBy
+        : DEFAULT_FILTERS.sortBy,
+    };
+  } catch {
+    return DEFAULT_FILTERS;
+  }
+}
+
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
@@ -85,28 +130,38 @@ export default function OwnerVouchers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-    // ---------- UI ----------
+  // ---------- UI ----------
   const [modal, setModal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formValue, setFormValue] = useState(10000);
-  const [q, setQ] = useState("");
-  const [filterSource, setFilterSource] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [sortBy, setSortBy] = useState("newest");
+
+  // ✅ V3: Khởi tạo filter từ localStorage
+  const [filters, setFilters] = useState(() => readStoredFilters());
+  const { q, source: filterSource, status: filterStatus, sortBy } = filters;
+
   const [selected, setSelected] = useState([]);
   const [copiedId, setCopiedId] = useState(null);
 
   // ---------- Claims modal ----------
-  const [claimsModal, setClaimsModal] = useState(null); // template object
+  const [claimsModal, setClaimsModal] = useState(null);
   const [claims, setClaims] = useState([]);
   const [loadingClaims, setLoadingClaims] = useState(false);
 
-  // ---------- ✅ Confirm dialog ----------
+  // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
   // Race-safe
   const reqIdRef = useRef(0);
+
+  // ---------- ✅ V3: Persist filters vào localStorage ----------
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+    } catch {
+      // Bỏ qua nếu localStorage bị chặn
+    }
+  }, [filters]);
 
   // ---------- Load ----------
 
@@ -134,7 +189,7 @@ export default function OwnerVouchers() {
     }
   }, []);
 
-   useEffect(() => {
+  useEffect(() => {
     load();
   }, [load]);
 
@@ -223,11 +278,15 @@ export default function OwnerVouchers() {
     );
     const personal = list.filter((v) => v.user_id);
     const totalClaims = personal.filter((v) => v.claimed_from).length;
+
+    // ✅ V2: "Khả dụng cá nhân" = chỉ tính personal chưa dùng
+    const personalAvailable = personal.filter((v) => !v.used).length;
+
     return {
       total: list.length,
       public: publicTemplates.length,
       personal: personal.length,
-      available: personal.filter((v) => !v.used).length,
+      personalAvailable,
       used: list.filter((v) => v.used).length,
       totalClaims,
     };
@@ -246,6 +305,27 @@ export default function OwnerVouchers() {
 
   const allSelected =
     filtered.length > 0 && selected.length === filtered.length;
+
+  // Có filter đang bật khác default?
+  const hasActiveFilter =
+    q.trim() !== "" ||
+    filterSource !== "all" ||
+    filterStatus !== "all" ||
+    sortBy !== "newest";
+
+  // ---------- Filter handlers ----------
+
+  const setFilterField = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  /** ✅ V3: Reset về default + xoá localStorage */
+  const clearFilters = () => {
+    setFilters({ ...DEFAULT_FILTERS });
+    try {
+      localStorage.removeItem(FILTER_STORAGE_KEY);
+    } catch {}
+  };
 
   // ---------- Handlers ----------
 
@@ -268,7 +348,7 @@ export default function OwnerVouchers() {
     toast("Đã sao chép mã " + v.code, "success");
   };
 
-  // ✅ Confirm helpers
+  // Confirm helpers
   const closeConfirm = useCallback(() => {
     if (confirmBusy) return;
     setConfirm(null);
@@ -307,12 +387,26 @@ export default function OwnerVouchers() {
     const userId = f.get("user_id") ? Number(f.get("user_id")) : null;
     const pointsUsed = Number(f.get("points_used")) || 0;
 
-    // Validate
+    // Validate cơ bản
     if (!code) return toast("Vui lòng nhập mã voucher", "error");
     if (!value || value <= 0) return toast("Giá trị phải lớn hơn 0", "error");
     if (value > 10_000_000)
       return toast("Giá trị tối đa 10 triệu", "error");
     if (pointsUsed < 0) return toast("Số điểm không được âm", "error");
+
+    // ✅ V1: Validate trùng mã (case-insensitive, bỏ qua chính nó khi edit)
+    const currentId = modal?.id;
+    const dup = list.find(
+      (v) =>
+        v.id !== currentId &&
+        (v.code || "").toUpperCase() === code
+    );
+    if (dup) {
+      return toast(
+        `Đã có voucher mã "${dup.code}" — vui lòng đặt mã khác`,
+        "error"
+      );
+    }
 
     setSaving(true);
     try {
@@ -333,7 +427,7 @@ export default function OwnerVouchers() {
     }
   };
 
-   const removeVoucher = (v) => {
+  const removeVoucher = (v) => {
     setConfirm({
       title: `Xóa voucher "${v.code}"?`,
       message:
@@ -356,7 +450,7 @@ export default function OwnerVouchers() {
     });
   };
 
-   const removeSelected = () => {
+  const removeSelected = () => {
     if (!selected.length) return;
     const count = selected.length;
 
@@ -381,7 +475,8 @@ export default function OwnerVouchers() {
       },
     });
   };
-    const toggleUsed = (v) => {
+
+  const toggleUsed = (v) => {
     const newUsed = !v.used;
     const action = newUsed ? "đã dùng" : "chưa dùng";
 
@@ -456,10 +551,8 @@ export default function OwnerVouchers() {
         }),
       ];
 
-      // Escape từng cell
       const csv = rows.map((r) => r.map(csvCell).join(",")).join("\n");
 
-      // BOM để Excel đọc UTF-8
       const blob = new Blob(["\uFEFF" + csv], {
         type: "text/csv;charset=utf-8",
       });
@@ -488,6 +581,7 @@ export default function OwnerVouchers() {
     <div>
       {/* ============================================================
           STATS
+          ✅ V2: đổi label "Chưa dùng" → "Khả dụng (cá nhân)"
           ============================================================ */}
       <div
         style={{
@@ -500,7 +594,7 @@ export default function OwnerVouchers() {
         <Stat label="Tổng voucher" value={stats.total} color="#2634d5" icon={<Ticket size={16} />} />
         <Stat label="Toàn hệ thống" value={stats.public} color="#ec4899" icon={<Globe size={16} />} />
         <Stat label="Cá nhân" value={stats.personal} color="#8b5cf6" icon={<UserIcon size={16} />} />
-        <Stat label="Chưa dùng" value={stats.available} color="#18a967" icon={<Gift size={16} />} />
+        <Stat label="Khả dụng (cá nhân)" value={stats.personalAvailable} color="#18a967" icon={<Gift size={16} />} />
         <Stat label="Đã dùng" value={stats.used} color="#ef4444" icon={<Check size={16} />} />
         <Stat label="Lượt nhận" value={stats.totalClaims} color="#f59e0b" icon={<Users size={16} />} />
       </div>
@@ -534,7 +628,7 @@ export default function OwnerVouchers() {
             <Search size={16} style={{ color: "var(--text-light, #8993a3)" }} />
             <input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => setFilterField("q", e.target.value)}
               placeholder="Tìm mã, giá trị, khách..."
               style={{
                 flex: 1,
@@ -548,7 +642,7 @@ export default function OwnerVouchers() {
             />
             {q && (
               <button
-                onClick={() => setQ("")}
+                onClick={() => setFilterField("q", "")}
                 style={clearBtnStyle}
                 aria-label="Xoá tìm kiếm"
               >
@@ -562,7 +656,7 @@ export default function OwnerVouchers() {
             {SOURCE_FILTERS.map((f) => (
               <button
                 key={f.id}
-                onClick={() => setFilterSource(f.id)}
+                onClick={() => setFilterField("source", f.id)}
                 style={segmentBtnStyle(filterSource === f.id)}
               >
                 {f.label}
@@ -573,7 +667,7 @@ export default function OwnerVouchers() {
           {/* Status filter */}
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={(e) => setFilterField("status", e.target.value)}
             style={selectStyle}
           >
             {STATUS_FILTERS.map((f) => (
@@ -586,7 +680,7 @@ export default function OwnerVouchers() {
           {/* Sort */}
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
+            onChange={(e) => setFilterField("sortBy", e.target.value)}
             style={selectStyle}
           >
             {SORT_OPTIONS.map((f) => (
@@ -595,6 +689,28 @@ export default function OwnerVouchers() {
               </option>
             ))}
           </select>
+
+          {/* ✅ V3: Clear filters (chỉ hiện khi có filter đang bật) */}
+          {hasActiveFilter && (
+            <button
+              onClick={clearFilters}
+              style={{
+                padding: "9px 14px",
+                background: "transparent",
+                color: "#ef4444",
+                border: "1px solid #ef4444",
+                borderRadius: 8,
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <X size={13} /> Xoá lọc
+            </button>
+          )}
 
           {/* Export */}
           <button onClick={exportCSV} style={toolBtnStyle} disabled={loading}>
@@ -667,7 +783,7 @@ export default function OwnerVouchers() {
           TABLE
           ============================================================ */}
       <div style={{ ...cardStyle, marginTop: 16 }}>
-                {/* Loading — skeleton table */}
+        {/* Loading — skeleton table */}
         {loading && (
           <SkeletonTable
             columns={8}
@@ -987,7 +1103,7 @@ export default function OwnerVouchers() {
                 marginBottom: 8,
               }}
             >
-                          {QUICK_VALUES.map((v) => (
+              {QUICK_VALUES.map((v) => (
                 <button
                   key={v}
                   type="button"
@@ -1148,7 +1264,7 @@ export default function OwnerVouchers() {
             <b>{claims.length}</b> khách đã nhận
           </div>
 
-                   {loadingClaims ? (
+          {loadingClaims ? (
             <SkeletonTable
               columns={4}
               rows={3}
@@ -1241,8 +1357,8 @@ export default function OwnerVouchers() {
           </button>
         </Modal>
       )}
-	
-	      {/* ✅ Confirm dialog */}
+
+      {/* Confirm dialog */}
       {confirm && (
         <ConfirmDialog
           open
@@ -1579,12 +1695,6 @@ const modalCloseStyle = {
   padding: 4,
   display: "grid",
   placeItems: "center",
-};
-
-const loadingBoxStyle = {
-  textAlign: "center",
-  padding: 40,
-  color: "var(--text-light, #8993a3)",
 };
 
 const emptyBoxStyle = {
