@@ -2611,25 +2611,57 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
 
   .topbar-right::before { display: none; }
 
-  /* ✅ FIX: Sidebar mobile — thu gọn, KHÔNG full-screen */
+  /* ✅ FIX: Sidebar mobile — chỉ chiếm ~30% màn hình */
   .sidebar, aside {
-    width: 78vw !important;
-    max-width: 320px !important;
-    min-width: 260px !important;
-    padding: 16px 12px !important;
+    width: 30vw !important;
+    max-width: 180px !important;
+    min-width: 140px !important;
+    padding: 14px 8px !important;
   }
   .sidebar nav a, aside nav a, .nav-link {
-    padding: 10px 12px !important;
-    font-size: 13px !important;
+    padding: 9px 8px !important;
+    font-size: 11.5px !important;
+    gap: 8px !important;
   }
-  .nav-badge { font-size: 10px !important; min-width: 18px !important; height: 18px !important; }
+  .sidebar nav a svg, aside nav a svg, .nav-link svg {
+    width: 15px !important;
+    height: 15px !important;
+  }
+  .sidebar .brand, aside > div:first-child {
+    padding: 6px 2px 14px !important;
+    gap: 8px !important;
+  }
+  .brand-mark {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 15px !important;
+    border-radius: 8px !important;
+  }
+  .brand-text strong { font-size: 11px !important; letter-spacing: 0.5px !important; }
+  .brand-text small { font-size: 8px !important; letter-spacing: 1.5px !important; }
+  .role-chip {
+    font-size: 9px !important;
+    padding: 3px 8px !important;
+    margin-bottom: 8px !important;
+  }
+  .nav-badge {
+    font-size: 9px !important;
+    min-width: 16px !important;
+    height: 16px !important;
+    padding: 0 4px !important;
+  }
+  .logout-btn {
+    padding: 9px 8px !important;
+    font-size: 11.5px !important;
+    gap: 8px !important;
+  }
 
   .sidebar.mobile-open .close-sidebar,
   aside.mobile-open .close-sidebar {
     display: grid !important;
     place-items: center;
-    width: 32px; height: 32px;
-    border-radius: 8px;
+    width: 26px; height: 26px;
+    border-radius: 6px;
     background: transparent;
     border: 0;
     color: #94a3b8;
@@ -4697,7 +4729,7 @@ html.dark-mode .v8-tab.active {
    ============================================================
    Dùng body.sidebar-open → đảm bảo match DOM dù React Fragment.
    Fix z-index: sidebar phải > topbar (100) khi mở trên mobile.
-   ✅ PATCH: Mobile sidebar thu gọn (78vw / max 320px), KHÔNG full-screen.
+   ✅ PATCH: Mobile sidebar chỉ chiếm ~30% màn hình, phần còn lại overlay đen mờ.
    ============================================================ */
 
 /* Main có transition mượt */
@@ -4716,14 +4748,14 @@ html.dark-mode .v8-tab.active {
   }
 }
 
-/* ===== MOBILE (≤768px): SIDEBAR THU GỌN ===== */
+/* ===== MOBILE (≤768px): SIDEBAR ~30% ===== */
 @media (max-width: 768px) {
-  /* 1. Sidebar chỉ chiếm 78vw, tối đa 320px */
+  /* 1. Sidebar chỉ chiếm ~30% màn hình */
   body.sidebar-open .sidebar,
   body.sidebar-open aside {
-    width: 78vw !important;
-    max-width: 320px !important;
-    min-width: 260px !important;
+    width: 30vw !important;
+    max-width: 180px !important;
+    min-width: 140px !important;
     z-index: 9999 !important;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35) !important;
     border-right: 0 !important;
@@ -4735,17 +4767,19 @@ html.dark-mode .v8-tab.active {
     width: 100% !important;
   }
 
-  /* 3. HIỆN overlay đen mờ để user bấm ra ngoài đóng */
+  /* 3. Overlay đen mờ phần còn lại (~70%) */
   body.sidebar-open .mobile-overlay.active {
     display: block !important;
     z-index: 9998 !important;
   }
 
-  /* 4. Nút close (X) luôn hiện rõ */
+  /* 4. Nút close (X) */
   body.sidebar-open .sidebar .close-sidebar,
   body.sidebar-open aside .close-sidebar {
     display: grid !important;
     z-index: 10000 !important;
+    width: 26px !important;
+    height: 26px !important;
   }
 }
 
