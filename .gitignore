@@ -1,82 +1,39 @@
-# ============================================================
-# .gitignore â€” Canteen VWA
-# ============================================================
-
-# ---------- Dependencies ----------
+﻿# Dependencies
 node_modules/
-.pnp
-.pnp.js
 
-# ---------- Build output ----------
+# Build output
 dist/
-dist-ssr/
+.vite/
 build/
-*.local
 
-# ---------- Environment ----------
+# Environment
 .env
-.env.*
-!.env.example
+.env.local
+.env.*.local
 
-# ---------- Logs ----------
-*.log
-logs/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# Database local
+canteen-db.local.json
+canteen-db*.json
+!canteen-db.example.json
 
-# ---------- IDE / Editor ----------
-.vscode/*
-!.vscode/extensions.json
+# Editor
+.vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# ---------- OS ----------
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
 Thumbs.db
-ehthumbs.db
-Desktop.ini
+desktop.ini
 
-# ---------- Cache / Temp ----------
-.cache/
-.parcel-cache/
-.vite/
-node_modules/.cache/
-.eslintcache
-*.tsbuildinfo
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# ---------- Test coverage ----------
-coverage/
-.nyc_output/
-*.lcov
-
-# ---------- Deploy platforms ----------
-.vercel/
-.netlify/
-.firebase/
-
-# ---------- Project-specific ----------
-canteen-db.local.json
-canteen-db.backup.json
-canteen-backup-*.json
-backup-*.json
-uploads/
-public/uploads/
-
-# ---------- Exceptions (KHÃ”NG ignore) ----------
-!README.md
-!CHANGELOG.md
-!LICENSE
-!docs/
-!package-lock.json
-!yarn.lock
-!pnpm-lock.yaml
-!.env.example
-canteen-db.json
+# Backup files
+*canteen-db-auto-backup-*.json
