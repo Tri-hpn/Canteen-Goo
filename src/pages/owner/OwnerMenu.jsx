@@ -14,6 +14,12 @@
 //   - Thay confirm() native bằng ConfirmDialog custom
 //   - ✅ FIX toggle: optimistic update, KHÔNG load() lại full list
 //     → nút trượt mượt, không bị remount reset animation
+//
+// Batch 2:
+//   - ✅ Form giá auto-sync: nhập giá gốc + % → auto tính giá bán
+//     (khớp logic backend). Bỏ nhập giá bán thủ công khi có giá gốc.
+//   - ✅ Validate trùng tên món (client-side, trước khi gọi API)
+//   - ✅ Category có field `order` (thứ tự hiển thị) — optional
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -35,6 +41,9 @@ import ImageUploader from "../../components/ImageUploader";
 const MODAL_Z = 2147483600;
 const DEFAULT_CATEGORY_ICON = "🍽️";
 
+const DEFAULT_PRICE = 30000;
+const MAX_DISCOUNT = 90;
+
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
@@ -50,7 +59,11 @@ export default function OwnerMenu() {
   // ---------- Categories ----------
   const [categories, setCategories] = useState([]);
   const [showCatModal, setShowCatModal] = useState(false);
-  const [catForm, setCatForm] = useState({ name: "", icon: DEFAULT_CATEGORY_ICON });
+  const [catForm, setCatForm] = useState({
+    name: "",
+    icon: DEFAULT_CATEGORY_ICON,
+    order: "",
+  });
   const [editingCat, setEditingCat] = useState(null);
   const [catLoading, setCatLoading] = useState(false);
 
@@ -58,6 +71,13 @@ export default function OwnerMenu() {
   const [modal, setModal] = useState(null);
   const [image, setImage] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // ---------- Price fields (Batch 2 — controlled) ----------
+  const [priceFields, setPriceFields] = useState({
+    price: DEFAULT_PRICE,
+    originalPrice: "",
+    discountPercent: 0,
+  });
 
   // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
@@ -98,6 +118,18 @@ export default function OwnerMenu() {
     return () => window.removeEventListener("keydown", handler);
   }, [modal, showCatModal, catLoading, saving]);
 
+  // ✅ Batch 2: Reset price fields khi mở modal khác
+  useEffect(() => {
+    if (!modal) return;
+    setPriceFields({
+      price: Number(modal.price) || DEFAULT_PRICE,
+      originalPrice: modal.original_price
+        ? String(modal.original_price)
+        : "",
+      discountPercent: Number(modal.discount_percent) || 0,
+    });
+  }, [modal]);
+
   // ---------- Filter (memo) ----------
 
   const filtered = useMemo(() => {
@@ -129,6 +161,54 @@ export default function OwnerMenu() {
     }
   }, [confirm, confirmBusy]);
 
+  // ---------- Price handlers (Batch 2) ----------
+
+  const hasOriginal = Number(priceFields.originalPrice) > 0;
+
+  /**
+   * User nhập giá gốc:
+   * - Nếu có discount > 0 → auto price
+   * - Nếu discount = 0 → price = original (không giảm)
+   * - Nếu xóa original (rỗng/0) → reset discount = 0, giữ price cho user nhập lại
+   */
+  const handleOriginalChange = (v) => {
+    const original = Number(v) || 0;
+    setPriceFields((prev) => {
+      if (original <= 0) {
+        return { ...prev, originalPrice: v, discountPercent: 0 };
+      }
+      const d = Number(prev.discountPercent) || 0;
+      const newPrice =
+        d > 0 ? Math.round(original * (1 - d / 100)) : original;
+      return { ...prev, originalPrice: v, price: newPrice };
+    });
+  };
+
+  /**
+   * User nhập % giảm:
+   * - Chỉ có tác dụng khi đã có original_price
+   * - Clamp 0-90
+   */
+  const handleDiscountChange = (v) => {
+    const d = Math.max(0, Math.min(MAX_DISCOUNT, Number(v) || 0));
+    setPriceFields((prev) => {
+      const original = Number(prev.originalPrice) || 0;
+      if (original <= 0) {
+        return { ...prev, discountPercent: 0 };
+      }
+      const newPrice =
+        d > 0 ? Math.round(original * (1 - d / 100)) : original;
+      return { ...prev, discountPercent: d, price: newPrice };
+    });
+  };
+
+  /**
+   * User nhập giá bán trực tiếp (chỉ enable khi KHÔNG có original).
+   */
+  const handlePriceChange = (v) => {
+    setPriceFields((prev) => ({ ...prev, price: v }));
+  };
+
   // ---------- Item modal handlers ----------
 
   const openItemModal = (item = null) => {
@@ -139,6 +219,11 @@ export default function OwnerMenu() {
   const closeItemModal = () => {
     setModal(null);
     setImage("");
+    setPriceFields({
+      price: DEFAULT_PRICE,
+      originalPrice: "",
+      discountPercent: 0,
+    });
   };
 
   const saveItem = async (e) => {
@@ -146,30 +231,55 @@ export default function OwnerMenu() {
     if (saving) return;
 
     const f = new FormData(e.currentTarget);
-    const price = Number(f.get("price"));
-    const originalPrice = Number(f.get("original_price")) || price;
-    const discountPercent = Number(f.get("discount_percent")) || 0;
+    const name = f.get("name")?.trim();
+    const category = f.get("category");
     const stock = Number(f.get("stock"));
 
-    if (!f.get("name")?.trim()) {
+    // ---- Validate cơ bản ----
+    if (!name) {
       return toast("Vui lòng nhập tên món", "error");
     }
+
+    // ✅ Batch 2: Validate trùng tên món
+    const currentId = modal._id || modal.id;
+    const dup = list.find(
+      (m) =>
+        (m._id || m.id) !== currentId &&
+        (m.name || "").trim().toLowerCase() === name.toLowerCase()
+    );
+    if (dup) {
+      return toast(
+        `Đã có món "${dup.name}" — vui lòng đặt tên khác`,
+        "error"
+      );
+    }
+
+    // ---- Validate giá ----
+    const original = Number(priceFields.originalPrice) || 0;
+    const d = Number(priceFields.discountPercent) || 0;
+    let price = Number(priceFields.price) || 0;
+
+    if (original > 0) {
+      // Auto-compute lại cho chắc (khớp backend)
+      price = d > 0 ? Math.round(original * (1 - d / 100)) : original;
+    }
+
     if (!price || price <= 0) {
       return toast("Giá phải lớn hơn 0", "error");
     }
-    if (discountPercent < 0 || discountPercent > 90) {
-      return toast("% giảm giá phải từ 0-90", "error");
+    if (d < 0 || d > MAX_DISCOUNT) {
+      return toast(`% giảm giá phải từ 0-${MAX_DISCOUNT}`, "error");
     }
     if (stock < 0) {
       return toast("Số lượng không được âm", "error");
     }
 
     const data = {
-      name: f.get("name").trim(),
-      category: f.get("category"),
+      name,
+      category,
       price,
-      original_price: originalPrice,
-      discount_percent: discountPercent,
+      original_price: original > 0 ? original : price,
+      discount_percent: original > 0 ? d : 0,
       stock,
       description: f.get("description")?.trim() || "",
       image: image || f.get("imageUrl")?.trim() || "",
@@ -178,9 +288,8 @@ export default function OwnerMenu() {
 
     setSaving(true);
     try {
-      const id = modal._id || modal.id;
-      if (id) {
-        await api.menu.update(id, data);
+      if (currentId) {
+        await api.menu.update(currentId, data);
         toast("Đã cập nhật món", "success");
       } else {
         await api.menu.create(data);
@@ -197,13 +306,6 @@ export default function OwnerMenu() {
 
   // ============================================================
   // ✅ TOGGLE ACTIVE — Optimistic update, KHÔNG load()
-  // ------------------------------------------------------------
-  // Vấn đề cũ: gọi load() sau khi update → fetch full list →
-  //   React unmount/remount các row → animation nút toggle bị
-  //   reset, không trượt.
-  //
-  // Fix: setList update local state NGAY → chỉ re-render 1 row
-  //   → nút trượt mượt. Nếu API fail → revert.
   // ============================================================
   const toggleActive = async (item) => {
     const id = item._id || item.id;
@@ -257,7 +359,7 @@ export default function OwnerMenu() {
 
   const openAddCat = () => {
     setEditingCat(null);
-    setCatForm({ name: "", icon: DEFAULT_CATEGORY_ICON });
+    setCatForm({ name: "", icon: DEFAULT_CATEGORY_ICON, order: "" });
   };
 
   const openEditCat = (cat) => {
@@ -265,6 +367,7 @@ export default function OwnerMenu() {
     setCatForm({
       name: cat.name,
       icon: cat.icon || DEFAULT_CATEGORY_ICON,
+      order: cat.order != null ? String(cat.order) : "",
     });
   };
 
@@ -273,20 +376,34 @@ export default function OwnerMenu() {
     if (!name) return toast("Nhập tên danh mục", "error");
     if (catLoading) return;
 
+    // ✅ Batch 2: Validate order nếu có
+    const orderStr = String(catForm.order || "").trim();
+    let order;
+    if (orderStr) {
+      order = Number(orderStr);
+      if (!Number.isInteger(order) || order < 0) {
+        return toast("Thứ tự phải là số nguyên >= 0", "error");
+      }
+    }
+
     setCatLoading(true);
     try {
+      const payload = {
+        name,
+        icon: catForm.icon,
+      };
+      // Chỉ gửi order nếu user nhập (để backend tự sinh khi tạo mới)
+      if (order !== undefined) payload.order = order;
+
       if (editingCat) {
-        await api.categories.update(editingCat.id, {
-          name,
-          icon: catForm.icon,
-        });
+        await api.categories.update(editingCat.id, payload);
         toast("Đã cập nhật danh mục", "success");
       } else {
-        await api.categories.create({ name, icon: catForm.icon });
+        await api.categories.create(payload);
         toast("Đã thêm danh mục", "success");
       }
       setEditingCat(null);
-      setCatForm({ name: "", icon: DEFAULT_CATEGORY_ICON });
+      setCatForm({ name: "", icon: DEFAULT_CATEGORY_ICON, order: "" });
       load();
     } catch (e) {
       toast(e.message || "Không lưu được", "error");
@@ -662,7 +779,7 @@ export default function OwnerMenu() {
             CATEGORY MANAGEMENT MODAL
             ============================================================ */}
         {showCatModal && (
-          <Modal onClose={() => !catLoading && setShowCatModal(false)} maxWidth={520}>
+          <Modal onClose={() => !catLoading && setShowCatModal(false)} maxWidth={560}>
             <div style={modalHeaderStyle}>
               <h3 style={modalTitleStyle}>
                 <Folder size={20} style={{ color: "#0EA5E9" }} /> Quản lý danh mục
@@ -695,10 +812,12 @@ export default function OwnerMenu() {
               >
                 {editingCat ? "✏️ Sửa danh mục" : "➕ Thêm danh mục mới"}
               </div>
+
+              {/* ✅ Batch 2: Thêm cột "Thứ tự" */}
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "60px 1fr auto",
+                  gridTemplateColumns: "60px 1fr 80px auto",
                   gap: 8,
                 }}
               >
@@ -741,6 +860,27 @@ export default function OwnerMenu() {
                     color: "var(--text-primary, #172033)",
                   }}
                 />
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={catForm.order}
+                  onChange={(e) =>
+                    setCatForm({ ...catForm, order: e.target.value })
+                  }
+                  placeholder="Tự động"
+                  title="Thứ tự hiển thị (để trống = tự động)"
+                  style={{
+                    padding: 10,
+                    border: "1px solid var(--border-color, #e5e9ef)",
+                    borderRadius: 8,
+                    outline: "none",
+                    background: "var(--card-bg, #fff)",
+                    color: "var(--text-primary, #172033)",
+                    fontSize: 13,
+                  }}
+                  aria-label="Thứ tự hiển thị"
+                />
                 <button
                   onClick={saveCat}
                   disabled={catLoading || !catForm.name.trim()}
@@ -777,7 +917,11 @@ export default function OwnerMenu() {
                 <button
                   onClick={() => {
                     setEditingCat(null);
-                    setCatForm({ name: "", icon: DEFAULT_CATEGORY_ICON });
+                    setCatForm({
+                      name: "",
+                      icon: DEFAULT_CATEGORY_ICON,
+                      order: "",
+                    });
                   }}
                   style={{
                     marginTop: 8,
@@ -949,37 +1093,25 @@ export default function OwnerMenu() {
                 ))}
               </select>
 
+              {/* ✅ Batch 2: Form giá auto-sync */}
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(3, 1fr)",
                   gap: 12,
-                  marginBottom: 14,
+                  marginBottom: 8,
                 }}
               >
                 <div>
                   <label style={{ ...labelStyle, marginTop: 0 }}>
-                    Giá bán *
+                    Giá gốc
                   </label>
                   <input
-                    name="price"
                     type="number"
                     min="0"
                     step="1000"
-                    defaultValue={modal.price ?? 30000}
-                    required
-                    style={{ ...inputStyle, marginBottom: 0 }}
-                    disabled={saving}
-                  />
-                </div>
-                <div>
-                  <label style={{ ...labelStyle, marginTop: 0 }}>Giá gốc</label>
-                  <input
-                    name="original_price"
-                    type="number"
-                    min="0"
-                    step="1000"
-                    defaultValue={modal.original_price ?? ""}
+                    value={priceFields.originalPrice}
+                    onChange={(e) => handleOriginalChange(e.target.value)}
                     placeholder="VD: 50000"
                     style={{ ...inputStyle, marginBottom: 0 }}
                     disabled={saving}
@@ -988,16 +1120,87 @@ export default function OwnerMenu() {
                 <div>
                   <label style={{ ...labelStyle, marginTop: 0 }}>% Giảm</label>
                   <input
-                    name="discount_percent"
                     type="number"
                     min="0"
-                    max="90"
+                    max={MAX_DISCOUNT}
                     step="1"
-                    defaultValue={modal.discount_percent ?? 0}
+                    value={priceFields.discountPercent}
+                    onChange={(e) => handleDiscountChange(e.target.value)}
                     style={{ ...inputStyle, marginBottom: 0 }}
-                    disabled={saving}
+                    disabled={saving || !hasOriginal}
                   />
                 </div>
+                <div>
+                  <label style={{ ...labelStyle, marginTop: 0 }}>
+                    Giá bán {!hasOriginal && "*"}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={priceFields.price}
+                    onChange={(e) => handlePriceChange(e.target.value)}
+                    required={!hasOriginal}
+                    style={{
+                      ...inputStyle,
+                      marginBottom: 0,
+                      background: hasOriginal
+                        ? "var(--bg-tertiary, #f5f7fb)"
+                        : "var(--bg-secondary, #fff)",
+                      cursor: hasOriginal ? "not-allowed" : "text",
+                      opacity: hasOriginal ? 0.75 : 1,
+                    }}
+                    disabled={saving || hasOriginal}
+                    title={
+                      hasOriginal
+                        ? "Tự động tính từ giá gốc và % giảm"
+                        : "Nhập giá bán trực tiếp"
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Preview info */}
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  fontSize: 12.5,
+                  background: hasOriginal
+                    ? "rgba(14, 165, 233, 0.08)"
+                    : "var(--bg-tertiary, #f8fafc)",
+                  border: hasOriginal
+                    ? "1px solid rgba(14, 165, 233, 0.25)"
+                    : "1px solid var(--border-color, #e5e9ef)",
+                  color: hasOriginal
+                    ? "#0284C7"
+                    : "var(--text-muted, #64748b)",
+                }}
+              >
+                {hasOriginal ? (
+                  <>
+                    💰 Khách sẽ trả{" "}
+                    <b>{money(priceFields.price)}</b>
+                    {priceFields.discountPercent > 0 && (
+                      <>
+                        {" "}
+                        — giảm <b>{priceFields.discountPercent}%</b> từ{" "}
+                        <span style={{ textDecoration: "line-through" }}>
+                          {money(Number(priceFields.originalPrice) || 0)}
+                        </span>
+                      </>
+                    )}
+                    {priceFields.discountPercent === 0 && (
+                      <> (không giảm giá)</>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    💡 Để trống <b>Giá gốc</b> nếu không giảm giá — nhập thẳng
+                    giá bán.
+                  </>
+                )}
               </div>
 
               <label style={labelStyle}>Số lượng *</label>

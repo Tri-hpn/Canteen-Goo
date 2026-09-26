@@ -3,18 +3,23 @@
 // ============================================================
 // Tính năng:
 //   - Xem tất cả lần đổi giá (món nào, từ giá nào sang giá nào)
-//   - Filter: theo tên món (client) + theo món cụ thể (server)
+//   - Filter: gõ tên món (client-side, searchable datalist)
 //   - Stats: tổng lần đổi, số lần tăng, số lần giảm
 //
 // Endpoints:
-//   - api.priceHistory.list(menuItemId?)  → danh sách lịch sử
-//   - api.menu.list(..., all=true)        → dropdown chọn món
+//   - api.priceHistory.list()             → TẤT CẢ lịch sử (không filter)
+//   - api.menu.list(..., all=true)        → datalist suggest tên món
 //
 // Lưu ý:
 //   - Percent = |diff| / old_price * 100
 //     Nếu old_price = 0 → hiện "—" thay vì chia cho 0
 //   - Money diff: dùng trực tiếp number (không replace chuỗi)
 //   - Race-safe: dùng reqIdRef để bỏ qua response cũ
+//
+// Batch 2:
+//   - ✅ Gộp 2 fetch thành 1 (chỉ load ALL, filter client)
+//   - ✅ Thay <select> → <input list="..."> + <datalist>
+//     → gõ để tìm, không cần gọi API khi filter
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -28,6 +33,8 @@ import { money } from "../../components/UI";
 // ============================================================
 // CONSTANTS
 // ============================================================
+
+const DATALIST_ID = "price-history-menu-items";
 
 const thStyle = {
   padding: 11,
@@ -43,16 +50,6 @@ const tdStyle = {
   color: "var(--text-primary, #172033)",
 };
 
-const filterInputStyle = {
-  padding: "8px 12px",
-  border: "1px solid var(--border-color, #e5e9ef)",
-  borderRadius: 8,
-  outline: "none",
-  fontSize: 13,
-  background: "var(--bg-secondary, #fff)",
-  color: "var(--text-primary, #172033)",
-};
-
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
@@ -64,14 +61,13 @@ export default function OwnerPriceHistory() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // ---------- Filters ----------
-  const [q, setQ] = useState("");
-  const [filterItem, setFilterItem] = useState("");
+  // ---------- Filter ----------
+  const [filterText, setFilterText] = useState("");
 
   // Race-safe
   const reqIdRef = useRef(0);
 
-  // ---------- Load menu (1 lần) ----------
+  // ---------- Load menu (1 lần) — cho datalist suggest ----------
   useEffect(() => {
     let cancelled = false;
     api.menu
@@ -83,14 +79,15 @@ export default function OwnerPriceHistory() {
     };
   }, []);
 
-  // ---------- Load history (theo filterItem, race-safe) ----------
+  // ---------- Load ALL history (race-safe) ----------
+  // ✅ Batch 2: không truyền filterItem → luôn load hết
   const loadHistory = useCallback(async () => {
     const myReqId = ++reqIdRef.current;
     setLoading(true);
     setError("");
 
     try {
-      const data = await api.priceHistory.list(filterItem);
+      const data = await api.priceHistory.list();
       if (myReqId !== reqIdRef.current) return;
       setHistory(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -100,7 +97,7 @@ export default function OwnerPriceHistory() {
     } finally {
       if (myReqId === reqIdRef.current) setLoading(false);
     }
-  }, [filterItem]);
+  }, []);
 
   useEffect(() => {
     loadHistory();
@@ -108,13 +105,14 @@ export default function OwnerPriceHistory() {
 
   // ---------- Computed (memo) ----------
 
+  // ✅ Batch 2: filter client theo tên món (partial match)
   const filtered = useMemo(() => {
-    if (!q.trim()) return history;
-    const s = q.toLowerCase().trim();
+    if (!filterText.trim()) return history;
+    const s = filterText.toLowerCase().trim();
     return history.filter((h) =>
       h.menu_item_name?.toLowerCase().includes(s)
     );
-  }, [history, q]);
+  }, [history, filterText]);
 
   const stats = useMemo(() => {
     let up = 0;
@@ -129,12 +127,9 @@ export default function OwnerPriceHistory() {
     return { total: filtered.length, up, down, unchanged };
   }, [filtered]);
 
-  const hasFilter = filterItem || q.trim();
+  const hasFilter = filterText.trim().length > 0;
 
-  const clearFilters = () => {
-    setFilterItem("");
-    setQ("");
-  };
+  const clearFilters = () => setFilterText("");
 
   // ============================================================
   // RENDER
@@ -189,7 +184,7 @@ export default function OwnerPriceHistory() {
           alignItems: "center",
         }}
       >
-        {/* Search box */}
+        {/* ✅ Batch 2: Search box với datalist suggest */}
         <div
           style={{
             display: "flex",
@@ -200,15 +195,20 @@ export default function OwnerPriceHistory() {
             borderRadius: 8,
             padding: "8px 12px",
             flex: 1,
-            minWidth: 200,
-            maxWidth: 300,
+            minWidth: 240,
+            maxWidth: 400,
           }}
         >
           <Search size={16} style={{ color: "var(--text-light, #8993a3)" }} />
           <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Tìm theo tên món..."
+            list={DATALIST_ID}
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setFilterText("");
+            }}
+            placeholder="Gõ hoặc chọn tên món..."
+            aria-label="Tìm theo tên món"
             style={{
               border: 0,
               outline: "none",
@@ -219,30 +219,27 @@ export default function OwnerPriceHistory() {
               minWidth: 0,
             }}
           />
-          {q && (
+          {filterText && (
             <button
-              onClick={() => setQ("")}
+              onClick={() => setFilterText("")}
               style={clearBtnStyle}
               aria-label="Xoá tìm kiếm"
+              type="button"
             >
               <X size={14} />
             </button>
           )}
         </div>
 
-        {/* Menu select */}
-        <select
-          value={filterItem}
-          onChange={(e) => setFilterItem(e.target.value)}
-          style={{ ...filterInputStyle, cursor: "pointer", minWidth: 200 }}
-        >
-          <option value="">Tất cả món</option>
+        {/* Datalist suggest từ tên món */}
+        <datalist id={DATALIST_ID}>
           {menu.map((m) => (
-            <option key={m.id || m._id} value={m.id || m._id}>
-              {m.name}
-            </option>
+            <option
+              key={m.id || m._id}
+              value={m.name}
+            />
           ))}
-        </select>
+        </datalist>
 
         {/* Clear filters */}
         {hasFilter && (
@@ -499,7 +496,7 @@ export default function OwnerPriceHistory() {
                       />
                       <div>
                         {hasFilter
-                          ? "Không có bản ghi nào khớp bộ lọc"
+                          ? `Không có bản ghi nào khớp "${filterText}"`
                           : "Chưa có lịch sử thay đổi giá"}
                       </div>
                     </td>

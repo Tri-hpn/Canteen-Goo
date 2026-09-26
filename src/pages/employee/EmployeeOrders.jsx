@@ -14,6 +14,9 @@
 //   - Manual refresh button
 //   - Sort: đổi tên biến cho rõ nghĩa
 //   - ✅ Thay confirm() native bằng ConfirmDialog custom
+//   - ✅ BATCH 2: Load ALL 1 lần + filter client theo status
+//     → đổi chip tức thì (không gọi API)
+//   - ✅ BATCH 2: Cột "Ngày/Giờ" gộp (dd/MM HH:mm)
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -58,6 +61,31 @@ const NEXT_LABEL = {
 const POLL_MS = 10000;
 
 // ============================================================
+// HELPERS
+// ============================================================
+
+/**
+ * Format ngày giờ dạng "dd/MM HH:mm".
+ * Guard Invalid Date → "—".
+ */
+function fmtDateTime(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const hour = String(d.getHours()).padStart(2, "0");
+    const minute = String(d.getMinutes()).padStart(2, "0");
+
+    return `${day}/${month} ${hour}:${minute}`;
+  } catch {
+    return "—";
+  }
+}
+
+// ============================================================
 // MAIN COMPONENT
 // ============================================================
 
@@ -66,8 +94,7 @@ export default function EmployeeOrders() {
 
   // ---------- Data ----------
   const [status, setStatus] = useState("Tất cả");
-  const [orders, setOrders] = useState([]);
-  const [allOrders, setAllOrders] = useState([]); // dùng để đếm filter chip
+  const [allOrders, setAllOrders] = useState([]); // luôn chứa TẤT CẢ đơn
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -83,53 +110,59 @@ export default function EmployeeOrders() {
   const [confirmCancel, setConfirmCancel] = useState(null);
 
   // ---------- Refs ----------
-  const reqIdRef = useRef(0);       // race-safe cho load
+  const reqIdRef = useRef(0); // race-safe cho load
+
   // ---------- Load ----------
+  // ✅ BATCH 2: Luôn load ALL (không truyền status)
+  //    → đổi chip filter ở client, không cần gọi API lại
 
-   const load = useCallback(
-    async (silent = false) => {
-      const myReqId = ++reqIdRef.current;
+  const load = useCallback(async (silent = false) => {
+    const myReqId = ++reqIdRef.current;
 
-      if (!silent) setRefreshing(true);
-      setError("");
+    if (!silent) setRefreshing(true);
+    setError("");
 
-      try {
-        const data = await api.orders.all(status);
+    try {
+      const data = await api.orders.all("Tất cả");
 
-        if (myReqId !== reqIdRef.current) return;
+      if (myReqId !== reqIdRef.current) return;
 
-        const sorted = [...(data || [])].sort((a, b) => {
-          const ta = new Date(a.created_at || 0).getTime();
-          const tb = new Date(b.created_at || 0).getTime();
-          return tb - ta;
-        });
+      const sorted = [...(data || [])].sort((a, b) => {
+        const ta = new Date(a.created_at || 0).getTime();
+        const tb = new Date(b.created_at || 0).getTime();
+        return tb - ta;
+      });
 
-        setOrders(sorted);
-        if (status === "Tất cả") setAllOrders(sorted);
-      } catch (e) {
-        if (myReqId === reqIdRef.current) {
-          setError(e.message || "Không tải được đơn hàng");
-        }
-      } finally {
-        if (myReqId === reqIdRef.current) {
-          setLoading(false);
-          if (!silent) setRefreshing(false);
-        }
+      setAllOrders(sorted);
+    } catch (e) {
+      if (myReqId === reqIdRef.current) {
+        setError(e.message || "Không tải được đơn hàng");
       }
-    },
-    [status]
-  );
+    } finally {
+      if (myReqId === reqIdRef.current) {
+        setLoading(false);
+        if (!silent) setRefreshing(false);
+      }
+    }
+  }, []);
 
-  // Initial + đổi filter
+  // Load 1 lần khi mount (không phụ thuộc status nữa)
   useEffect(() => {
     load(false);
   }, [load]);
 
-  // Polling (10s) — tự skip nếu request trước chưa xong
+  // Polling 10s — tự skip nếu request trước chưa xong
   useEffect(() => {
     const timer = setInterval(() => load(true), POLL_MS);
     return () => clearInterval(timer);
   }, [load]);
+
+  // ---------- Filter client theo status (memo) ----------
+  // ✅ BATCH 2: đổi chip tức thì, không chờ API
+  const orders = useMemo(() => {
+    if (status === "Tất cả") return allOrders;
+    return allOrders.filter((o) => o.status === status);
+  }, [allOrders, status]);
 
   // ---------- Actions ----------
 
@@ -182,7 +215,7 @@ export default function EmployeeOrders() {
 
   // ---------- Computed ----------
 
-  // Đếm số đơn theo từng trạng thái (dùng allOrders)
+  // Đếm số đơn theo từng trạng thái (dùng allOrders — luôn đầy đủ)
   const statusCounts = useMemo(() => {
     const map = { "Tất cả": allOrders.length };
     for (const o of allOrders) {
@@ -346,7 +379,7 @@ export default function EmployeeOrders() {
               headers={[
                 t("orders.code"),
                 "Customer",
-                t("common.time"),
+                "Ngày/Giờ",
                 t("cart.total"),
                 t("common.status"),
                 t("common.action"),
@@ -362,7 +395,7 @@ export default function EmployeeOrders() {
                   <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
                     <th style={thLeft}>{t("orders.code")}</th>
                     <th style={thLeft}>Customer</th>
-                    <th style={thLeft}>{t("common.time")}</th>
+                    <th style={thLeft}>Ngày/Giờ</th>
                     <th style={thRight}>{t("cart.total")}</th>
                     <th style={thLeft}>{t("common.status")}</th>
                     <th style={thLeft}>{t("common.action")}</th>
@@ -396,7 +429,7 @@ export default function EmployeeOrders() {
                           {o.customer_name || "—"}
                         </td>
 
-                        {/* Time */}
+                        {/* Ngày/Giờ — gộp 1 cột */}
                         <td
                           style={{
                             ...tdBase,
@@ -405,12 +438,7 @@ export default function EmployeeOrders() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {o.created_at
-                            ? new Date(o.created_at).toLocaleTimeString("vi-VN", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "—"}
+                          {fmtDateTime(o.created_at)}
                         </td>
 
                         {/* Total */}

@@ -867,25 +867,40 @@ app.get("/api/categories", (req, res) => {
   res.json([...categories].sort((a, b) => (a.order || 0) - (b.order || 0)));
 });
 
+// ✅ BATCH 2: Nhận field `order` từ body
 app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
     const { categories } = ensureCategories(db);
-    const { name, icon } = req.body;
+    const { name, icon, order } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ message: "Thiếu tên danh mục" });
     const trimmed = name.trim();
     if (categories.find(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
       return res.status(400).json({ message: "Danh mục đã tồn tại" });
     }
+
+    // ✅ Validate order nếu user nhập
+    let finalOrder;
+    if (order !== undefined && order !== null && order !== "") {
+      const parsed = Number(order);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        return res.status(400).json({ message: "Thứ tự phải là số nguyên >= 0" });
+      }
+      finalOrder = parsed;
+    } else {
+      // Auto: max + 1
+      finalOrder = Math.max(0, ...categories.map(c => c.order || 0)) + 1;
+    }
+
     const id = Math.max(0, ...categories.map(c => c.id)) + 1;
-    const order = Math.max(0, ...categories.map(c => c.order || 0)) + 1;
-    const cat = { id, name: trimmed, icon: icon || "🍽️", order };
+    const cat = { id, name: trimmed, icon: icon || "🍽️", order: finalOrder };
     categories.push(cat);
     saveDB(db);
     res.status(201).json(cat);
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+// ✅ BATCH 2: Nhận field `order` từ body
 app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
@@ -893,7 +908,8 @@ app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     const cat = categories.find(c => c.id == req.params.id);
     if (!cat) return res.status(404).json({ message: "Không tìm thấy danh mục" });
     const oldName = cat.name;
-    const { name, icon } = req.body;
+    const { name, icon, order } = req.body;
+
     if (name && name.trim()) {
       const trimmed = name.trim();
       if (categories.find(c => c.id != req.params.id && c.name.toLowerCase() === trimmed.toLowerCase())) {
@@ -906,7 +922,18 @@ app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
         });
       }
     }
+
     if (icon !== undefined) cat.icon = icon;
+
+    // ✅ Validate order nếu user gửi
+    if (order !== undefined && order !== null && order !== "") {
+      const parsed = Number(order);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        return res.status(400).json({ message: "Thứ tự phải là số nguyên >= 0" });
+      }
+      cat.order = parsed;
+    }
+
     saveDB(db);
     res.json(cat);
   } catch (e) { res.status(500).json({ message: e.message }); }
