@@ -43,3 +43,5 @@ Dockerfile
 Dockerfile.backend
 Makefile
 nginx.conf
+
+.dockerignore
