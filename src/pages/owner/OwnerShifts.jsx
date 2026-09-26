@@ -25,6 +25,23 @@ import { toast } from "../../components/Effects";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
+// HELPERS — Bổ sung Batch 5C
+// ============================================================
+
+/**
+ * ✅ #11.1: Bỏ dấu tiếng Việt + lowercase để search chính xác.
+ * "Trần Văn Trí" → "tran van tri"
+ */
+function normalize(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+}
+
+// ============================================================
 // CONSTANTS
 // ============================================================
 
@@ -249,9 +266,10 @@ export default function OwnerShifts() {
       });
     }
     if (search.trim()) {
-      const q = search.toLowerCase().trim();
+      // ✅ #11.2: Search không dấu — "Tran" match "Trần"
+      const q = normalize(search);
       list = list.filter((s) =>
-        (s.employee_name || "").toLowerCase().includes(q)
+        normalize(s.employee_name).includes(q)
       );
     }
     return list;
@@ -293,9 +311,10 @@ export default function OwnerShifts() {
 
   const filteredEmployees = useMemo(() => {
     if (!search.trim()) return employees;
-    const q = search.toLowerCase().trim();
+    // ✅ #11.3: Search không dấu
+    const q = normalize(search);
     return employees.filter((e) =>
-      e.name?.toLowerCase().includes(q)
+      normalize(e.name).includes(q)
     );
   }, [employees, search]);
 

@@ -412,26 +412,60 @@ app.get("/api/users", auth(["ADMIN"]), (req, res) => {
 });
 
 app.post("/api/users", auth(["ADMIN"]), (req, res) => {
-  const db = loadDB();
-  const id = Math.max(0, ...db.users.map(u => u.id)) + 1;
-  const hash = bcrypt.hashSync(req.body.password || "123456", 10);
-  const user = { id, email: req.body.email, password: hash, name: req.body.name, phone: req.body.phone || "", role: req.body.role || "EMPLOYEE", status: "Hoạt động", points: 0 };
-  db.users.push(user);
-  saveDB(db);
-  res.status(201).json({ ...user, password: undefined });
+  try {
+    const db = loadDB();
+    const emailNorm = (req.body.email || "").toLowerCase().trim();
+    if (!emailNorm) return res.status(400).json({ message: "Thiếu email" });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+      return res.status(400).json({ message: "Email không hợp lệ" });
+    }
+    // ✅ Batch 5A: Validate trùng email (check cả 3 role)
+    if (db.users.find(u => u.email === emailNorm)) {
+      return res.status(400).json({ message: "Email đã được sử dụng" });
+    }
+    const id = Math.max(0, ...db.users.map(u => u.id)) + 1;
+    const hash = bcrypt.hashSync(req.body.password || "123456", 10);
+    const user = { id, email: emailNorm, password: hash, name: req.body.name, phone: req.body.phone || "", role: req.body.role || "EMPLOYEE", status: "Hoạt động", points: 0 };
+    db.users.push(user);
+    saveDB(db);
+    res.status(201).json({ ...user, password: undefined });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
 app.put("/api/users/:id", auth(["ADMIN"]), (req, res) => {
-  const db = loadDB();
-  const i = db.users.findIndex(u => u.id == req.params.id);
-  if (i >= 0) {
+  try {
+    const db = loadDB();
+    const i = db.users.findIndex(u => u.id == req.params.id);
+    if (i < 0) return res.status(404).json({ message: "Không tìm thấy user" });
+
     const data = { ...req.body };
+
+    // ✅ Batch 5A: Validate email nếu user đổi
+    if (data.email !== undefined) {
+      const emailNorm = String(data.email).toLowerCase().trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+        return res.status(400).json({ message: "Email không hợp lệ" });
+      }
+      const dup = db.users.find(
+        (u) => u.id != req.params.id && u.email === emailNorm
+      );
+      if (dup) {
+        return res.status(400).json({ message: "Email đã được sử dụng" });
+      }
+      data.email = emailNorm;
+    }
+
     if (data.password) data.password = bcrypt.hashSync(data.password, 10);
     else delete data.password;
+
     db.users[i] = { ...db.users[i], ...data };
+    saveDB(db);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
   }
-  saveDB(db);
-  res.json({ ok: true });
 });
 
 app.delete("/api/users/:id", auth(["ADMIN"]), (req, res) => {

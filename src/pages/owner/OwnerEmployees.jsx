@@ -14,7 +14,13 @@
 //   - Không có race condition: detail + mode được set trong 1 batch
 //   - ESC đóng modal
 //   - Save button disable khi đang request
-//   - ✅ Thay confirm() native bằng ConfirmDialog custom
+//   - Thay confirm() native bằng ConfirmDialog custom
+//
+// Batch 5A fixes:
+//   - ✅ #10.1: Validate trùng email phía client khi thêm NV
+//     (check với toàn bộ users list, không chỉ EMPLOYEE)
+//   - ✅ #10.2: Lưu trữ email set để lookup O(1)
+//   - ✅ #10.3: Normalize search không dấu (tìm "Tran" match "Trần")
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -36,6 +42,23 @@ const DEFAULT_PASSWORD = "123456";
 const MODAL_Z = 2147483600;
 
 // ============================================================
+// HELPERS
+// ============================================================
+
+/**
+ * ✅ #10.3: Bỏ dấu tiếng Việt + lowercase để search chính xác.
+ * "Cơm Gà" → "com ga"
+ */
+function normalize(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+}
+
+// ============================================================
 // MAIN COMPONENT
 // ============================================================
 
@@ -55,7 +78,7 @@ export default function OwnerEmployees() {
   const [addModal, setAddModal] = useState(false);
   const [adding, setAdding] = useState(false);
 
-  // ---------- ✅ Confirm dialog ----------
+  // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -90,15 +113,41 @@ export default function OwnerEmployees() {
     return () => window.removeEventListener("keydown", handler);
   }, [addModal, detailModal, adding, saving]);
 
-  // ---------- Filter (memo) ----------
+  // ---------- ✅ #10.2: Email set để lookup O(1) ----------
+  // Load ALL users (kể cả customer) để check trùng email
+  const [allUsers, setAllUsers] = useState([]);
+
+  const loadAllUsers = useCallback(async () => {
+    try {
+      const data = await api.users.list(); // không filter → lấy hết
+      setAllUsers(Array.isArray(data) ? data : []);
+    } catch {
+      // Fallback: dùng list employee
+      setAllUsers(list);
+    }
+  }, [list]);
+
+  useEffect(() => {
+    loadAllUsers();
+  }, [loadAllUsers]);
+
+  const existingEmails = useMemo(() => {
+    const set = new Set();
+    for (const u of allUsers) {
+      if (u.email) set.add(u.email.toLowerCase().trim());
+    }
+    return set;
+  }, [allUsers]);
+
+  // ---------- Filter (memo) ✅ #10.3 ----------
 
   const filtered = useMemo(() => {
     if (!q.trim()) return list;
-    const s = q.toLowerCase().trim();
+    const s = normalize(q);
     return list.filter(
       (e) =>
-        e.name?.toLowerCase().includes(s) ||
-        e.email?.toLowerCase().includes(s)
+        normalize(e.name).includes(s) ||
+        normalize(e.email).includes(s)
     );
   }, [list, q]);
 
@@ -189,6 +238,14 @@ export default function OwnerEmployees() {
     if (password.length < 6)
       return toast("Mật khẩu phải từ 6 ký tự", "error");
 
+    // ✅ #10.1: Validate trùng email (check toàn bộ users, không chỉ EMPLOYEE)
+    if (existingEmails.has(email)) {
+      return toast(
+        `Email "${email}" đã được sử dụng — vui lòng dùng email khác`,
+        "error"
+      );
+    }
+
     setAdding(true);
     try {
       await api.users.create({
@@ -202,6 +259,7 @@ export default function OwnerEmployees() {
       toast("Đã thêm nhân viên mới", "success");
       setAddModal(false);
       load();
+      loadAllUsers(); // Refresh email set
     } catch (e) {
       toast(e.message || "Không thêm được", "error");
     } finally {
@@ -209,7 +267,7 @@ export default function OwnerEmployees() {
     }
   };
 
-  // ---------- ✅ Confirm dialog helpers ----------
+  // ---------- Confirm dialog helpers ----------
 
   const closeConfirm = useCallback(() => {
     if (confirmBusy) return;
@@ -228,9 +286,6 @@ export default function OwnerEmployees() {
 
   // ---------- Destructive actions ----------
 
-  /**
-   * ✅ Xoá nhân viên — dùng ConfirmDialog.
-   */
   const remove = (emp) => {
     setConfirm({
       title: `Xóa nhân viên "${emp.name}"?`,
@@ -246,13 +301,11 @@ export default function OwnerEmployees() {
         setConfirm(null);
         closeDetail();
         load();
+        loadAllUsers();
       },
     });
   };
 
-  /**
-   * ✅ Reset mật khẩu — dùng ConfirmDialog.
-   */
   const resetPassword = (emp) => {
     setConfirm({
       title: `Reset mật khẩu của "${emp.name}"?`,
@@ -369,7 +422,7 @@ export default function OwnerEmployees() {
             padding: 20,
           }}
         >
-                 {/* Loading — skeleton table */}
+          {/* Loading — skeleton table */}
           {loading && (
             <SkeletonTable
               columns={6}
@@ -935,9 +988,7 @@ export default function OwnerEmployees() {
         `}</style>
       </div>
 
-      {/* ============================================================
-          ✅ CONFIRM DIALOG (xoá + reset password)
-          ============================================================ */}
+      {/* ConfirmDialog */}
       {confirm && (
         <ConfirmDialog
           open

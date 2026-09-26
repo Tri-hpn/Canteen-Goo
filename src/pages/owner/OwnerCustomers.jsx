@@ -3,6 +3,7 @@
 // ============================================================
 // Tính năng:
 //   - Danh sách khách hàng + tìm kiếm (tên/email/SĐT)
+//   - Filter trạng thái (Hoạt động / Bị khóa)
 //   - Xem chi tiết / Sửa / Khóa/Mở / Xoá
 //   - Ví voucher: xem, thu hồi voucher khả dụng
 //
@@ -14,19 +15,53 @@
 //   - api.vouchers.revoke(voucherId)
 //
 // Fixes (so với bản gốc):
-//   - ✅ Thay confirm() native bằng ConfirmDialog custom (3 chỗ:
-//     toggleLock, remove, revokeVoucher)
+//   - Thay confirm() native bằng ConfirmDialog custom
+//
+// Batch 5D fixes:
+//   - ✅ #12.1: Search không dấu (Tran match Trần)
+//   - ✅ #12.2: Validate SĐT Việt Nam (10-11 số, đầu 0)
+//   - ✅ #12.3: Filter trạng thái Hoạt động/Bị khóa
+//   - ✅ #12.4: Đếm số lượng mỗi trạng thái trên filter chip
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Search, Lock, Unlock, Trash2, Eye, Edit, Mail, Phone,
   Ticket, Gift, Ban, X, Copy, Check, Users, Globe,
-  User as UserIcon, Loader2, AlertCircle,
+  User as UserIcon, Loader2, AlertCircle, Filter,
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
 import ConfirmDialog from "../../components/ConfirmDialog";
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+/**
+ * ✅ #12.1: Bỏ dấu tiếng Việt + lowercase để search chính xác.
+ */
+function normalize(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+}
+
+/**
+ * ✅ #12.2: Validate SĐT Việt Nam (10-11 số, bắt đầu bằng 0).
+ * Return: null nếu hợp lệ/rỗng, string lỗi nếu không hợp lệ.
+ */
+function validatePhone(phone) {
+  const p = String(phone || "").trim();
+  if (!p) return null; // cho phép rỗng
+  if (!/^0\d{9,10}$/.test(p)) {
+    return "SĐT phải bắt đầu bằng 0 và có 10-11 chữ số";
+  }
+  return null;
+}
 
 // ============================================================
 // CONSTANTS
@@ -38,6 +73,13 @@ const USED_GRADIENT = "linear-gradient(135deg, #94a3b8, #64748b)";
 
 const MODAL_Z = 2147483600;
 
+// ✅ #12.3: Filter status options
+const STATUS_FILTERS = [
+  { id: "all",      label: "Tất cả" },
+  { id: "active",   label: "Hoạt động" },
+  { id: "locked",   label: "Bị khóa" },
+];
+
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
@@ -48,6 +90,7 @@ export default function OwnerCustomers() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
 
   // ---------- Detail modal ----------
   const [detail, setDetail] = useState(null);
@@ -55,6 +98,7 @@ export default function OwnerCustomers() {
   // ---------- Edit modal ----------
   const [editModal, setEditModal] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   // ---------- Voucher modal ----------
   const [voucherModal, setVoucherModal] = useState(null);
@@ -66,7 +110,7 @@ export default function OwnerCustomers() {
   const [voucherTab, setVoucherTab] = useState("active");
   const [copiedId, setCopiedId] = useState(null);
 
-  // ---------- ✅ Confirm dialog ----------
+  // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -102,20 +146,55 @@ export default function OwnerCustomers() {
     return () => window.removeEventListener("keydown", handler);
   }, [editModal, voucherModal, detail, saving]);
 
-  // ---------- Filter ----------
+  // ---------- ✅ #12.3 + #12.4: Stats theo status ----------
+  const statusCounts = useMemo(() => {
+    const active = list.filter(
+      (c) => (c.status || "Hoạt động") === "Hoạt động"
+    ).length;
+    const locked = list.length - active;
+    return {
+      all: list.length,
+      active,
+      locked,
+    };
+  }, [list]);
+
+  // ---------- Filter + Search (memo) ✅ #12.1 ----------
 
   const filtered = useMemo(() => {
-    if (!q.trim()) return list;
-    const s = q.toLowerCase().trim();
-    return list.filter(
-      (c) =>
-        c.name?.toLowerCase().includes(s) ||
-        c.email?.toLowerCase().includes(s) ||
-        (c.phone || "").includes(s)
-    );
-  }, [list, q]);
+    let result = list;
 
-  // ---------- ✅ Confirm helpers ----------
+    // Filter status
+    if (filterStatus === "active") {
+      result = result.filter(
+        (c) => (c.status || "Hoạt động") === "Hoạt động"
+      );
+    } else if (filterStatus === "locked") {
+      result = result.filter((c) => c.status === "Bị khóa");
+    }
+
+    // Search không dấu
+    if (q.trim()) {
+      const s = normalize(q);
+      result = result.filter(
+        (c) =>
+          normalize(c.name).includes(s) ||
+          normalize(c.email).includes(s) ||
+          (c.phone || "").includes(q.trim())
+      );
+    }
+
+    return result;
+  }, [list, q, filterStatus]);
+
+  const hasFilter = q.trim() !== "" || filterStatus !== "all";
+
+  const clearFilters = () => {
+    setQ("");
+    setFilterStatus("all");
+  };
+
+  // ---------- Confirm helpers ----------
 
   const closeConfirm = useCallback(() => {
     if (confirmBusy) return;
@@ -134,9 +213,6 @@ export default function OwnerCustomers() {
 
   // ---------- Handlers ----------
 
-  /**
-   * ✅ Khoá/mở tài khoản — dùng ConfirmDialog.
-   */
   const toggleLock = (c) => {
     const newStatus = c.status === "Hoạt động" ? "Bị khóa" : "Hoạt động";
     const action = newStatus === "Bị khóa" ? "khóa" : "mở khóa";
@@ -159,9 +235,6 @@ export default function OwnerCustomers() {
     });
   };
 
-  /**
-   * ✅ Xoá — dùng ConfirmDialog.
-   */
   const remove = (c) => {
     setConfirm({
       title: `Xóa tài khoản "${c.name}"?`,
@@ -180,23 +253,40 @@ export default function OwnerCustomers() {
     });
   };
 
+  const openEdit = (c) => {
+    setEditError("");
+    setEditModal(c);
+  };
+
   const saveEdit = async (e) => {
     e.preventDefault();
     if (saving) return;
 
     const f = new FormData(e.currentTarget);
+    const name = f.get("name")?.trim();
+    const phone = f.get("phone")?.trim();
+    const status = f.get("status");
+
+    // Validate name
+    if (!name) {
+      return setEditError("Vui lòng nhập họ tên");
+    }
+
+    // ✅ #12.2: Validate SĐT VN
+    const phoneErr = validatePhone(phone);
+    if (phoneErr) {
+      return setEditError(phoneErr);
+    }
+
+    setEditError("");
     setSaving(true);
     try {
-      await api.users.update(editModal.id, {
-        name: f.get("name")?.trim(),
-        phone: f.get("phone")?.trim(),
-        status: f.get("status"),
-      });
+      await api.users.update(editModal.id, { name, phone, status });
       toast("Đã cập nhật thông tin khách hàng", "success");
       setEditModal(null);
       load();
     } catch (e) {
-      toast(e.message || "Không lưu được", "error");
+      setEditError(e.message || "Không lưu được");
     } finally {
       setSaving(false);
     }
@@ -222,9 +312,6 @@ export default function OwnerCustomers() {
     }
   };
 
-  /**
-   * ✅ Thu hồi voucher — dùng ConfirmDialog.
-   */
   const revokeVoucher = (v) => {
     setConfirm({
       title: `Thu hồi voucher "${v.code}"?`,
@@ -282,7 +369,7 @@ export default function OwnerCustomers() {
     <>
       <div>
         {/* ============================================================
-            TOOLBAR — Search
+            TOOLBAR — Search + Filter status
             ============================================================ */}
         <div
           style={{
@@ -293,6 +380,7 @@ export default function OwnerCustomers() {
             alignItems: "center",
           }}
         >
+          {/* Search */}
           <div
             style={{
               display: "flex",
@@ -337,6 +425,86 @@ export default function OwnerCustomers() {
             )}
           </div>
 
+          {/* ✅ #12.3: Status filter chips */}
+          <div
+            style={{
+              display: "inline-flex",
+              gap: 3,
+              background: "var(--bg-tertiary, #f5f7fb)",
+              padding: 4,
+              borderRadius: 10,
+            }}
+          >
+            {STATUS_FILTERS.map((f) => {
+              const active = filterStatus === f.id;
+              const count = statusCounts[f.id] || 0;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setFilterStatus(f.id)}
+                  style={{
+                    padding: "7px 12px",
+                    background: active ? "#2634d5" : "transparent",
+                    color: active ? "#fff" : "var(--text-muted, #475569)",
+                    border: 0,
+                    borderRadius: 7,
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {f.label}
+                  <span
+                    style={{
+                      background: active
+                        ? "rgba(255,255,255,0.3)"
+                        : "var(--card-bg, #e2e8f0)",
+                      color: active ? "#fff" : "var(--text-muted, #64748b)",
+                      minWidth: 18,
+                      height: 16,
+                      padding: "0 5px",
+                      borderRadius: 8,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Clear filter */}
+          {hasFilter && (
+            <button
+              onClick={clearFilters}
+              style={{
+                padding: "9px 14px",
+                background: "transparent",
+                border: "1px solid #ef4444",
+                color: "#ef4444",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <X size={13} /> Xoá lọc
+            </button>
+          )}
+
+          {/* Counter */}
           <div
             style={{
               fontSize: 13,
@@ -344,7 +512,9 @@ export default function OwnerCustomers() {
               marginLeft: "auto",
             }}
           >
-            <b style={{ color: "var(--text-primary, #172033)" }}>{filtered.length}</b>{" "}
+            <b style={{ color: "var(--text-primary, #172033)" }}>
+              {filtered.length}
+            </b>{" "}
             khách hàng
           </div>
         </div>
@@ -428,7 +598,6 @@ export default function OwnerCustomers() {
                         borderBottom: "1px solid var(--border-color, #eef2f7)",
                       }}
                     >
-                      {/* ID */}
                       <td style={tdStyle}>
                         <span
                           style={{
@@ -441,7 +610,6 @@ export default function OwnerCustomers() {
                         </span>
                       </td>
 
-                      {/* Khách hàng */}
                       <td style={tdStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <div
@@ -464,7 +632,6 @@ export default function OwnerCustomers() {
                         </div>
                       </td>
 
-                      {/* Liên hệ */}
                       <td style={{ ...tdStyle, fontSize: 12, color: "var(--text-muted, #64748b)" }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                           <span>
@@ -478,19 +645,16 @@ export default function OwnerCustomers() {
                         </div>
                       </td>
 
-                      {/* Điểm */}
                       <td style={tdStyle}>
                         <b style={{ color: "#f59e0b" }}>
                           {fmtNumber(c.points || 0)} điểm
                         </b>
                       </td>
 
-                      {/* Trạng thái */}
                       <td style={tdStyle}>
                         <StatusBadge status={c.status || "Hoạt động"} />
                       </td>
 
-                      {/* Actions */}
                       <td style={{ ...tdStyle, textAlign: "right" }}>
                         <div
                           style={{
@@ -510,7 +674,7 @@ export default function OwnerCustomers() {
                           <IconButton onClick={() => setDetail(c)} title="Xem chi tiết">
                             <Eye size={15} />
                           </IconButton>
-                          <IconButton onClick={() => setEditModal(c)} title="Sửa">
+                          <IconButton onClick={() => openEdit(c)} title="Sửa">
                             <Edit size={15} />
                           </IconButton>
                           <IconButton
@@ -548,8 +712,8 @@ export default function OwnerCustomers() {
                       >
                         <Users size={36} style={{ opacity: 0.35, marginBottom: 10 }} />
                         <div>
-                          {q
-                            ? `Không có khách hàng nào khớp "${q}"`
+                          {hasFilter
+                            ? "Không có khách hàng nào khớp bộ lọc"
                             : "Chưa có khách hàng nào"}
                         </div>
                       </td>
@@ -641,14 +805,36 @@ export default function OwnerCustomers() {
                 required
                 style={modalInputStyle}
                 autoFocus
+                onChange={() => editError && setEditError("")}
               />
 
               <label style={modalLabelStyle}>Số điện thoại</label>
               <input
                 name="phone"
                 defaultValue={editModal.phone || ""}
-                style={modalInputStyle}
+                placeholder="VD: 0901234567"
+                inputMode="numeric"
+                style={{
+                  ...modalInputStyle,
+                  borderColor: editError ? "#ef4444" : undefined,
+                }}
+                onChange={() => editError && setEditError("")}
               />
+              {editError && (
+                <div
+                  style={{
+                    color: "#ef4444",
+                    fontSize: 12,
+                    marginTop: -10,
+                    marginBottom: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <AlertCircle size={12} /> {editError}
+                </div>
+              )}
 
               <label style={modalLabelStyle}>Trạng thái</label>
               <select
@@ -1019,9 +1205,7 @@ export default function OwnerCustomers() {
         `}</style>
       </div>
 
-      {/* ============================================================
-          ✅ CONFIRM DIALOG (toggleLock / remove / revokeVoucher)
-          ============================================================ */}
+      {/* ConfirmDialog */}
       {confirm && (
         <ConfirmDialog
           open
@@ -1055,6 +1239,7 @@ function StatusBadge({ status }) {
         fontWeight: 600,
         background: active ? "#e8f9f1" : "#fde8e8",
         color: active ? "#18a967" : "#ef4444",
+        whiteSpace: "nowrap",
       }}
     >
       {status}

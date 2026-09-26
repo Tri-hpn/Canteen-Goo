@@ -20,13 +20,21 @@
 //
 // Fixes:
 //   - resetCustom: dùng ConfirmDialog custom
-//     (thay cho confirm() native → đồng bộ UX toàn app)
+//
+// Batch 5B fixes:
+//   - ✅ #13.1: Gom nhóm permissions theo category (9 nhóm)
+//     thay vì 1 grid flat 23 items
+//   - ✅ #13.2: Font "Mặc định theo role" tăng 10 → 11.5px, đậm hơn
+//   - ✅ #13.3: Badge số lượng được tick / tổng trong mỗi nhóm
+//   - ✅ #13.4: Nút "Chọn tất cả" per group (toggle)
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Shield, Check, Search, Save, RotateCcw, Users, Edit, X,
   Loader2, AlertCircle,
+  Utensils, ClipboardList, Warehouse, UserCog, UserRound,
+  CalendarCheck, BarChart3, Database, Settings as SettingsIcon,
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
@@ -46,6 +54,22 @@ const ROLE_LABEL = {
   CUSTOMER: "Khách hàng",
   ADMIN: "Quản trị viên",
 };
+
+/**
+ * ✅ #13.1: Map prefix → metadata cho từng nhóm quyền.
+ * Thứ tự trong array QUYẾT ĐỊNH thứ tự hiển thị.
+ */
+const CATEGORY_META = [
+  { prefix: "menu.",       label: "Thực đơn",   icon: Utensils,       color: "#0EA5E9" },
+  { prefix: "orders.",     label: "Đơn hàng",   icon: ClipboardList,  color: "#2634d5" },
+  { prefix: "inventory.",  label: "Kho hàng",   icon: Warehouse,      color: "#18a967" },
+  { prefix: "customers.",  label: "Khách hàng", icon: UserRound,      color: "#f59e0b" },
+  { prefix: "employees.",  label: "Nhân viên",  icon: UserCog,        color: "#8b5cf6" },
+  { prefix: "attendance.", label: "Chấm công",  icon: CalendarCheck,  color: "#ec4899" },
+  { prefix: "reports.",    label: "Báo cáo",    icon: BarChart3,      color: "#14b8a6" },
+  { prefix: "backup.",     label: "Sao lưu",    icon: Database,       color: "#ef4444" },
+  { prefix: "settings.",   label: "Cài đặt",    icon: SettingsIcon,   color: "#f97316" },
+];
 
 // ============================================================
 // MAIN COMPONENT
@@ -73,7 +97,7 @@ export default function OwnerPermissions() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // ---------- ✅ Confirm dialog ----------
+  // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -126,7 +150,39 @@ export default function OwnerPermissions() {
     );
   }, [users, activeRole, search]);
 
-  // ---------- ✅ Confirm helpers ----------
+  // ---------- ✅ #13.1: Group permissions by category ----------
+
+  const groupedPermissions = useMemo(() => {
+    const groups = [];
+
+    for (const meta of CATEGORY_META) {
+      const items = allPermissions.filter((p) =>
+        p.key.startsWith(meta.prefix)
+      );
+      if (items.length > 0) {
+        groups.push({ ...meta, items });
+      }
+    }
+
+    // Catch-all: permissions không thuộc prefix nào (nếu backend thêm mới)
+    const knownPrefixes = CATEGORY_META.map((m) => m.prefix);
+    const orphans = allPermissions.filter(
+      (p) => !knownPrefixes.some((pre) => p.key.startsWith(pre))
+    );
+    if (orphans.length > 0) {
+      groups.push({
+        prefix: "__other__",
+        label: "Khác",
+        icon: Shield,
+        color: "#64748b",
+        items: orphans,
+      });
+    }
+
+    return groups;
+  }, [allPermissions]);
+
+  // ---------- Confirm helpers ----------
 
   const closeConfirm = () => {
     if (confirmBusy) return;
@@ -145,10 +201,6 @@ export default function OwnerPermissions() {
 
   // ---------- Handlers ----------
 
-  /**
-   * Chọn user → load quyền của user đó.
-   * Dùng cờ `cancelled` để tránh race khi user click liên tục.
-   */
   const openUser = useCallback(async (u) => {
     setSelectedUser(u);
     setIsEditing(false);
@@ -171,16 +223,11 @@ export default function OwnerPermissions() {
       if (!cancelled) setLoadingPerms(false);
     }
 
-    // Cleanup: nếu user click user khác trong lúc fetch → cancel
     return () => {
       cancelled = true;
     };
   }, []);
 
-  /**
-   * Toggle 1 quyền custom.
-   * Logic đơn giản: chỉ đụng tới array `custom`, sau đó tính lại `permissions`.
-   */
   const togglePerm = (key) => {
     if (!isEditing) {
       toast("Bấm Sửa để chỉnh quyền", "info");
@@ -200,8 +247,49 @@ export default function OwnerPermissions() {
         ? prev.custom.filter((x) => x !== key)
         : [...prev.custom, key];
 
-      // Recompute permissions = defaults + custom (Set để tránh trùng)
       const defaults = roleDefaults[selectedUser.role] || [];
+      const newPermissions = Array.from(new Set([...defaults, ...newCustom]));
+
+      return { custom: newCustom, permissions: newPermissions };
+    });
+  };
+
+  /**
+   * ✅ #13.4: Toggle toàn bộ quyền trong 1 group.
+   * - Nếu đã chọn hết → bỏ hết (chỉ bỏ những cái là custom)
+   * - Nếu chưa chọn hết → chọn hết (thêm tất cả non-default vào custom)
+   */
+  const toggleGroup = (group) => {
+    if (!isEditing) {
+      toast("Bấm Sửa để chỉnh quyền", "info");
+      return;
+    }
+    if (!selectedUser) return;
+
+    const defaults = roleDefaults[selectedUser.role] || [];
+    // Chỉ thao tác với non-default keys trong group
+    const editableKeys = group.items
+      .map((p) => p.key)
+      .filter((k) => !defaults.includes(k));
+
+    if (editableKeys.length === 0) {
+      toast("Nhóm này chỉ có quyền mặc định", "info");
+      return;
+    }
+
+    setUserPerms((prev) => {
+      const customSet = new Set(prev.custom);
+      const allSelected = editableKeys.every((k) => customSet.has(k));
+
+      if (allSelected) {
+        // Bỏ hết khỏi custom
+        editableKeys.forEach((k) => customSet.delete(k));
+      } else {
+        // Thêm hết
+        editableKeys.forEach((k) => customSet.add(k));
+      }
+
+      const newCustom = Array.from(customSet);
       const newPermissions = Array.from(new Set([...defaults, ...newCustom]));
 
       return { custom: newCustom, permissions: newPermissions };
@@ -218,7 +306,6 @@ export default function OwnerPermissions() {
       setIsEditing(false);
       return;
     }
-    // Reload quyền từ server để discard mọi thay đổi local
     try {
       const res = await api.permissions.ofUser(selectedUser.id);
       setUserPerms({
@@ -239,7 +326,6 @@ export default function OwnerPermissions() {
       await api.permissions.update(selectedUser.id, userPerms.custom);
       toast(`Đã cập nhật quyền cho ${selectedUser.name}`, "success");
 
-      // Reload quyền để lấy state mới nhất từ server
       const res = await api.permissions.ofUser(selectedUser.id);
       setUserPerms({
         custom: res.custom || [],
@@ -253,9 +339,6 @@ export default function OwnerPermissions() {
     }
   };
 
-  /**
-   * ✅ Reset custom — dùng ConfirmDialog custom.
-   */
   const resetCustom = () => {
     if (!selectedUser) return;
     if (!isEditing) {
@@ -274,17 +357,13 @@ export default function OwnerPermissions() {
         setSaving(true);
         try {
           await api.permissions.update(selectedUser.id, []);
-
-          // Reload quyền — không dùng openUser để tránh reset isEditing
           const res = await api.permissions.ofUser(selectedUser.id);
           setUserPerms({
             custom: res.custom || [],
             permissions: res.permissions || [],
           });
-
           toast("Đã reset về quyền mặc định", "success");
           setConfirm(null);
-          // Giữ isEditing = true để user có thể tiếp tục chỉnh nếu muốn
         } catch (e) {
           toast(e.message || "Không reset được", "error");
         } finally {
@@ -298,7 +377,6 @@ export default function OwnerPermissions() {
   // RENDER
   // ============================================================
 
-  // Loading config lần đầu
   if (configLoading) {
     return (
       <div style={loadingFullStyle}>
@@ -697,96 +775,238 @@ export default function OwnerPermissions() {
                   />
                   <div style={{ fontSize: 13 }}>Đang tải quyền...</div>
                 </div>
-              ) : allPermissions.length === 0 ? (
+              ) : groupedPermissions.length === 0 ? (
                 <div style={emptySmallStyle}>
                   Không có quyền nào để phân
                 </div>
               ) : (
+                // ✅ #13.1: Render theo group
                 <div
                   style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fit, minmax(240px, 1fr))",
-                    gap: 10,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 16,
                   }}
                 >
-                  {allPermissions.map((p) => {
-                    const isDefault = roleDefaults[selectedUser.role]?.includes(
-                      p.key
-                    );
-                    const isChecked = userPerms.permissions?.includes(p.key);
-                    const disabled = isDefault || !isEditing || saving;
+                  {groupedPermissions.map((group) => {
+                    const GroupIcon = group.icon;
+                    const defaults = roleDefaults[selectedUser.role] || [];
+
+                    // Đếm
+                    const checkedCount = group.items.filter((p) =>
+                      userPerms.permissions?.includes(p.key)
+                    ).length;
+                    const totalCount = group.items.length;
+
+                    // Chỉ tính editable (không phải default) để quyết định toggle
+                    const editableKeys = group.items
+                      .map((p) => p.key)
+                      .filter((k) => !defaults.includes(k));
+                    const editableChecked = editableKeys.filter((k) =>
+                      userPerms.custom?.includes(k)
+                    ).length;
+                    const allGroupSelected =
+                      editableKeys.length > 0 &&
+                      editableChecked === editableKeys.length;
 
                     return (
-                      <button
-                        key={p.key}
-                        onClick={() => togglePerm(p.key)}
-                        disabled={disabled}
-                        title={
-                          isDefault
-                            ? "Quyền mặc định theo role — không thể bỏ"
-                            : !isEditing
-                            ? "Bấm Sửa để chỉnh"
-                            : ""
-                        }
+                      <div
+                        key={group.prefix}
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          padding: 12,
-                          background: isChecked
-                            ? "rgba(24, 169, 103, 0.08)"
-                            : "var(--bg-tertiary, #f8fafc)",
-                          border: isChecked
-                            ? "2px solid #18a967"
-                            : "2px solid var(--border-color, #e5e9ef)",
-                          borderRadius: 10,
-                          cursor: disabled ? "not-allowed" : "pointer",
-                          textAlign: "left",
-                          opacity: isDefault ? 0.7 : isEditing ? 1 : 0.85,
-                          transition: "all 0.15s",
+                          border: "1px solid var(--border-color, #e5e9ef)",
+                          borderRadius: 12,
+                          overflow: "hidden",
                         }}
                       >
+                        {/* Group header */}
                         <div
                           style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: 4,
-                            background: isChecked ? "#18a967" : "transparent",
-                            border: isChecked
-                              ? "0"
-                              : "2px solid var(--border-color, #cbd5e1)",
-                            display: "grid",
-                            placeItems: "center",
-                            flexShrink: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "10px 14px",
+                            background: group.color + "10",
+                            borderBottom: "1px solid var(--border-color, #e5e9ef)",
+                            gap: 10,
+                            flexWrap: "wrap",
                           }}
                         >
-                          {isChecked && <Check size={12} color="#fff" />}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div
                             style={{
-                              fontSize: 13,
-                              fontWeight: 500,
-                              color: "var(--text-primary, #172033)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              minWidth: 0,
                             }}
                           >
-                            {p.label}
-                          </div>
-                          {isDefault && (
                             <div
                               style={{
-                                fontSize: 10,
-                                color: "#2634d5",
-                                fontWeight: 600,
-                                marginTop: 2,
+                                width: 28,
+                                height: 28,
+                                borderRadius: 8,
+                                background: group.color + "25",
+                                color: group.color,
+                                display: "grid",
+                                placeItems: "center",
+                                flexShrink: 0,
                               }}
                             >
-                              Mặc định theo role
+                              <GroupIcon size={15} />
                             </div>
+                            <b
+                              style={{
+                                fontSize: 13.5,
+                                color: "var(--text-primary, #172033)",
+                              }}
+                            >
+                              {group.label}
+                            </b>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: group.color,
+                                background: group.color + "18",
+                                padding: "2px 8px",
+                                borderRadius: 10,
+                              }}
+                            >
+                              {checkedCount}/{totalCount}
+                            </span>
+                          </div>
+
+                          {/* ✅ #13.4: Nút chọn tất cả per group */}
+                          {editableKeys.length > 0 && (
+                            <button
+                              onClick={() => toggleGroup(group)}
+                              disabled={!isEditing || saving}
+                              style={{
+                                padding: "4px 10px",
+                                background: "transparent",
+                                border: "1px solid " + group.color + "50",
+                                color: group.color,
+                                borderRadius: 6,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor:
+                                  !isEditing || saving
+                                    ? "not-allowed"
+                                    : "pointer",
+                                opacity: !isEditing || saving ? 0.5 : 1,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {allGroupSelected ? "Bỏ chọn nhóm" : "Chọn cả nhóm"}
+                            </button>
                           )}
                         </div>
-                      </button>
+
+                        {/* Group items grid */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(240px, 1fr))",
+                            gap: 8,
+                            padding: 12,
+                          }}
+                        >
+                          {group.items.map((p) => {
+                            const isDefault = defaults.includes(p.key);
+                            const isChecked = userPerms.permissions?.includes(
+                              p.key
+                            );
+                            const disabled = isDefault || !isEditing || saving;
+
+                            return (
+                              <button
+                                key={p.key}
+                                onClick={() => togglePerm(p.key)}
+                                disabled={disabled}
+                                title={
+                                  isDefault
+                                    ? "Quyền mặc định theo role — không thể bỏ"
+                                    : !isEditing
+                                    ? "Bấm Sửa để chỉnh"
+                                    : ""
+                                }
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 10,
+                                  padding: 10,
+                                  background: isChecked
+                                    ? "rgba(24, 169, 103, 0.08)"
+                                    : "var(--bg-tertiary, #f8fafc)",
+                                  border: isChecked
+                                    ? "2px solid #18a967"
+                                    : "2px solid var(--border-color, #e5e9ef)",
+                                  borderRadius: 10,
+                                  cursor: disabled
+                                    ? "not-allowed"
+                                    : "pointer",
+                                  textAlign: "left",
+                                  opacity: isDefault
+                                    ? 0.75
+                                    : isEditing
+                                    ? 1
+                                    : 0.9,
+                                  transition: "all 0.15s",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderRadius: 4,
+                                    background: isChecked
+                                      ? "#18a967"
+                                      : "transparent",
+                                    border: isChecked
+                                      ? "0"
+                                      : "2px solid var(--border-color, #cbd5e1)",
+                                    display: "grid",
+                                    placeItems: "center",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {isChecked && (
+                                    <Check size={12} color="#fff" />
+                                  )}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div
+                                    style={{
+                                      fontSize: 13,
+                                      fontWeight: 500,
+                                      color: "var(--text-primary, #172033)",
+                                    }}
+                                  >
+                                    {p.label}
+                                  </div>
+                                  {/* ✅ #13.2: Font đậm rõ hơn */}
+                                  {isDefault && (
+                                    <div
+                                      style={{
+                                        fontSize: 11.5,
+                                        color: "#2634d5",
+                                        fontWeight: 700,
+                                        marginTop: 3,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 3,
+                                      }}
+                                    >
+                                      <Shield size={10} />
+                                      Mặc định theo role
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
@@ -805,7 +1025,7 @@ export default function OwnerPermissions() {
         `}</style>
       </div>
 
-      {/* ✅ ConfirmDialog */}
+      {/* ConfirmDialog */}
       {confirm && (
         <ConfirmDialog
           open
@@ -869,15 +1089,11 @@ const btnPrimaryStyle = {
 
 const btnToolbarStyle = ({ disabled, primary, danger }) => ({
   padding: "8px 14px",
-  background: primary
-    ? "var(--bg-tertiary, #f5f7fb)"
-    : "var(--bg-tertiary, #f5f7fb)",
+  background: "var(--bg-tertiary, #f5f7fb)",
   border: "1px solid var(--border-color, #e5e9ef)",
   borderRadius: 8,
   cursor: disabled ? "not-allowed" : "pointer",
-  color: danger
-    ? "#ef4444"
-    : "var(--text-primary, #172033)",
+  color: danger ? "#ef4444" : "var(--text-primary, #172033)",
   fontSize: 12,
   display: "inline-flex",
   alignItems: "center",
