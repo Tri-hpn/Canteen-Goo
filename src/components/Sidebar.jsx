@@ -288,8 +288,7 @@ export default function Sidebar({ role, onLogout, user }) {
     }
   };
 }, [open]);
-// ✅ FIX: Toggle class body.sidebar-open khi mở/đóng sidebar
-// → CSS sẽ dùng class này để push .main sang phải (tablet)
+// ✅ FIX: Toggle body class để CSS biết sidebar đang mở
 useEffect(() => {
   if (open) {
     document.body.classList.add("sidebar-open");
