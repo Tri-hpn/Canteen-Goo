@@ -18,6 +18,8 @@
 //     (không dùng list.length vì có thể trùng)
 //   - Badge trạng thái dùng CSS class .inv-badge--xxx
 //     → dark mode tự đổi màu
+//   - removeItem: dùng ConfirmDialog custom
+//     (thay cho confirm() native → đồng bộ UX toàn app)
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -27,6 +29,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
 // CONSTANTS
@@ -58,6 +61,10 @@ export default function OwnerInventory() {
   const [modal, setModal] = useState(null);         // Add/Edit
   const [importModal, setImportModal] = useState(null); // Import stock
   const [saving, setSaving] = useState(false);
+
+  // ---------- ✅ Confirm dialog ----------
+  const [confirm, setConfirm] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   // ---------- Load ----------
 
@@ -140,6 +147,23 @@ export default function OwnerInventory() {
     return "NL" + String(maxNum + 1).padStart(3, "0");
   };
 
+  // ---------- ✅ Confirm helpers ----------
+
+  const closeConfirm = () => {
+    if (confirmBusy) return;
+    setConfirm(null);
+  };
+
+  const runConfirm = async () => {
+    if (!confirm || confirmBusy) return;
+    setConfirmBusy(true);
+    try {
+      await confirm.onConfirm();
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
   // ---------- Handlers ----------
 
   const saveItem = async (e) => {
@@ -179,15 +203,32 @@ export default function OwnerInventory() {
     }
   };
 
-  const removeItem = async (code) => {
-    if (!confirm(`Xóa nguyên liệu "${code}"?`)) return;
-    try {
-      await api.inventory.remove(code);
-      toast("Đã xóa", "success");
-      load();
-    } catch (e) {
-      toast(e.message || "Không xóa được", "error");
-    }
+  /**
+   * ✅ Xoá nguyên liệu — dùng ConfirmDialog custom.
+   */
+  const removeItem = (code) => {
+    const item = list.find((x) => x.code === code);
+    if (!item) return;
+
+    setConfirm({
+      title: `Xóa nguyên liệu "${item.name}"?`,
+      message:
+        `Mã ${item.code} sẽ bị xóa vĩnh viễn khỏi kho. ` +
+        "Hành động này không thể hoàn tác.",
+      confirmText: "Xóa",
+      cancelText: "Hủy",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api.inventory.remove(code);
+          toast("Đã xóa", "success");
+          setConfirm(null);
+          load();
+        } catch (e) {
+          toast(e.message || "Không xóa được", "error");
+        }
+      },
+    });
   };
 
   const doImport = async (e) => {
@@ -242,623 +283,640 @@ export default function OwnerInventory() {
   // ============================================================
 
   return (
-    <div>
-      {/* ============================================================
-          ALERT — Tồn kho thấp
-          ============================================================ */}
-      {stats.lowCount > 0 && (
-        <div
-          style={{
-            display: "flex",
-            gap: 14,
-            alignItems: "center",
-            background: "rgba(245, 158, 11, 0.12)",
-            border: "1px solid rgba(245, 158, 11, 0.3)",
-            color: "#92400e",
-            padding: "16px 20px",
-            borderRadius: 12,
-            marginBottom: 18,
-          }}
-        >
-          <AlertTriangle size={20} style={{ flexShrink: 0 }} />
-          <div>
-            <b style={{ fontSize: 13, display: "block", marginBottom: 2 }}>
-              ⚠️ Cảnh báo tồn kho thấp
-            </b>
-            <div style={{ fontSize: 12.5, opacity: 0.9 }}>
-              {stats.lowCount} nguyên liệu dưới mức tối thiểu
-              {stats.outCount > 0 && ` (${stats.outCount} đã hết)`}.
+    <>
+      <div>
+        {/* ============================================================
+            ALERT — Tồn kho thấp
+            ============================================================ */}
+        {stats.lowCount > 0 && (
+          <div
+            style={{
+              display: "flex",
+              gap: 14,
+              alignItems: "center",
+              background: "rgba(245, 158, 11, 0.12)",
+              border: "1px solid rgba(245, 158, 11, 0.3)",
+              color: "#92400e",
+              padding: "16px 20px",
+              borderRadius: 12,
+              marginBottom: 18,
+            }}
+          >
+            <AlertTriangle size={20} style={{ flexShrink: 0 }} />
+            <div>
+              <b style={{ fontSize: 13, display: "block", marginBottom: 2 }}>
+                ⚠️ Cảnh báo tồn kho thấp
+              </b>
+              <div style={{ fontSize: 12.5, opacity: 0.9 }}>
+                {stats.lowCount} nguyên liệu dưới mức tối thiểu
+                {stats.outCount > 0 && ` (${stats.outCount} đã hết)`}.
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ============================================================
-          TOOLBAR
-          ============================================================ */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginBottom: 20,
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
+        {/* ============================================================
+            TOOLBAR
+            ============================================================ */}
         <div
           style={{
             display: "flex",
+            gap: 12,
+            marginBottom: 20,
+            flexWrap: "wrap",
             alignItems: "center",
-            gap: 10,
-            background: "var(--card-bg, #fff)",
-            border: "1px solid var(--border-color, #e5e9ef)",
-            borderRadius: 10,
-            padding: "10px 14px",
-            flex: 1,
-            minWidth: 240,
-            maxWidth: 400,
           }}
         >
-          <Search size={18} style={{ color: "var(--text-light, #8993a3)" }} />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Tìm nguyên liệu..."
+          <div
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              background: "var(--card-bg, #fff)",
+              border: "1px solid var(--border-color, #e5e9ef)",
+              borderRadius: 10,
+              padding: "10px 14px",
               flex: 1,
-              border: 0,
-              outline: "none",
-              fontSize: 13,
-              background: "transparent",
-              color: "var(--text-primary, #172033)",
+              minWidth: 240,
+              maxWidth: 400,
             }}
-          />
-          {q && (
-            <button
-              onClick={() => setQ("")}
+          >
+            <Search size={18} style={{ color: "var(--text-light, #8993a3)" }} />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Tìm nguyên liệu..."
               style={{
-                background: "transparent",
+                flex: 1,
                 border: 0,
-                cursor: "pointer",
-                color: "var(--text-light, #8993a3)",
-                padding: 2,
+                outline: "none",
+                fontSize: 13,
+                background: "transparent",
+                color: "var(--text-primary, #172033)",
               }}
-              aria-label="Xoá tìm kiếm"
-            >
-              <X size={14} />
-            </button>
-          )}
+            />
+            {q && (
+              <button
+                onClick={() => setQ("")}
+                style={{
+                  background: "transparent",
+                  border: 0,
+                  cursor: "pointer",
+                  color: "var(--text-light, #8993a3)",
+                  padding: 2,
+                }}
+                aria-label="Xoá tìm kiếm"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              background: showHistory ? "#18a967" : "var(--card-bg, #fff)",
+              color: showHistory ? "#fff" : "var(--text-primary, #172033)",
+              padding: "10px 16px",
+              border: "1px solid " + (showHistory ? "#18a967" : "var(--border-color, #e5e9ef)"),
+              borderRadius: 10,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            <History size={16} /> {showHistory ? "Ẩn lịch sử" : "Lịch sử nhập"}
+          </button>
+
+          <button
+            onClick={() => setModal({})}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              background: "#2634d5",
+              color: "#fff",
+              padding: "10px 16px",
+              border: 0,
+              borderRadius: 10,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            <Plus size={16} /> Thêm nguyên liệu
+          </button>
         </div>
 
-        <button
-          onClick={() => setShowHistory(!showHistory)}
+        {/* ============================================================
+            STATS
+            ============================================================ */}
+        <div
           style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            background: showHistory ? "#18a967" : "var(--card-bg, #fff)",
-            color: showHistory ? "#fff" : "var(--text-primary, #172033)",
-            padding: "10px 16px",
-            border: "1px solid " + (showHistory ? "#18a967" : "var(--border-color, #e5e9ef)"),
-            borderRadius: 10,
-            fontWeight: 600,
-            cursor: "pointer",
-            fontSize: 13,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: 16,
+            marginBottom: 20,
           }}
         >
-          <History size={16} /> {showHistory ? "Ẩn lịch sử" : "Lịch sử nhập"}
-        </button>
+          <StatBox label="Tổng nguyên liệu" value={stats.total} color="#2634d5" icon={<Boxes size={18} />} />
+          <StatBox label="Sắp hết"          value={stats.lowCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+          <StatBox label="Hết hàng"          value={stats.outCount} color="#ef4444" icon={<PackageX size={18} />} />
+          <StatBox label="Đủ hàng"           value={stats.okCount}  color="#18a967" icon={<Package size={18} />} />
+        </div>
 
-        <button
-          onClick={() => setModal({})}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            background: "#2634d5",
-            color: "#fff",
-            padding: "10px 16px",
-            border: 0,
-            borderRadius: 10,
-            fontWeight: 600,
-            cursor: "pointer",
-            fontSize: 13,
-          }}
-        >
-          <Plus size={16} /> Thêm nguyên liệu
-        </button>
-      </div>
-
-      {/* ============================================================
-          STATS
-          ============================================================ */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: 16,
-          marginBottom: 20,
-        }}
-      >
-        <StatBox label="Tổng nguyên liệu" value={stats.total} color="#2634d5" icon={<Boxes size={18} />} />
-        <StatBox label="Sắp hết"          value={stats.lowCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-        <StatBox label="Hết hàng"          value={stats.outCount} color="#ef4444" icon={<PackageX size={18} />} />
-        <StatBox label="Đủ hàng"           value={stats.okCount}  color="#18a967" icon={<Package size={18} />} />
-      </div>
-
-      {/* ============================================================
-          MAIN TABLE
-          ============================================================ */}
-      <div
-        style={{
-          background: "var(--card-bg, #fff)",
-          border: "1px solid var(--border-color, #e7ebf0)",
-          borderRadius: 12,
-          padding: 20,
-        }}
-      >
-             {/* Loading — skeleton table */}
-        {loading && (
-          <SkeletonTable
-            columns={7}
-            rows={5}
-            headers={["Mã", "Nguyên liệu", "Số lượng", "Đơn vị", "Tối thiểu", "Trạng thái", "Thao tác"]}
-          />
-        )}
-        {/* Error */}
-        {!loading && error && (
-          <ErrorBox message={error} onRetry={load} />
-        )}
-
-        {/* Data */}
-        {!loading && !error && (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                  <th style={thStyle}>Mã</th>
-                  <th style={thStyle}>Nguyên liệu</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Số lượng</th>
-                  <th style={thStyle}>Đơn vị</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Tối thiểu</th>
-                  <th style={thStyle}>Trạng thái</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((x) => {
-                  const statusKey = getStatusKey(x);
-                  return (
-                    <tr
-                      key={x.code}
-                      style={{ borderBottom: "1px solid var(--border-color, #eef2f7)" }}
-                    >
-                      <td style={tdStyle}>
-                        <b style={{ fontFamily: "monospace", fontSize: 12 }}>{x.code}</b>
-                      </td>
-                      <td style={tdStyle}>{x.name}</td>
-                      <td
-                        style={{
-                          ...tdStyle,
-                          textAlign: "right",
-                          fontWeight: 700,
-                        }}
-                      >
-                        <span className={`inv-qty inv-qty--${statusKey}`}>
-                          {x.qty}
-                        </span>
-                      </td>
-                      <td style={{ ...tdStyle, color: "var(--text-muted, #64748b)" }}>
-                        {x.unit}
-                      </td>
-                      <td
-                        style={{
-                          ...tdStyle,
-                          textAlign: "right",
-                          color: "var(--text-muted, #64748b)",
-                        }}
-                      >
-                        {x.min}
-                      </td>
-                      <td style={tdStyle}>
-                        <span className={`inv-badge inv-badge--${statusKey}`}>
-                          {getStatusLabel(statusKey)}
-                        </span>
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            justifyContent: "flex-end",
-                          }}
-                        >
-                          <IconButton
-                            onClick={() => setImportModal(x)}
-                            title="Nhập kho"
-                            color="#18a967"
-                            bg="#18a967"
-                          >
-                            <Package size={15} />
-                          </IconButton>
-                          <IconButton
-                            onClick={() => setModal(x)}
-                            title="Sửa"
-                          >
-                            <Edit size={15} />
-                          </IconButton>
-                          <IconButton
-                            onClick={() => removeItem(x.code)}
-                            title="Xóa"
-                            color="#ef4444"
-                          >
-                            <Trash2 size={15} />
-                          </IconButton>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {!filtered.length && (
-                  <tr>
-                    <td
-                      colSpan="7"
-                      style={{
-                        textAlign: "center",
-                        padding: 40,
-                        color: "var(--text-light, #8993a3)",
-                      }}
-                    >
-                      <PackageX size={36} style={{ opacity: 0.35, marginBottom: 10 }} />
-                      <div>
-                        {q
-                          ? `Không có nguyên liệu khớp "${q}"`
-                          : "Chưa có nguyên liệu nào"}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ============================================================
-          IMPORT HISTORY
-          ============================================================ */}
-      {showHistory && (
+        {/* ============================================================
+            MAIN TABLE
+            ============================================================ */}
         <div
           style={{
             background: "var(--card-bg, #fff)",
             border: "1px solid var(--border-color, #e7ebf0)",
             borderRadius: 12,
             padding: 20,
-            marginTop: 20,
           }}
         >
-          <h3
-            style={{
-              marginTop: 0,
-              color: "var(--text-primary, #172033)",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 15,
-            }}
-          >
-            <History size={18} />
-            Lịch sử nhập kho ({imports.length})
-          </h3>
+          {/* Loading — skeleton table */}
+          {loading && (
+            <SkeletonTable
+              columns={7}
+              rows={5}
+              headers={["Mã", "Nguyên liệu", "Số lượng", "Đơn vị", "Tối thiểu", "Trạng thái", "Thao tác"]}
+            />
+          )}
+          {/* Error */}
+          {!loading && error && (
+            <ErrorBox message={error} onRetry={load} />
+          )}
 
-          {imports.length === 0 ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: 40,
-                color: "var(--text-light, #8993a3)",
-                fontSize: 13,
-              }}
-            >
-              Chưa có lịch sử nhập kho
-            </div>
-          ) : (
+          {/* Data */}
+          {!loading && !error && (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                    <th style={thStyle}>Thời gian</th>
+                    <th style={thStyle}>Mã</th>
                     <th style={thStyle}>Nguyên liệu</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>SL nhập</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Tồn sau</th>
-                    <th style={thStyle}>Người nhập</th>
-                    <th style={thStyle}>Nhà cung cấp</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Số lượng</th>
+                    <th style={thStyle}>Đơn vị</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Tối thiểu</th>
+                    <th style={thStyle}>Trạng thái</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {imports.slice(0, IMPORT_HISTORY_LIMIT).map((r) => (
-                    <tr
-                      key={r.id}
-                      style={{ borderBottom: "1px solid var(--border-color, #eef2f7)" }}
-                    >
-                      <td style={{ ...tdStyle, fontSize: 12, color: "var(--text-muted, #64748b)" }}>
-                        {new Date(r.created_at).toLocaleString("vi-VN")}
-                      </td>
-                      <td style={tdStyle}>
-                        <b>{r.name}</b>{" "}
-                        <span style={{ color: "var(--text-light, #94a3b8)", fontFamily: "monospace", fontSize: 11 }}>
-                          ({r.code})
-                        </span>
-                      </td>
+                  {filtered.map((x) => {
+                    const statusKey = getStatusKey(x);
+                    return (
+                      <tr
+                        key={x.code}
+                        style={{ borderBottom: "1px solid var(--border-color, #eef2f7)" }}
+                      >
+                        <td style={tdStyle}>
+                          <b style={{ fontFamily: "monospace", fontSize: 12 }}>{x.code}</b>
+                        </td>
+                        <td style={tdStyle}>{x.name}</td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            textAlign: "right",
+                            fontWeight: 700,
+                          }}
+                        >
+                          <span className={`inv-qty inv-qty--${statusKey}`}>
+                            {x.qty}
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, color: "var(--text-muted, #64748b)" }}>
+                          {x.unit}
+                        </td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            textAlign: "right",
+                            color: "var(--text-muted, #64748b)",
+                          }}
+                        >
+                          {x.min}
+                        </td>
+                        <td style={tdStyle}>
+                          <span className={`inv-badge inv-badge--${statusKey}`}>
+                            {getStatusLabel(statusKey)}
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 6,
+                              justifyContent: "flex-end",
+                            }}
+                          >
+                            <IconButton
+                              onClick={() => setImportModal(x)}
+                              title="Nhập kho"
+                              color="#18a967"
+                              bg="#18a967"
+                            >
+                              <Package size={15} />
+                            </IconButton>
+                            <IconButton
+                              onClick={() => setModal(x)}
+                              title="Sửa"
+                            >
+                              <Edit size={15} />
+                            </IconButton>
+                            <IconButton
+                              onClick={() => removeItem(x.code)}
+                              title="Xóa"
+                              color="#ef4444"
+                            >
+                              <Trash2 size={15} />
+                            </IconButton>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {!filtered.length && (
+                    <tr>
                       <td
+                        colSpan="7"
                         style={{
-                          ...tdStyle,
-                          textAlign: "right",
-                          color: "#18a967",
-                          fontWeight: 700,
+                          textAlign: "center",
+                          padding: 40,
+                          color: "var(--text-light, #8993a3)",
                         }}
                       >
-                        +{r.qty} {r.unit}
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>
-                        {r.after} {r.unit}
-                      </td>
-                      <td style={tdStyle}>{r.imported_by}</td>
-                      <td style={{ ...tdStyle, color: "var(--text-muted, #64748b)" }}>
-                        {r.supplier || "—"}
+                        <PackageX size={36} style={{ opacity: 0.35, marginBottom: 10 }} />
+                        <div>
+                          {q
+                            ? `Không có nguyên liệu khớp "${q}"`
+                            : "Chưa có nguyên liệu nào"}
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
-
-              {imports.length > IMPORT_HISTORY_LIMIT && (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "10px 0",
-                    fontSize: 12,
-                    color: "var(--text-light, #8993a3)",
-                  }}
-                >
-                  Hiển thị {IMPORT_HISTORY_LIMIT} / {imports.length} bản ghi gần nhất
-                </div>
-              )}
             </div>
           )}
         </div>
-      )}
 
-      {/* ============================================================
-          ADD / EDIT MODAL
-          ============================================================ */}
-      {modal && (
-        <Modal onClose={() => !saving && setModal(null)} maxWidth={480}>
-          <div style={modalHeaderStyle}>
-            <h3 style={modalTitleStyle}>
-              {modal.code ? "Sửa nguyên liệu" : "Thêm nguyên liệu"}
-            </h3>
-            <button
-              onClick={() => !saving && setModal(null)}
-              style={modalCloseStyle}
-              aria-label="Đóng"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <form onSubmit={saveItem} autoComplete="off">
-            <label style={labelStyle}>Mã *</label>
-            <input
-              name="code"
-              defaultValue={modal.code || generateNextCode()}
-              required
-              disabled={!!modal.code}
-              style={{
-                ...inputStyle,
-                fontFamily: "monospace",
-                textTransform: "uppercase",
-                background: modal.code
-                  ? "var(--bg-tertiary, #f5f7fb)"
-                  : "var(--bg-secondary, #fff)",
-                cursor: modal.code ? "not-allowed" : "text",
-                opacity: modal.code ? 0.7 : 1,
-              }}
-              autoFocus={!modal.code}
-            />
-
-            <label style={labelStyle}>Tên nguyên liệu *</label>
-            <input
-              name="name"
-              defaultValue={modal.name || ""}
-              required
-              style={inputStyle}
-              autoFocus={!!modal.code}
-            />
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Số lượng</label>
-                <input
-                  name="qty"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  defaultValue={modal.qty ?? 0}
-                  required
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Đơn vị</label>
-                <select
-                  name="unit"
-                  defaultValue={modal.unit || "kg"}
-                  style={inputStyle}
-                >
-                  {UNITS.map((u) => (
-                    <option key={u}>{u}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <label style={labelStyle}>Mức tối thiểu (cảnh báo khi dưới)</label>
-            <input
-              name="min"
-              type="number"
-              min="0"
-              step="0.1"
-              defaultValue={modal.min ?? 10}
-              required
-              style={inputStyle}
-            />
-
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button
-                type="button"
-                onClick={() => setModal(null)}
-                disabled={saving}
-                style={{ ...btnCancelStyle, flex: 1 }}
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                style={{ ...btnPrimaryStyle(saving), flex: 1, width: "auto" }}
-              >
-                {saving ? (
-                  <>
-                    <Loader2
-                      size={14}
-                      style={{ animation: "spin 1s linear infinite" }}
-                    />
-                    Đang lưu...
-                  </>
-                ) : (
-                  "Lưu"
-                )}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* ============================================================
-          IMPORT STOCK MODAL
-          ============================================================ */}
-      {importModal && (
-        <Modal onClose={() => !saving && setImportModal(null)} maxWidth={480}>
-          <div style={modalHeaderStyle}>
-            <h3 style={modalTitleStyle}>
-              <Package size={20} style={{ color: "#18a967" }} /> Nhập kho
-            </h3>
-            <button
-              onClick={() => !saving && setImportModal(null)}
-              style={modalCloseStyle}
-              aria-label="Đóng"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* Info box */}
+        {/* ============================================================
+            IMPORT HISTORY
+            ============================================================ */}
+        {showHistory && (
           <div
             style={{
-              background: "var(--bg-tertiary, #f5f7fb)",
-              borderRadius: 10,
-              padding: 12,
-              marginBottom: 16,
-              fontSize: 13,
+              background: "var(--card-bg, #fff)",
+              border: "1px solid var(--border-color, #e7ebf0)",
+              borderRadius: 12,
+              padding: 20,
+              marginTop: 20,
             }}
           >
-            <div style={{ marginBottom: 4 }}>
-              <b>{importModal.name}</b>{" "}
-              <span style={{ color: "var(--text-light, #94a3b8)", fontFamily: "monospace", fontSize: 11 }}>
-                ({importModal.code})
-              </span>
-            </div>
-            <div style={{ color: "var(--text-muted, #64748b)" }}>
-              Tồn hiện tại:{" "}
-              <b style={{ color: "var(--text-primary, #172033)" }}>
-                {importModal.qty} {importModal.unit}
-              </b>
-            </div>
-          </div>
+            <h3
+              style={{
+                marginTop: 0,
+                color: "var(--text-primary, #172033)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 15,
+              }}
+            >
+              <History size={18} />
+              Lịch sử nhập kho ({imports.length})
+            </h3>
 
-          <form onSubmit={doImport} autoComplete="off">
-            <label style={labelStyle}>
-              Số lượng nhập ({importModal.unit}) *
-            </label>
-            <input
-              name="qty"
-              type="number"
-              min="0.1"
-              step="0.1"
-              defaultValue={10}
-              required
-              autoFocus
-              style={{ ...inputStyle, fontSize: 14 }}
-            />
-
-            <label style={labelStyle}>Nhà cung cấp</label>
-            <input
-              name="supplier"
-              placeholder="VD: Công ty TNHH ABC"
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>Ghi chú</label>
-            <textarea
-              name="note"
-              placeholder="VD: Hàng tươi, nhập buổi sáng..."
-              style={{ ...inputStyle, minHeight: 60, resize: "vertical" }}
-            />
-
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button
-                type="button"
-                onClick={() => setImportModal(null)}
-                disabled={saving}
-                style={{ ...btnCancelStyle, flex: 1 }}
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
+            {imports.length === 0 ? (
+              <div
                 style={{
-                  ...btnPrimaryStyle(saving),
-                  background: saving ? "#94a3b8" : "#18a967",
-                  flex: 1,
-                  width: "auto",
+                  textAlign: "center",
+                  padding: 40,
+                  color: "var(--text-light, #8993a3)",
+                  fontSize: 13,
                 }}
               >
-                {saving ? (
-                  <>
-                    <Loader2
-                      size={14}
-                      style={{ animation: "spin 1s linear infinite" }}
-                    />
-                    Đang nhập...
-                  </>
-                ) : (
-                  <>
-                    <Package size={14} /> Nhập kho
-                  </>
+                Chưa có lịch sử nhập kho
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
+                      <th style={thStyle}>Thời gian</th>
+                      <th style={thStyle}>Nguyên liệu</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>SL nhập</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Tồn sau</th>
+                      <th style={thStyle}>Người nhập</th>
+                      <th style={thStyle}>Nhà cung cấp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {imports.slice(0, IMPORT_HISTORY_LIMIT).map((r) => (
+                      <tr
+                        key={r.id}
+                        style={{ borderBottom: "1px solid var(--border-color, #eef2f7)" }}
+                      >
+                        <td style={{ ...tdStyle, fontSize: 12, color: "var(--text-muted, #64748b)" }}>
+                          {new Date(r.created_at).toLocaleString("vi-VN")}
+                        </td>
+                        <td style={tdStyle}>
+                          <b>{r.name}</b>{" "}
+                          <span style={{ color: "var(--text-light, #94a3b8)", fontFamily: "monospace", fontSize: 11 }}>
+                            ({r.code})
+                          </span>
+                        </td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            textAlign: "right",
+                            color: "#18a967",
+                            fontWeight: 700,
+                          }}
+                        >
+                          +{r.qty} {r.unit}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                          {r.after} {r.unit}
+                        </td>
+                        <td style={tdStyle}>{r.imported_by}</td>
+                        <td style={{ ...tdStyle, color: "var(--text-muted, #64748b)" }}>
+                          {r.supplier || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {imports.length > IMPORT_HISTORY_LIMIT && (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      padding: "10px 0",
+                      fontSize: 12,
+                      color: "var(--text-light, #8993a3)",
+                    }}
+                  >
+                    Hiển thị {IMPORT_HISTORY_LIMIT} / {imports.length} bản ghi gần nhất
+                  </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ============================================================
+            ADD / EDIT MODAL
+            ============================================================ */}
+        {modal && (
+          <Modal onClose={() => !saving && setModal(null)} maxWidth={480}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>
+                {modal.code ? "Sửa nguyên liệu" : "Thêm nguyên liệu"}
+              </h3>
+              <button
+                onClick={() => !saving && setModal(null)}
+                style={modalCloseStyle}
+                aria-label="Đóng"
+              >
+                <X size={20} />
               </button>
             </div>
-          </form>
-        </Modal>
-      )}
 
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
-    </div>
+            <form onSubmit={saveItem} autoComplete="off">
+              <label style={labelStyle}>Mã *</label>
+              <input
+                name="code"
+                defaultValue={modal.code || generateNextCode()}
+                required
+                disabled={!!modal.code}
+                style={{
+                  ...inputStyle,
+                  fontFamily: "monospace",
+                  textTransform: "uppercase",
+                  background: modal.code
+                    ? "var(--bg-tertiary, #f5f7fb)"
+                    : "var(--bg-secondary, #fff)",
+                  cursor: modal.code ? "not-allowed" : "text",
+                  opacity: modal.code ? 0.7 : 1,
+                }}
+                autoFocus={!modal.code}
+              />
+
+              <label style={labelStyle}>Tên nguyên liệu *</label>
+              <input
+                name="name"
+                defaultValue={modal.name || ""}
+                required
+                style={inputStyle}
+                autoFocus={!!modal.code}
+              />
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={labelStyle}>Số lượng</label>
+                  <input
+                    name="qty"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    defaultValue={modal.qty ?? 0}
+                    required
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Đơn vị</label>
+                  <select
+                    name="unit"
+                    defaultValue={modal.unit || "kg"}
+                    style={inputStyle}
+                  >
+                    {UNITS.map((u) => (
+                      <option key={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <label style={labelStyle}>Mức tối thiểu (cảnh báo khi dưới)</label>
+              <input
+                name="min"
+                type="number"
+                min="0"
+                step="0.1"
+                defaultValue={modal.min ?? 10}
+                required
+                style={inputStyle}
+              />
+
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button
+                  type="button"
+                  onClick={() => setModal(null)}
+                  disabled={saving}
+                  style={{ ...btnCancelStyle, flex: 1 }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  style={{ ...btnPrimaryStyle(saving), flex: 1, width: "auto" }}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2
+                        size={14}
+                        style={{ animation: "spin 1s linear infinite" }}
+                      />
+                      Đang lưu...
+                    </>
+                  ) : (
+                    "Lưu"
+                  )}
+                </button>
+              </div>
+            </form>
+          </Modal>
+        )}
+
+        {/* ============================================================
+            IMPORT STOCK MODAL
+            ============================================================ */}
+        {importModal && (
+          <Modal onClose={() => !saving && setImportModal(null)} maxWidth={480}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>
+                <Package size={20} style={{ color: "#18a967" }} /> Nhập kho
+              </h3>
+              <button
+                onClick={() => !saving && setImportModal(null)}
+                style={modalCloseStyle}
+                aria-label="Đóng"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Info box */}
+            <div
+              style={{
+                background: "var(--bg-tertiary, #f5f7fb)",
+                borderRadius: 10,
+                padding: 12,
+                marginBottom: 16,
+                fontSize: 13,
+              }}
+            >
+              <div style={{ marginBottom: 4 }}>
+                <b>{importModal.name}</b>{" "}
+                <span style={{ color: "var(--text-light, #94a3b8)", fontFamily: "monospace", fontSize: 11 }}>
+                  ({importModal.code})
+                </span>
+              </div>
+              <div style={{ color: "var(--text-muted, #64748b)" }}>
+                Tồn hiện tại:{" "}
+                <b style={{ color: "var(--text-primary, #172033)" }}>
+                  {importModal.qty} {importModal.unit}
+                </b>
+              </div>
+            </div>
+
+            <form onSubmit={doImport} autoComplete="off">
+              <label style={labelStyle}>
+                Số lượng nhập ({importModal.unit}) *
+              </label>
+              <input
+                name="qty"
+                type="number"
+                min="0.1"
+                step="0.1"
+                defaultValue={10}
+                required
+                autoFocus
+                style={{ ...inputStyle, fontSize: 14 }}
+              />
+
+              <label style={labelStyle}>Nhà cung cấp</label>
+              <input
+                name="supplier"
+                placeholder="VD: Công ty TNHH ABC"
+                style={inputStyle}
+              />
+
+              <label style={labelStyle}>Ghi chú</label>
+              <textarea
+                name="note"
+                placeholder="VD: Hàng tươi, nhập buổi sáng..."
+                style={{ ...inputStyle, minHeight: 60, resize: "vertical" }}
+              />
+
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button
+                  type="button"
+                  onClick={() => setImportModal(null)}
+                  disabled={saving}
+                  style={{ ...btnCancelStyle, flex: 1 }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  style={{
+                    ...btnPrimaryStyle(saving),
+                    background: saving ? "#94a3b8" : "#18a967",
+                    flex: 1,
+                    width: "auto",
+                  }}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2
+                        size={14}
+                        style={{ animation: "spin 1s linear infinite" }}
+                      />
+                      Đang nhập...
+                    </>
+                  ) : (
+                    <>
+                      <Package size={14} /> Nhập kho
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </Modal>
+        )}
+
+        <style>{`
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        `}</style>
+      </div>
+
+      {/* ✅ ConfirmDialog */}
+      {confirm && (
+        <ConfirmDialog
+          open
+          title={confirm.title}
+          message={confirm.message}
+          confirmText={confirm.confirmText}
+          cancelText={confirm.cancelText}
+          danger={confirm.danger}
+          loading={confirmBusy}
+          onConfirm={runConfirm}
+          onClose={closeConfirm}
+        />
+      )}
+    </>
   );
 }
 

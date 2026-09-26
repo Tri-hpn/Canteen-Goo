@@ -17,6 +17,10 @@
 //   - api.permissions.ofUser(userId)   → quyền của 1 user
 //   - api.permissions.update(userId, custom[])
 //   - api.users.list()                 → danh sách users (không có ADMIN)
+//
+// Fixes:
+//   - resetCustom: dùng ConfirmDialog custom
+//     (thay cho confirm() native → đồng bộ UX toàn app)
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -26,6 +30,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
 // CONSTANTS
@@ -67,6 +72,10 @@ export default function OwnerPermissions() {
   const [activeRole, setActiveRole] = useState("EMPLOYEE");
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // ---------- ✅ Confirm dialog ----------
+  const [confirm, setConfirm] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   // ---------- Load config + users ----------
 
@@ -116,6 +125,23 @@ export default function OwnerPermissions() {
         u.email?.toLowerCase().includes(s)
     );
   }, [users, activeRole, search]);
+
+  // ---------- ✅ Confirm helpers ----------
+
+  const closeConfirm = () => {
+    if (confirmBusy) return;
+    setConfirm(null);
+  };
+
+  const runConfirm = async () => {
+    if (!confirm || confirmBusy) return;
+    setConfirmBusy(true);
+    try {
+      await confirm.onConfirm();
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
 
   // ---------- Handlers ----------
 
@@ -227,37 +253,45 @@ export default function OwnerPermissions() {
     }
   };
 
-  const resetCustom = async () => {
+  /**
+   * ✅ Reset custom — dùng ConfirmDialog custom.
+   */
+  const resetCustom = () => {
     if (!selectedUser) return;
     if (!isEditing) {
       toast("Bấm Sửa để chỉnh quyền", "info");
       return;
     }
-    if (
-      !confirm(
-        `Xóa tất cả quyền custom của "${selectedUser.name}"?\n\nUser sẽ về quyền mặc định theo role.`
-      )
-    )
-      return;
 
-    setSaving(true);
-    try {
-      await api.permissions.update(selectedUser.id, []);
+    setConfirm({
+      title: `Reset quyền của "${selectedUser.name}"?`,
+      message:
+        "Tất cả quyền custom sẽ bị xóa. User sẽ trở về quyền mặc định theo role.",
+      confirmText: "Reset",
+      cancelText: "Hủy",
+      danger: true,
+      onConfirm: async () => {
+        setSaving(true);
+        try {
+          await api.permissions.update(selectedUser.id, []);
 
-      // Reload quyền — không dùng openUser để tránh reset isEditing
-      const res = await api.permissions.ofUser(selectedUser.id);
-      setUserPerms({
-        custom: res.custom || [],
-        permissions: res.permissions || [],
-      });
+          // Reload quyền — không dùng openUser để tránh reset isEditing
+          const res = await api.permissions.ofUser(selectedUser.id);
+          setUserPerms({
+            custom: res.custom || [],
+            permissions: res.permissions || [],
+          });
 
-      toast("Đã reset về quyền mặc định", "success");
-      // Giữ isEditing = true để user có thể tiếp tục chỉnh nếu muốn
-    } catch (e) {
-      toast(e.message || "Không reset được", "error");
-    } finally {
-      setSaving(false);
-    }
+          toast("Đã reset về quyền mặc định", "success");
+          setConfirm(null);
+          // Giữ isEditing = true để user có thể tiếp tục chỉnh nếu muốn
+        } catch (e) {
+          toast(e.message || "Không reset được", "error");
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
   // ============================================================
@@ -298,477 +332,494 @@ export default function OwnerPermissions() {
   }
 
   return (
-    <div
-      className="perm-layout"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(260px, 320px) minmax(0, 1fr)",
-        gap: 20,
-      }}
-    >
-      {/* ============================================================
-          CỘT TRÁI — Danh sách user
-          ============================================================ */}
+    <>
       <div
+        className="perm-layout"
         style={{
-          background: "var(--card-bg, #fff)",
-          border: "1px solid var(--border-color, #e7ebf0)",
-          borderRadius: 12,
-          padding: 16,
-          height: "fit-content",
-          maxHeight: "calc(100vh - 120px)",
-          display: "flex",
-          flexDirection: "column",
+          display: "grid",
+          gridTemplateColumns: "minmax(260px, 320px) minmax(0, 1fr)",
+          gap: 20,
         }}
       >
-        <h3
-          style={{
-            marginTop: 0,
-            marginBottom: 12,
-            color: "var(--text-primary, #172033)",
-            fontSize: 14,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <Users size={16} /> Người dùng
-        </h3>
-
-        {/* Tabs role */}
+        {/* ============================================================
+            CỘT TRÁI — Danh sách user
+            ============================================================ */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 4,
-            background: "var(--bg-tertiary, #f5f7fb)",
-            padding: 4,
-            borderRadius: 10,
-            marginBottom: 12,
-          }}
-        >
-          {ROLE_TABS.map((t) => {
-            const active = activeRole === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => {
-                  setActiveRole(t.id);
-                  setSelectedUser(null);
-                  setIsEditing(false);
-                }}
-                style={{
-                  padding: "8px 10px",
-                  background: active ? "#2634d5" : "transparent",
-                  color: active ? "#fff" : "var(--text-muted, #475569)",
-                  border: 0,
-                  borderRadius: 7,
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  fontSize: 12,
-                }}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Search */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "var(--bg-tertiary, #f5f7fb)",
-            borderRadius: 8,
-            padding: "8px 12px",
-            marginBottom: 12,
-          }}
-        >
-          <Search size={14} style={{ color: "var(--text-light, #8993a3)" }} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm..."
-            style={{
-              border: 0,
-              outline: "none",
-              background: "transparent",
-              color: "var(--text-primary, #172033)",
-              fontSize: 12,
-              flex: 1,
-            }}
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              style={{
-                background: "transparent",
-                border: 0,
-                cursor: "pointer",
-                color: "var(--text-light, #8993a3)",
-                padding: 2,
-              }}
-              aria-label="Xoá tìm kiếm"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-
-        {/* User list */}
-        <div
-          style={{
+            background: "var(--card-bg, #fff)",
+            border: "1px solid var(--border-color, #e7ebf0)",
+            borderRadius: 12,
+            padding: 16,
+            height: "fit-content",
+            maxHeight: "calc(100vh - 120px)",
             display: "flex",
             flexDirection: "column",
-            gap: 6,
-            overflowY: "auto",
-            flex: 1,
           }}
         >
-          {usersLoading ? (
-            <div style={loadingSmallStyle}>Đang tải...</div>
-          ) : !filteredUsers.length ? (
-            <div style={emptySmallStyle}>
-              Không có {activeRole === "EMPLOYEE" ? "nhân viên" : "khách hàng"}
-            </div>
-          ) : (
-            filteredUsers.map((u) => {
-              const selected = selectedUser?.id === u.id;
-              return (
-                <button
-                  key={u.id}
-                  onClick={() => openUser(u)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 10,
-                    background: selected
-                      ? "rgba(38, 52, 213, 0.1)"
-                      : "transparent",
-                    border: selected
-                      ? "1px solid #2634d5"
-                      : "1px solid transparent",
-                    borderRadius: 10,
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: "50%",
-                      background:
-                        u.role === "EMPLOYEE"
-                          ? "linear-gradient(135deg, #2634d5, #20c779)"
-                          : "linear-gradient(135deg, #f59e0b, #ef4444)",
-                      color: "#fff",
-                      display: "grid",
-                      placeItems: "center",
-                      fontWeight: 700,
-                      fontSize: 11,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {(u.name || "?").slice(0, 2).toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "var(--text-primary, #172033)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {u.name}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "var(--text-light, #8993a3)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {ROLE_LABEL[u.role] || u.role}
-                    </div>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* ============================================================
-          CỘT PHẢI — Chi tiết quyền
-          ============================================================ */}
-      <div
-        style={{
-          background: "var(--card-bg, #fff)",
-          border: "1px solid var(--border-color, #e7ebf0)",
-          borderRadius: 12,
-          padding: 20,
-        }}
-      >
-        {!selectedUser ? (
-          <div
+          <h3
             style={{
-              textAlign: "center",
-              padding: 60,
-              color: "var(--text-light, #8993a3)",
+              marginTop: 0,
+              marginBottom: 12,
+              color: "var(--text-primary, #172033)",
+              fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
             }}
           >
-            <Shield size={60} style={{ opacity: 0.3, marginBottom: 12 }} />
-            <p style={{ margin: 0, fontSize: 14 }}>
-              Chọn 1 người dùng để phân quyền
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Header + buttons */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 16,
-                paddingBottom: 16,
-                borderBottom: "1px solid var(--border-color, #eef2f7)",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <h3
-                  style={{
-                    margin: 0,
-                    color: "var(--text-primary, #172033)",
-                    fontSize: 16,
+            <Users size={16} /> Người dùng
+          </h3>
+
+          {/* Tabs role */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 4,
+              background: "var(--bg-tertiary, #f5f7fb)",
+              padding: 4,
+              borderRadius: 10,
+              marginBottom: 12,
+            }}
+          >
+            {ROLE_TABS.map((t) => {
+              const active = activeRole === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setActiveRole(t.id);
+                    setSelectedUser(null);
+                    setIsEditing(false);
                   }}
-                >
-                  {selectedUser.name}
-                </h3>
-                <span
                   style={{
+                    padding: "8px 10px",
+                    background: active ? "#2634d5" : "transparent",
+                    color: active ? "#fff" : "var(--text-muted, #475569)",
+                    border: 0,
+                    borderRadius: 7,
+                    cursor: "pointer",
+                    fontWeight: 700,
                     fontSize: 12,
-                    color: "var(--text-muted, #64748b)",
-                    display: "block",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
                   }}
                 >
-                  {selectedUser.email} ·{" "}
-                  <span style={{ color: "#2634d5", fontWeight: 600 }}>
-                    {ROLE_LABEL[selectedUser.role]}
-                  </span>
-                </span>
-              </div>
-
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  onClick={resetCustom}
-                  disabled={saving || !isEditing}
-                  style={btnToolbarStyle({
-                    disabled: saving || !isEditing,
-                  })}
-                  title="Xóa hết quyền custom"
-                >
-                  <RotateCcw size={13} /> Reset
+                  {t.label}
                 </button>
+              );
+            })}
+          </div>
 
-                {!isEditing ? (
-                  <button
-                    onClick={startEdit}
-                    disabled={saving || loadingPerms}
-                    style={btnToolbarStyle({
-                      disabled: saving || loadingPerms,
-                      primary: true,
-                    })}
-                  >
-                    <Edit size={13} /> Sửa
-                  </button>
-                ) : (
-                  <button
-                    onClick={cancelEdit}
-                    disabled={saving}
-                    style={btnToolbarStyle({
-                      disabled: saving,
-                      danger: true,
-                    })}
-                  >
-                    <X size={13} /> Hủy
-                  </button>
-                )}
-
-                <button
-                  onClick={save}
-                  disabled={saving || !isEditing}
-                  style={btnSaveStyle({ disabled: saving || !isEditing })}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2
-                        size={13}
-                        style={{ animation: "spin 1s linear infinite" }}
-                      />
-                      Đang lưu...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={13} /> Lưu thay đổi
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Mode indicator */}
-            {isEditing && (
-              <div
+          {/* Search */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "var(--bg-tertiary, #f5f7fb)",
+              borderRadius: 8,
+              padding: "8px 12px",
+              marginBottom: 12,
+            }}
+          >
+            <Search size={14} style={{ color: "var(--text-light, #8993a3)" }} />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm..."
+              style={{
+                border: 0,
+                outline: "none",
+                background: "transparent",
+                color: "var(--text-primary, #172033)",
+                fontSize: 12,
+                flex: 1,
+              }}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
                 style={{
-                  padding: "8px 12px",
-                  background: "rgba(245, 158, 11, 0.1)",
-                  border: "1px solid rgba(245, 158, 11, 0.3)",
-                  color: "#92400e",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  marginBottom: 12,
-                  fontWeight: 600,
+                  background: "transparent",
+                  border: 0,
+                  cursor: "pointer",
+                  color: "var(--text-light, #8993a3)",
+                  padding: 2,
                 }}
+                aria-label="Xoá tìm kiếm"
               >
-                ✏️ Đang ở chế độ chỉnh sửa — tick/bỏ tick quyền, sau đó bấm
-                "Lưu thay đổi"
-              </div>
+                <X size={12} />
+              </button>
             )}
+          </div>
 
-            {/* Loading quyền */}
-            {loadingPerms ? (
-              <div style={loadingSmallStyle}>
-                <Loader2
-                  size={22}
-                  style={{
-                    animation: "spin 1s linear infinite",
-                    marginBottom: 8,
-                  }}
-                />
-                <div style={{ fontSize: 13 }}>Đang tải quyền...</div>
-              </div>
-            ) : allPermissions.length === 0 ? (
+          {/* User list */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              overflowY: "auto",
+              flex: 1,
+            }}
+          >
+            {usersLoading ? (
+              <div style={loadingSmallStyle}>Đang tải...</div>
+            ) : !filteredUsers.length ? (
               <div style={emptySmallStyle}>
-                Không có quyền nào để phân
+                Không có {activeRole === "EMPLOYEE" ? "nhân viên" : "khách hàng"}
               </div>
             ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fit, minmax(240px, 1fr))",
-                  gap: 10,
-                }}
-              >
-                {allPermissions.map((p) => {
-                  const isDefault = roleDefaults[selectedUser.role]?.includes(
-                    p.key
-                  );
-                  const isChecked = userPerms.permissions?.includes(p.key);
-                  const disabled = isDefault || !isEditing || saving;
-
-                  return (
-                    <button
-                      key={p.key}
-                      onClick={() => togglePerm(p.key)}
-                      disabled={disabled}
-                      title={
-                        isDefault
-                          ? "Quyền mặc định theo role — không thể bỏ"
-                          : !isEditing
-                          ? "Bấm Sửa để chỉnh"
-                          : ""
-                      }
+              filteredUsers.map((u) => {
+                const selected = selectedUser?.id === u.id;
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => openUser(u)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: 10,
+                      background: selected
+                        ? "rgba(38, 52, 213, 0.1)"
+                        : "transparent",
+                      border: selected
+                        ? "1px solid #2634d5"
+                        : "1px solid transparent",
+                      borderRadius: 10,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <div
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: 12,
-                        background: isChecked
-                          ? "rgba(24, 169, 103, 0.08)"
-                          : "var(--bg-tertiary, #f8fafc)",
-                        border: isChecked
-                          ? "2px solid #18a967"
-                          : "2px solid var(--border-color, #e5e9ef)",
-                        borderRadius: 10,
-                        cursor: disabled ? "not-allowed" : "pointer",
-                        textAlign: "left",
-                        opacity: isDefault ? 0.7 : isEditing ? 1 : 0.85,
-                        transition: "all 0.15s",
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        background:
+                          u.role === "EMPLOYEE"
+                            ? "linear-gradient(135deg, #2634d5, #20c779)"
+                            : "linear-gradient(135deg, #f59e0b, #ef4444)",
+                        color: "#fff",
+                        display: "grid",
+                        placeItems: "center",
+                        fontWeight: 700,
+                        fontSize: 11,
+                        flexShrink: 0,
                       }}
                     >
+                      {(u.name || "?").slice(0, 2).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 4,
-                          background: isChecked ? "#18a967" : "transparent",
-                          border: isChecked
-                            ? "0"
-                            : "2px solid var(--border-color, #cbd5e1)",
-                          display: "grid",
-                          placeItems: "center",
-                          flexShrink: 0,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "var(--text-primary, #172033)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        {isChecked && <Check size={12} color="#fff" />}
+                        {u.name}
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--text-light, #8993a3)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {ROLE_LABEL[u.role] || u.role}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ============================================================
+            CỘT PHẢI — Chi tiết quyền
+            ============================================================ */}
+        <div
+          style={{
+            background: "var(--card-bg, #fff)",
+            border: "1px solid var(--border-color, #e7ebf0)",
+            borderRadius: 12,
+            padding: 20,
+          }}
+        >
+          {!selectedUser ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: 60,
+                color: "var(--text-light, #8993a3)",
+              }}
+            >
+              <Shield size={60} style={{ opacity: 0.3, marginBottom: 12 }} />
+              <p style={{ margin: 0, fontSize: 14 }}>
+                Chọn 1 người dùng để phân quyền
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Header + buttons */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 16,
+                  paddingBottom: 16,
+                  borderBottom: "1px solid var(--border-color, #eef2f7)",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <h3
+                    style={{
+                      margin: 0,
+                      color: "var(--text-primary, #172033)",
+                      fontSize: 16,
+                    }}
+                  >
+                    {selectedUser.name}
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: "var(--text-muted, #64748b)",
+                      display: "block",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {selectedUser.email} ·{" "}
+                    <span style={{ color: "#2634d5", fontWeight: 600 }}>
+                      {ROLE_LABEL[selectedUser.role]}
+                    </span>
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    onClick={resetCustom}
+                    disabled={saving || !isEditing}
+                    style={btnToolbarStyle({
+                      disabled: saving || !isEditing,
+                    })}
+                    title="Xóa hết quyền custom"
+                  >
+                    <RotateCcw size={13} /> Reset
+                  </button>
+
+                  {!isEditing ? (
+                    <button
+                      onClick={startEdit}
+                      disabled={saving || loadingPerms}
+                      style={btnToolbarStyle({
+                        disabled: saving || loadingPerms,
+                        primary: true,
+                      })}
+                    >
+                      <Edit size={13} /> Sửa
+                    </button>
+                  ) : (
+                    <button
+                      onClick={cancelEdit}
+                      disabled={saving}
+                      style={btnToolbarStyle({
+                        disabled: saving,
+                        danger: true,
+                      })}
+                    >
+                      <X size={13} /> Hủy
+                    </button>
+                  )}
+
+                  <button
+                    onClick={save}
+                    disabled={saving || !isEditing}
+                    style={btnSaveStyle({ disabled: saving || !isEditing })}
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2
+                          size={13}
+                          style={{ animation: "spin 1s linear infinite" }}
+                        />
+                        Đang lưu...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={13} /> Lưu thay đổi
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Mode indicator */}
+              {isEditing && (
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    background: "rgba(245, 158, 11, 0.1)",
+                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                    color: "#92400e",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    marginBottom: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  ✏️ Đang ở chế độ chỉnh sửa — tick/bỏ tick quyền, sau đó bấm
+                  "Lưu thay đổi"
+                </div>
+              )}
+
+              {/* Loading quyền */}
+              {loadingPerms ? (
+                <div style={loadingSmallStyle}>
+                  <Loader2
+                    size={22}
+                    style={{
+                      animation: "spin 1s linear infinite",
+                      marginBottom: 8,
+                    }}
+                  />
+                  <div style={{ fontSize: 13 }}>Đang tải quyền...</div>
+                </div>
+              ) : allPermissions.length === 0 ? (
+                <div style={emptySmallStyle}>
+                  Không có quyền nào để phân
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(240px, 1fr))",
+                    gap: 10,
+                  }}
+                >
+                  {allPermissions.map((p) => {
+                    const isDefault = roleDefaults[selectedUser.role]?.includes(
+                      p.key
+                    );
+                    const isChecked = userPerms.permissions?.includes(p.key);
+                    const disabled = isDefault || !isEditing || saving;
+
+                    return (
+                      <button
+                        key={p.key}
+                        onClick={() => togglePerm(p.key)}
+                        disabled={disabled}
+                        title={
+                          isDefault
+                            ? "Quyền mặc định theo role — không thể bỏ"
+                            : !isEditing
+                            ? "Bấm Sửa để chỉnh"
+                            : ""
+                        }
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: 12,
+                          background: isChecked
+                            ? "rgba(24, 169, 103, 0.08)"
+                            : "var(--bg-tertiary, #f8fafc)",
+                          border: isChecked
+                            ? "2px solid #18a967"
+                            : "2px solid var(--border-color, #e5e9ef)",
+                          borderRadius: 10,
+                          cursor: disabled ? "not-allowed" : "pointer",
+                          textAlign: "left",
+                          opacity: isDefault ? 0.7 : isEditing ? 1 : 0.85,
+                          transition: "all 0.15s",
+                        }}
+                      >
                         <div
                           style={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "var(--text-primary, #172033)",
+                            width: 18,
+                            height: 18,
+                            borderRadius: 4,
+                            background: isChecked ? "#18a967" : "transparent",
+                            border: isChecked
+                              ? "0"
+                              : "2px solid var(--border-color, #cbd5e1)",
+                            display: "grid",
+                            placeItems: "center",
+                            flexShrink: 0,
                           }}
                         >
-                          {p.label}
+                          {isChecked && <Check size={12} color="#fff" />}
                         </div>
-                        {isDefault && (
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div
                             style={{
-                              fontSize: 10,
-                              color: "#2634d5",
-                              fontWeight: 600,
-                              marginTop: 2,
+                              fontSize: 13,
+                              fontWeight: 500,
+                              color: "var(--text-primary, #172033)",
                             }}
                           >
-                            Mặc định theo role
+                            {p.label}
                           </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
+                          {isDefault && (
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#2634d5",
+                                fontWeight: 600,
+                                marginTop: 2,
+                              }}
+                            >
+                              Mặc định theo role
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <style>{`
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          @media (max-width: 900px) {
+            .perm-layout {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}</style>
       </div>
 
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @media (max-width: 900px) {
-          .perm-layout {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
-    </div>
+      {/* ✅ ConfirmDialog */}
+      {confirm && (
+        <ConfirmDialog
+          open
+          title={confirm.title}
+          message={confirm.message}
+          confirmText={confirm.confirmText}
+          cancelText={confirm.cancelText}
+          danger={confirm.danger}
+          loading={confirmBusy}
+          onConfirm={runConfirm}
+          onClose={closeConfirm}
+        />
+      )}
+    </>
   );
 }
 

@@ -14,9 +14,10 @@
 //   - Percent = |diff| / old_price * 100
 //     Nếu old_price = 0 → hiện "—" thay vì chia cho 0
 //   - Money diff: dùng trực tiếp number (không replace chuỗi)
+//   - Race-safe: dùng reqIdRef để bỏ qua response cũ
 // ============================================================
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   TrendingUp, TrendingDown, Search, Calendar, X,
   Loader2, AlertCircle, History, Minus,
@@ -67,6 +68,9 @@ export default function OwnerPriceHistory() {
   const [q, setQ] = useState("");
   const [filterItem, setFilterItem] = useState("");
 
+  // Race-safe
+  const reqIdRef = useRef(0);
+
   // ---------- Load menu (1 lần) ----------
   useEffect(() => {
     let cancelled = false;
@@ -79,46 +83,28 @@ export default function OwnerPriceHistory() {
     };
   }, []);
 
-  // ---------- Load history (theo filterItem) ----------
+  // ---------- Load history (theo filterItem, race-safe) ----------
   const loadHistory = useCallback(async () => {
+    const myReqId = ++reqIdRef.current;
     setLoading(true);
     setError("");
+
     try {
       const data = await api.priceHistory.list(filterItem);
+      if (myReqId !== reqIdRef.current) return;
       setHistory(Array.isArray(data) ? data : []);
     } catch (e) {
+      if (myReqId !== reqIdRef.current) return;
       setError(e.message || "Không tải được lịch sử giá");
       setHistory([]);
     } finally {
-      setLoading(false);
+      if (myReqId === reqIdRef.current) setLoading(false);
     }
   }, [filterItem]);
 
-  // Race-safe: dùng cancelled flag để bỏ qua response cũ
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-
-    api.priceHistory
-      .list(filterItem)
-      .then((data) => {
-        if (cancelled) return;
-        setHistory(Array.isArray(data) ? data : []);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e.message || "Không tải được lịch sử giá");
-        setHistory([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [filterItem]);
+    loadHistory();
+  }, [loadHistory]);
 
   // ---------- Computed (memo) ----------
 

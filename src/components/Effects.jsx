@@ -15,7 +15,7 @@
 //   - Thêm icon theo type
 //   - Thêm dismiss button
 //   - aria-live + role="status" cho a11y
-//   - Đẩy toast lên trên bottom-nav (mobile)
+//   - Toast hiển thị ở góc phải trên (vị trí thật do CSS quy định)
 //   - Guard SSR (typeof window check)
 // ============================================================
 
@@ -86,7 +86,7 @@ export function BgParticles() {
 //   - options.id: string (để dedupe nếu cần)
 //
 // Đặc điểm:
-//   - Nhiều toast cùng lúc: xếp chồng từ dưới lên
+//   - Nhiều toast cùng lúc: xếp chồng từ trên xuống (góc phải trên)
 //   - Mỗi toast tự quản lý timer
 //   - Có animation vào/ra
 //   - Click X để đóng sớm
@@ -112,7 +112,8 @@ const ICONS = {
 
 /**
  * Lấy (hoặc tạo) container chứa toast.
- * Container cố định ở giữa dưới màn hình, xếp chồng từ dưới lên.
+ * Container cố định ở góc phải trên, xếp chồng từ trên xuống.
+ * (vị trí thật do .toast-container trong styles.css quy định)
  */
 function getContainer() {
   let container = document.getElementById(TOAST_CONTAINER_ID);

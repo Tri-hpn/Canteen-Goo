@@ -14,6 +14,10 @@
 //   - api.settings.get/update()       → bank, expenses
 //   - api.reports.revenue(period)     → doanh thu
 //   - api.orders.all()                → giao dịch
+//
+// Fixes:
+//   - ExpensesTab.remove: dùng ConfirmDialog custom
+//     (thay cho confirm() native → đồng bộ UX toàn app)
 // ============================================================
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -25,6 +29,7 @@ import {
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
 // CONSTANTS
@@ -666,6 +671,10 @@ function ExpensesTab() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // ✅ Confirm dialog state
+  const [confirm, setConfirm] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
   // ---------- Load ----------
   useEffect(() => {
     setLoading(true);
@@ -675,6 +684,22 @@ function ExpensesTab() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // ---------- ✅ Confirm helpers ----------
+  const closeConfirm = () => {
+    if (confirmBusy) return;
+    setConfirm(null);
+  };
+
+  const runConfirm = async () => {
+    if (!confirm || confirmBusy) return;
+    setConfirmBusy(true);
+    try {
+      await confirm.onConfirm();
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
 
   // ---------- Add ----------
   const add = async () => {
@@ -707,17 +732,31 @@ function ExpensesTab() {
     }
   };
 
-  // ---------- Remove ----------
-  const remove = async (id) => {
-    if (!confirm("Xóa khoản chi này?")) return;
-    const newList = expenses.filter((e) => e.id !== id);
-    try {
-      await api.settings.update({ expenses: newList });
-      setExpenses(newList);
-      toast("Đã xóa", "success");
-    } catch (e) {
-      toast(e.message || "Không xóa được", "error");
-    }
+  // ---------- ✅ Remove — dùng ConfirmDialog ----------
+  const remove = (id) => {
+    const target = expenses.find((e) => e.id === id);
+    if (!target) return;
+
+    setConfirm({
+      title: `Xóa khoản chi "${target.title}"?`,
+      message:
+        `Khoản chi ${money(target.amount)} sẽ bị xóa vĩnh viễn. ` +
+        "Hành động này không thể hoàn tác.",
+      confirmText: "Xóa",
+      cancelText: "Hủy",
+      danger: true,
+      onConfirm: async () => {
+        const newList = expenses.filter((e) => e.id !== id);
+        try {
+          await api.settings.update({ expenses: newList });
+          setExpenses(newList);
+          toast("Đã xóa", "success");
+          setConfirm(null);
+        } catch (e) {
+          toast(e.message || "Không xóa được", "error");
+        }
+      },
+    });
   };
 
   const totalExpense = useMemo(
@@ -726,169 +765,186 @@ function ExpensesTab() {
   );
 
   return (
-    <div>
-      {/* Header row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) minmax(0, 2fr)",
-          gap: 16,
-          marginBottom: 16,
-        }}
-      >
-        <KPI label="Tổng chi phí" value={money(totalExpense)} color="#ef4444" />
+    <>
+      <div>
+        {/* Header row */}
         <div
           style={{
-            ...cardStyle,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 2fr)",
+            gap: 16,
+            marginBottom: 16,
           }}
         >
-          <button
-            onClick={() => setShowForm(!showForm)}
-            style={btnPrimaryStyle(false)}
-          >
-            <Plus size={16} /> {showForm ? "Đóng" : "Thêm chi phí"}
-          </button>
-        </div>
-      </div>
-
-      {/* Add form */}
-      {showForm && (
-        <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <h3 style={h3Style}>Thêm khoản chi</h3>
+          <KPI label="Tổng chi phí" value={money(totalExpense)} color="#ef4444" />
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: 12,
+              ...cardStyle,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
             }}
           >
-            <div>
-              <label style={labelStyle}>Tên khoản chi *</label>
-              <input
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="VD: Nhập gạo 50kg"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Số tiền *</label>
-              <input
-                type="number"
-                min="0"
-                step="1000"
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                placeholder="500000"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Danh mục</label>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                style={inputStyle}
-              >
-                {EXPENSE_CATEGORIES.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Ghi chú</label>
-              <input
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-                placeholder="Ghi chú thêm"
-                style={inputStyle}
-              />
-            </div>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              style={btnPrimaryStyle(false)}
+            >
+              <Plus size={16} /> {showForm ? "Đóng" : "Thêm chi phí"}
+            </button>
           </div>
-          <button
-            onClick={add}
-            disabled={saving}
-            style={{
-              ...btnPrimaryStyle(saving),
-              background: saving ? "#94a3b8" : "#18a967",
-              marginTop: 12,
-              padding: "12px 24px",
-              width: "auto",
-            }}
-          >
-            {saving ? "Đang lưu..." : "Lưu chi phí"}
-          </button>
         </div>
-      )}
 
-      {/* Table */}
-      <div style={cardStyle}>
-        <h3 style={h3Style}>
-          <DollarSign size={18} /> Danh sách chi phí ({expenses.length})
-        </h3>
-
-        {loading ? (
-          <LoadingBox />
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={tableStyle}>
-              <thead>
-                <tr style={theadStyle}>
-                  <th style={thStyle}>Ngày</th>
-                  <th style={thStyle}>Khoản chi</th>
-                  <th style={thStyle}>Danh mục</th>
-                  <th style={thStyle}>Ghi chú</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Số tiền</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {expenses.map((e) => (
-                  <tr key={e.id} style={trStyle}>
-                    <td style={tdStyle}>
-                      {new Date(e.date).toLocaleDateString("vi-VN")}
-                    </td>
-                    <td style={tdStyle}><b>{e.title}</b></td>
-                    <td style={tdStyle}>{e.category}</td>
-                    <td style={tdStyle}>{e.note || "—"}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <b style={{ color: "#ef4444" }}>-{money(e.amount)}</b>
-                    </td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <button
-                        onClick={() => remove(e.id)}
-                        title="Xóa"
-                        aria-label="Xóa chi phí"
-                        style={{
-                          padding: 6,
-                          background: "transparent",
-                          color: "#ef4444",
-                          border: "1px solid #ef4444",
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          display: "grid",
-                          placeItems: "center",
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!expenses.length && (
-                  <tr>
-                    <td colSpan="6" style={emptyTdStyle}>Chưa có chi phí</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        {/* Add form */}
+        {showForm && (
+          <div style={{ ...cardStyle, marginBottom: 16 }}>
+            <h3 style={h3Style}>Thêm khoản chi</h3>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <div>
+                <label style={labelStyle}>Tên khoản chi *</label>
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="VD: Nhập gạo 50kg"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Số tiền *</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={form.amount}
+                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  placeholder="500000"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Danh mục</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  style={inputStyle}
+                >
+                  {EXPENSE_CATEGORIES.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Ghi chú</label>
+                <input
+                  value={form.note}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                  placeholder="Ghi chú thêm"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+            <button
+              onClick={add}
+              disabled={saving}
+              style={{
+                ...btnPrimaryStyle(saving),
+                background: saving ? "#94a3b8" : "#18a967",
+                marginTop: 12,
+                padding: "12px 24px",
+                width: "auto",
+              }}
+            >
+              {saving ? "Đang lưu..." : "Lưu chi phí"}
+            </button>
           </div>
         )}
+
+        {/* Table */}
+        <div style={cardStyle}>
+          <h3 style={h3Style}>
+            <DollarSign size={18} /> Danh sách chi phí ({expenses.length})
+          </h3>
+
+          {loading ? (
+            <LoadingBox />
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr style={theadStyle}>
+                    <th style={thStyle}>Ngày</th>
+                    <th style={thStyle}>Khoản chi</th>
+                    <th style={thStyle}>Danh mục</th>
+                    <th style={thStyle}>Ghi chú</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Số tiền</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenses.map((e) => (
+                    <tr key={e.id} style={trStyle}>
+                      <td style={tdStyle}>
+                        {new Date(e.date).toLocaleDateString("vi-VN")}
+                      </td>
+                      <td style={tdStyle}><b>{e.title}</b></td>
+                      <td style={tdStyle}>{e.category}</td>
+                      <td style={tdStyle}>{e.note || "—"}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        <b style={{ color: "#ef4444" }}>-{money(e.amount)}</b>
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        <button
+                          onClick={() => remove(e.id)}
+                          title="Xóa"
+                          aria-label="Xóa chi phí"
+                          style={{
+                            padding: 6,
+                            background: "transparent",
+                            color: "#ef4444",
+                            border: "1px solid #ef4444",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            display: "grid",
+                            placeItems: "center",
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!expenses.length && (
+                    <tr>
+                      <td colSpan="6" style={emptyTdStyle}>Chưa có chi phí</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* ✅ ConfirmDialog */}
+      {confirm && (
+        <ConfirmDialog
+          open
+          title={confirm.title}
+          message={confirm.message}
+          confirmText={confirm.confirmText}
+          cancelText={confirm.cancelText}
+          danger={confirm.danger}
+          loading={confirmBusy}
+          onConfirm={runConfirm}
+          onClose={closeConfirm}
+        />
+      )}
+    </>
   );
 }
 

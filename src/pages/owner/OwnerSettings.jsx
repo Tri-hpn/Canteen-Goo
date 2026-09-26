@@ -16,6 +16,8 @@
 //     đóng tab có thay đổi chưa lưu
 //   - Account number: chỉ cho nhập số
 //   - Account name: tự uppercase khi blur
+//   - resetForm: dùng ConfirmDialog custom
+//     (thay cho confirm() native → đồng bộ UX toàn app)
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -25,6 +27,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
 // CONSTANTS
@@ -68,6 +71,10 @@ export default function OwnerSettings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+
+  // ---------- ✅ Confirm dialog ----------
+  const [confirm, setConfirm] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   // ---------- Load ----------
 
@@ -141,6 +148,23 @@ export default function OwnerSettings() {
     });
     return `https://img.vietqr.io/image/${form.bank}-${form.account.trim()}-compact2.png?${params}`;
   }, [form.bank, form.account, form.accountName]);
+
+  // ---------- ✅ Confirm helpers ----------
+
+  const closeConfirm = () => {
+    if (confirmBusy) return;
+    setConfirm(null);
+  };
+
+  const runConfirm = async () => {
+    if (!confirm || confirmBusy) return;
+    setConfirmBusy(true);
+    try {
+      await confirm.onConfirm();
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
 
   // ---------- Handlers ----------
 
@@ -216,13 +240,24 @@ export default function OwnerSettings() {
     }
   };
 
-  // ---------- Reset form về giá trị đã lưu ----------
+  // ---------- ✅ Reset form — dùng ConfirmDialog ----------
 
   const resetForm = () => {
     if (!isDirty) return;
-    if (!confirm("Hủy các thay đổi chưa lưu?")) return;
-    setForm(original);
-    toast("Đã hủy thay đổi", "info");
+
+    setConfirm({
+      title: "Hủy các thay đổi chưa lưu?",
+      message:
+        "Mọi thay đổi bạn vừa nhập sẽ bị mất và khôi phục về giá trị đã lưu gần nhất.",
+      confirmText: "Hủy thay đổi",
+      cancelText: "Giữ lại",
+      danger: true,
+      onConfirm: async () => {
+        setForm(original);
+        toast("Đã hủy thay đổi", "info");
+        setConfirm(null);
+      },
+    });
   };
 
   // ---------- Upload QR ----------
@@ -293,322 +328,339 @@ export default function OwnerSettings() {
   }
 
   return (
-    <div>
-      {/* ============================================================
-          UNSAVED INDICATOR
-          ============================================================ */}
-      {isDirty && (
+    <>
+      <div>
+        {/* ============================================================
+            UNSAVED INDICATOR
+            ============================================================ */}
+        {isDirty && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              background: "rgba(245, 158, 11, 0.1)",
+              border: "1px solid rgba(245, 158, 11, 0.3)",
+              color: "#92400e",
+              padding: "10px 14px",
+              borderRadius: 10,
+              marginBottom: 16,
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            <AlertCircle size={16} />
+            <span style={{ flex: 1 }}>
+              Bạn có thay đổi chưa lưu
+            </span>
+            <button
+              onClick={resetForm}
+              style={{
+                background: "transparent",
+                border: 0,
+                color: "#92400e",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 700,
+                textDecoration: "underline",
+              }}
+            >
+              Hủy thay đổi
+            </button>
+          </div>
+        )}
+
         <div
+          className="settings-layout"
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            background: "rgba(245, 158, 11, 0.1)",
-            border: "1px solid rgba(245, 158, 11, 0.3)",
-            color: "#92400e",
-            padding: "10px 14px",
-            borderRadius: 10,
-            marginBottom: 16,
-            fontSize: 13,
-            fontWeight: 600,
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)",
+            gap: 20,
           }}
         >
-          <AlertCircle size={16} />
-          <span style={{ flex: 1 }}>
-            Bạn có thay đổi chưa lưu
-          </span>
-          <button
-            onClick={resetForm}
-            style={{
-              background: "transparent",
-              border: 0,
-              color: "#92400e",
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 700,
-              textDecoration: "underline",
-            }}
-          >
-            Hủy thay đổi
-          </button>
-        </div>
-      )}
+          {/* ============================================================
+              LEFT — FORM
+              ============================================================ */}
+          <div>
+            {/* ---------- Bank ---------- */}
+            <div style={cardStyle}>
+              <h3 style={cardTitleStyle}>
+                <CreditCard size={18} /> Tài khoản nhận tiền
+              </h3>
 
-      <div
-        className="settings-layout"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)",
-          gap: 20,
-        }}
-      >
-        {/* ============================================================
-            LEFT — FORM
-            ============================================================ */}
-        <div>
-          {/* ---------- Bank ---------- */}
-          <div style={cardStyle}>
-            <h3 style={cardTitleStyle}>
-              <CreditCard size={18} /> Tài khoản nhận tiền
-            </h3>
+              <label style={labelStyle}>Ngân hàng</label>
+              <select
+                value={form.bank}
+                onChange={updateText("bank")}
+                disabled={saving}
+                style={{ ...inputStyle, cursor: "pointer" }}
+              >
+                {BANKS.map((b) => (
+                  <option key={b.code} value={b.code}>
+                    {b.name} ({b.code})
+                  </option>
+                ))}
+              </select>
 
-            <label style={labelStyle}>Ngân hàng</label>
-            <select
-              value={form.bank}
-              onChange={updateText("bank")}
-              disabled={saving}
-              style={{ ...inputStyle, cursor: "pointer" }}
-            >
-              {BANKS.map((b) => (
-                <option key={b.code} value={b.code}>
-                  {b.name} ({b.code})
-                </option>
-              ))}
-            </select>
+              <label style={labelStyle}>Số tài khoản</label>
+              <input
+                value={form.account}
+                onChange={updateAccount}
+                placeholder="VD: 1234567890"
+                disabled={saving}
+                inputMode="numeric"
+                style={inputStyle}
+              />
 
-            <label style={labelStyle}>Số tài khoản</label>
-            <input
-              value={form.account}
-              onChange={updateAccount}
-              placeholder="VD: 1234567890"
-              disabled={saving}
-              inputMode="numeric"
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>Chủ tài khoản</label>
-            <input
-              value={form.accountName}
-              onChange={updateText("accountName")}
-              onBlur={normalizeAccountName}
-              placeholder="VD: NGUYEN VAN A"
-              disabled={saving}
-              style={{ ...inputStyle, marginBottom: 0 }}
-            />
-          </div>
-
-          {/* ---------- Contact ---------- */}
-          <div style={{ ...cardStyle, marginTop: 16 }}>
-            <h3 style={cardTitleStyle}>
-              <Building2 size={18} /> Thông tin liên hệ (footer)
-            </h3>
-
-            <label style={labelStyle}>
-              <Phone size={12} style={inlineIconStyle} /> Hotline
-            </label>
-            <input
-              value={form.hotline}
-              onChange={updateText("hotline")}
-              placeholder="VD: 0328 866 959"
-              disabled={saving}
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>
-              <Mail size={12} style={inlineIconStyle} /> Email
-            </label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={updateText("email")}
-              placeholder="admin@vwa.vn"
-              disabled={saving}
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>
-              <MapPin size={12} style={inlineIconStyle} /> Địa chỉ
-            </label>
-            <input
-              value={form.address}
-              onChange={updateText("address")}
-              placeholder="VD: 68 Nguyễn Chí Thanh, Hà Nội"
-              disabled={saving}
-              style={{ ...inputStyle, marginBottom: 0 }}
-            />
-          </div>
-
-          {/* ---------- Save button ---------- */}
-          <button
-            onClick={save}
-            disabled={saving || !isDirty}
-            style={{
-              width: "100%",
-              padding: 14,
-              marginTop: 16,
-              background: saving
-                ? "#94a3b8"
-                : saved
-                ? "#18a967"
-                : isDirty
-                ? "#2634d5"
-                : "#94a3b8",
-              color: "#fff",
-              border: 0,
-              borderRadius: 10,
-              fontWeight: 700,
-              cursor: saving || !isDirty ? "not-allowed" : "pointer",
-              fontSize: 14,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              opacity: saving || (!isDirty && !saved) ? 0.6 : 1,
-            }}
-          >
-            {saving ? (
-              <>
-                <Loader2
-                  size={18}
-                  style={{ animation: "spin 1s linear infinite" }}
-                />
-                Đang lưu...
-              </>
-            ) : saved ? (
-              <>
-                <CheckCircle2 size={18} /> Đã lưu
-              </>
-            ) : (
-              <>
-                <Save size={18} /> Lưu thay đổi
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* ============================================================
-            RIGHT — QR PREVIEW
-            ============================================================ */}
-        <div style={{ position: "sticky", top: 90, height: "fit-content" }}>
-          <div style={cardStyle}>
-            <h3 style={cardTitleStyle}>
-              <QrCode size={18} /> Xem trước QR
-            </h3>
-
-            {/* Preview box */}
-            <div
-              style={{
-                background: "var(--bg-tertiary, #f8fafc)",
-                padding: 16,
-                borderRadius: 10,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                marginBottom: 14,
-                minHeight: 232,
-              }}
-            >
-              {form.qrCustomImage ? (
-                <img
-                  src={form.qrCustomImage}
-                  alt="Custom QR"
-                  style={{
-                    width: 200,
-                    height: 200,
-                    objectFit: "contain",
-                    borderRadius: 8,
-                  }}
-                />
-              ) : vietQR ? (
-                <QRImage src={vietQR} />
-              ) : (
-                <div
-                  style={{
-                    textAlign: "center",
-                    color: "var(--text-light, #8993a3)",
-                    fontSize: 12,
-                  }}
-                >
-                  <QrCode size={48} style={{ opacity: 0.3, marginBottom: 8 }} />
-                  <div>Nhập số tài khoản</div>
-                  <div>để xem trước QR</div>
-                </div>
-              )}
+              <label style={labelStyle}>Chủ tài khoản</label>
+              <input
+                value={form.accountName}
+                onChange={updateText("accountName")}
+                onBlur={normalizeAccountName}
+                placeholder="VD: NGUYEN VAN A"
+                disabled={saving}
+                style={{ ...inputStyle, marginBottom: 0 }}
+              />
             </div>
 
-            {/* Info summary */}
-            <div
-              style={{
-                fontSize: 12,
-                color: "var(--text-muted, #64748b)",
-                lineHeight: 1.8,
-                marginBottom: 14,
-                padding: 12,
-                background: "var(--bg-tertiary, #f8fafc)",
-                borderRadius: 8,
-              }}
-            >
-              <div>
-                <b style={{ color: "var(--text-primary, #172033)" }}>NH:</b>{" "}
-                {selectedBankName}
-              </div>
-              <div>
-                <b style={{ color: "var(--text-primary, #172033)" }}>STK:</b>{" "}
-                {form.account || "(chưa nhập)"}
-              </div>
-              <div>
-                <b style={{ color: "var(--text-primary, #172033)" }}>
-                  Chủ TK:
-                </b>{" "}
-                {form.accountName || "(chưa nhập)"}
-              </div>
+            {/* ---------- Contact ---------- */}
+            <div style={{ ...cardStyle, marginTop: 16 }}>
+              <h3 style={cardTitleStyle}>
+                <Building2 size={18} /> Thông tin liên hệ (footer)
+              </h3>
+
+              <label style={labelStyle}>
+                <Phone size={12} style={inlineIconStyle} /> Hotline
+              </label>
+              <input
+                value={form.hotline}
+                onChange={updateText("hotline")}
+                placeholder="VD: 0328 866 959"
+                disabled={saving}
+                style={inputStyle}
+              />
+
+              <label style={labelStyle}>
+                <Mail size={12} style={inlineIconStyle} /> Email
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={updateText("email")}
+                placeholder="admin@vwa.vn"
+                disabled={saving}
+                style={inputStyle}
+              />
+
+              <label style={labelStyle}>
+                <MapPin size={12} style={inlineIconStyle} /> Địa chỉ
+              </label>
+              <input
+                value={form.address}
+                onChange={updateText("address")}
+                placeholder="VD: 68 Nguyễn Chí Thanh, Hà Nội"
+                disabled={saving}
+                style={{ ...inputStyle, marginBottom: 0 }}
+              />
             </div>
 
-            {/* Upload custom QR */}
-            <label style={labelStyle}>Hoặc tải ảnh QR riêng lên</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleQRUpload}
-              disabled={saving}
+            {/* ---------- Save button ---------- */}
+            <button
+              onClick={save}
+              disabled={saving || !isDirty}
               style={{
                 width: "100%",
-                padding: 8,
-                background: "var(--bg-tertiary, #f5f7fb)",
-                border: "1px dashed var(--border-color, #cbd5e1)",
-                borderRadius: 8,
-                fontSize: 12,
-                cursor: saving ? "not-allowed" : "pointer",
-                color: "var(--text-muted, #64748b)",
-                boxSizing: "border-box",
+                padding: 14,
+                marginTop: 16,
+                background: saving
+                  ? "#94a3b8"
+                  : saved
+                  ? "#18a967"
+                  : isDirty
+                  ? "#2634d5"
+                  : "#94a3b8",
+                color: "#fff",
+                border: 0,
+                borderRadius: 10,
+                fontWeight: 700,
+                cursor: saving || !isDirty ? "not-allowed" : "pointer",
+                fontSize: 14,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                opacity: saving || (!isDirty && !saved) ? 0.6 : 1,
               }}
-            />
+            >
+              {saving ? (
+                <>
+                  <Loader2
+                    size={18}
+                    style={{ animation: "spin 1s linear infinite" }}
+                  />
+                  Đang lưu...
+                </>
+              ) : saved ? (
+                <>
+                  <CheckCircle2 size={18} /> Đã lưu
+                </>
+              ) : (
+                <>
+                  <Save size={18} /> Lưu thay đổi
+                </>
+              )}
+            </button>
+          </div>
 
-            {form.qrCustomImage && (
-              <button
-                onClick={removeCustomQR}
+          {/* ============================================================
+              RIGHT — QR PREVIEW
+              ============================================================ */}
+          <div style={{ position: "sticky", top: 90, height: "fit-content" }}>
+            <div style={cardStyle}>
+              <h3 style={cardTitleStyle}>
+                <QrCode size={18} /> Xem trước QR
+              </h3>
+
+              {/* Preview box */}
+              <div
+                style={{
+                  background: "var(--bg-tertiary, #f8fafc)",
+                  padding: 16,
+                  borderRadius: 10,
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginBottom: 14,
+                  minHeight: 232,
+                }}
+              >
+                {form.qrCustomImage ? (
+                  <img
+                    src={form.qrCustomImage}
+                    alt="Custom QR"
+                    style={{
+                      width: 200,
+                      height: 200,
+                      objectFit: "contain",
+                      borderRadius: 8,
+                    }}
+                  />
+                ) : vietQR ? (
+                  <QRImage src={vietQR} />
+                ) : (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      color: "var(--text-light, #8993a3)",
+                      fontSize: 12,
+                    }}
+                  >
+                    <QrCode size={48} style={{ opacity: 0.3, marginBottom: 8 }} />
+                    <div>Nhập số tài khoản</div>
+                    <div>để xem trước QR</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Info summary */}
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-muted, #64748b)",
+                  lineHeight: 1.8,
+                  marginBottom: 14,
+                  padding: 12,
+                  background: "var(--bg-tertiary, #f8fafc)",
+                  borderRadius: 8,
+                }}
+              >
+                <div>
+                  <b style={{ color: "var(--text-primary, #172033)" }}>NH:</b>{" "}
+                  {selectedBankName}
+                </div>
+                <div>
+                  <b style={{ color: "var(--text-primary, #172033)" }}>STK:</b>{" "}
+                  {form.account || "(chưa nhập)"}
+                </div>
+                <div>
+                  <b style={{ color: "var(--text-primary, #172033)" }}>
+                    Chủ TK:
+                  </b>{" "}
+                  {form.accountName || "(chưa nhập)"}
+                </div>
+              </div>
+
+              {/* Upload custom QR */}
+              <label style={labelStyle}>Hoặc tải ảnh QR riêng lên</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleQRUpload}
                 disabled={saving}
                 style={{
                   width: "100%",
                   padding: 8,
-                  marginTop: 8,
-                  background: "var(--card-bg, #fff)",
-                  color: "#ef4444",
-                  border: "1px solid #ef4444",
+                  background: "var(--bg-tertiary, #f5f7fb)",
+                  border: "1px dashed var(--border-color, #cbd5e1)",
                   borderRadius: 8,
                   fontSize: 12,
                   cursor: saving ? "not-allowed" : "pointer",
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
+                  color: "var(--text-muted, #64748b)",
+                  boxSizing: "border-box",
                 }}
-              >
-                <X size={12} /> Xóa ảnh QR — dùng VietQR tự động
-              </button>
-            )}
+              />
+
+              {form.qrCustomImage && (
+                <button
+                  onClick={removeCustomQR}
+                  disabled={saving}
+                  style={{
+                    width: "100%",
+                    padding: 8,
+                    marginTop: 8,
+                    background: "var(--card-bg, #fff)",
+                    color: "#ef4444",
+                    border: "1px solid #ef4444",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    cursor: saving ? "not-allowed" : "pointer",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <X size={12} /> Xóa ảnh QR — dùng VietQR tự động
+                </button>
+              )}
+            </div>
           </div>
         </div>
+
+        <style>{`
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          @media (max-width: 900px) {
+            .settings-layout { grid-template-columns: 1fr !important; }
+          }
+        `}</style>
       </div>
 
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @media (max-width: 900px) {
-          .settings-layout { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
-    </div>
+      {/* ✅ ConfirmDialog */}
+      {confirm && (
+        <ConfirmDialog
+          open
+          title={confirm.title}
+          message={confirm.message}
+          confirmText={confirm.confirmText}
+          cancelText={confirm.cancelText}
+          danger={confirm.danger}
+          loading={confirmBusy}
+          onConfirm={runConfirm}
+          onClose={closeConfirm}
+        />
+      )}
+    </>
   );
 }
 

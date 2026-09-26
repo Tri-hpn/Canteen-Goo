@@ -1,6 +1,7 @@
 // ============================================================
 // PAGINATION.JSX — Phân trang + chọn số item/trang
 // ============================================================
+import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const PAGE_SIZES = [10, 20, 50, 100];
@@ -151,7 +152,6 @@ export default function Pagination({
 // ============================================================
 // HOOK: dùng kèm Pagination
 // ============================================================
-import { useState, useMemo, useEffect } from "react";
 
 export function usePagination(list, defaultSize = 10) {
   const [page, setPage] = useState(1);

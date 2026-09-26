@@ -333,22 +333,7 @@ export const api = {
   reports: {
     revenue: (period = "day") => req(`/reports/revenue?period=${period}`),
   },
-// src/api.js — trong object api.shifts
-shifts: {
-  mine:     () => req("/shifts/me"),
-  pending:  () => req("/shifts/pending"),
-  all:      (params = {}) => {
-    const q = new URLSearchParams(params).toString();
-    return req("/shifts" + (q ? `?${q}` : ""));
-  },
-  register: (data) => req("/shifts/register", { method: "POST", body: JSON.stringify(data) }),
-  bulk:     (data) => req("/shifts/bulk",     { method: "POST", body: JSON.stringify(data) }),
-  create:   (data) => req("/shifts",          { method: "POST", body: JSON.stringify(data) }),
-  update:   (id, data) => req(`/shifts/${id}`,    { method: "PUT",  body: JSON.stringify(data) }),
-  remove:   (id)       => req(`/shifts/${id}`,    { method: "DELETE" }),
-  approve:  (id)       => req(`/shifts/${id}/approve`, { method: "PATCH"  }),
-  reject:   (id)       => req(`/shifts/${id}/reject`,  { method: "DELETE" }),
-},
+
   // ----------------------------------------------------------
   // SETTINGS — Cài đặt hệ thống (bank, hotline, ...)
   // ----------------------------------------------------------
