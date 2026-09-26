@@ -13,6 +13,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_FILE = path.join(__dirname, "canteen-db.json");
 
 // ============================================================
+// ✅ Batch 7 / N1: Date helpers — LOCAL timezone (không dùng toISOString)
+// ============================================================
+function getLocalDateStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dt = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dt}`;
+}
+
+function toLocalDateStr(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return getLocalDateStr(d);
+}
+
+// ============================================================
 // MONGODB — Lưu DB dưới dạng 1 document JSON
 // ============================================================
 const MONGO_URI = process.env.MONGO_URI;
@@ -31,7 +48,7 @@ if (MONGO_URI) {
 }
 
 // ============================================================
-// SEED DATA — Dùng khi DB chưa có (lần đầu)
+// SEED DATA
 // ============================================================
 function buildSeedData() {
   return {
@@ -64,7 +81,7 @@ function buildSeedData() {
     shifts: [],
     wallets: [],
     wallet_transactions: [],
-      settings: { bank: "VCB", account: "", accountName: "", hotline: "", email: "", address: "", qrCustomImage: "" },
+    settings: { bank: "VCB", account: "", accountName: "", hotline: "", email: "", address: "", qrCustomImage: "" },
   };
 }
 
@@ -170,7 +187,6 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "10mb" }));
 
-// ✅ FIX #7: JWT_SECRET bắt buộc — không fallback
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   console.error("❌ FATAL: JWT_SECRET chưa được set trong env!");
@@ -298,14 +314,12 @@ app.get("/api/menu", (req, res) => {
   res.json(items);
 });
 
-// ✅ FIX #2: Validate discount_percent + price
 app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
     const id = Math.max(0, ...db.menu_items.map(m => m.id)) + 1;
     const body = { ...req.body };
 
-    // Validate
     if (!body.name || !body.name.trim()) {
       return res.status(400).json({ message: "Tên món không được để trống" });
     }
@@ -338,7 +352,6 @@ app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   }
 });
 
-// ✅ FIX #2: Validate discount_percent + price cho PUT
 app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
@@ -347,7 +360,6 @@ app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     const oldItem = db.menu_items[i];
     const newData = { ...req.body };
 
-    // Validate
     if (newData.price !== undefined && (isNaN(Number(newData.price)) || Number(newData.price) < 0)) {
       return res.status(400).json({ message: "Giá không được âm" });
     }
@@ -419,7 +431,6 @@ app.post("/api/users", auth(["ADMIN"]), (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
       return res.status(400).json({ message: "Email không hợp lệ" });
     }
-    // ✅ Batch 5A: Validate trùng email (check cả 3 role)
     if (db.users.find(u => u.email === emailNorm)) {
       return res.status(400).json({ message: "Email đã được sử dụng" });
     }
@@ -442,7 +453,6 @@ app.put("/api/users/:id", auth(["ADMIN"]), (req, res) => {
 
     const data = { ...req.body };
 
-    // ✅ Batch 5A: Validate email nếu user đổi
     if (data.email !== undefined) {
       const emailNorm = String(data.email).toLowerCase().trim();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
@@ -474,6 +484,7 @@ app.delete("/api/users/:id", auth(["ADMIN"]), (req, res) => {
   saveDB(db);
   res.json({ ok: true });
 });
+
 // ============ ORDERS ============
 app.post("/api/orders", auth(), (req, res) => {
   try {
@@ -527,7 +538,13 @@ app.post("/api/orders", auth(), (req, res) => {
     const customer = db.users.find(u => u.id === req.user.id);
     if (customer) customer.points = (customer.points || 0) + pointsEarned;
     const id = Math.max(0, ...db.orders.map(o => o.id)) + 1;
-    const code = "VWA-" + Date.now().toString().slice(-8);
+    // ✅ Batch 7 / N3: unique code — tránh trùng khi 2 đơn cùng millisecond
+    let code;
+    let attempts = 0;
+    do {
+      code = "VWA-" + Date.now().toString().slice(-8) + "-" + Math.random().toString(36).slice(2, 5).toUpperCase();
+      attempts++;
+    } while (db.orders.some(o => o.code === code) && attempts < 5);
     if ((payment === "Ví Canteen" || payment === "WALLET") && db.wallet_transactions) {
       const lastWTx = db.wallet_transactions[db.wallet_transactions.length - 1];
       if (lastWTx && lastWTx.user_id === req.user.id && lastWTx.type === "payment" && !lastWTx.order_code) {
@@ -581,7 +598,6 @@ app.get("/api/orders", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   res.json(list.map(o => ({ ...o, _id: o.id })));
 });
 
-// ✅ FIX #5: Validate status
 const VALID_ORDER_STATUSES = ["Chờ xác nhận", "Đã xác nhận", "Đang chuẩn bị", "Sẵn sàng nhận", "Hoàn thành", "Đã hủy"];
 
 app.patch("/api/orders/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
@@ -639,7 +655,19 @@ app.get("/api/reviews/can-review/:menuItemId", auth(), (req, res) => {
   const hasReviewed = (db.reviews || []).some(r =>
     r.user_id === req.user.id && r.menu_item_id == menuItemId
   );
-  res.json({ canReview: !hasReviewed, hasPurchased: true, hasReviewed });
+
+  // ✅ Batch 7 / N4: check user đã thực sự mua món này (đơn Hoàn thành)
+  const hasPurchased = (db.orders || []).some(o =>
+    o.customer_id === req.user.id &&
+    o.status === "Hoàn thành" &&
+    (o.items || []).some(it => it.menu_item_id == menuItemId)
+  );
+
+  res.json({
+    canReview: !hasReviewed && hasPurchased,
+    hasPurchased,
+    hasReviewed,
+  });
 });
 
 app.get("/api/reviews/me", auth(), (req, res) => {
@@ -668,6 +696,18 @@ app.post("/api/reviews", auth(), (req, res) => {
     );
     if (alreadyReviewed) {
       return res.status(400).json({ message: "Bạn đã đánh giá món này rồi" });
+    }
+
+    // ✅ Batch 7 / N4: chỉ cho review nếu đã mua (defense in depth)
+    const hasPurchased = (db.orders || []).some(o =>
+      o.customer_id === req.user.id &&
+      o.status === "Hoàn thành" &&
+      (o.items || []).some(it => it.menu_item_id == menuItemId)
+    );
+    if (!hasPurchased) {
+      return res.status(403).json({
+        message: "Bạn cần mua món này để có thể đánh giá"
+      });
     }
 
     const id = Math.max(0, ...db.reviews.map(r => r.id)) + 1;
@@ -885,7 +925,6 @@ const DEFAULT_CATEGORIES = [
   { id: 7, name: "Combo", icon: "🍱", order: 7 }
 ];
 
-// ✅ FIX #3: Trả về {categories, changed} thay vì chỉ categories
 function ensureCategories(db) {
   if (!db.categories || !Array.isArray(db.categories) || db.categories.length === 0) {
     db.categories = [...DEFAULT_CATEGORIES];
@@ -897,11 +936,10 @@ function ensureCategories(db) {
 app.get("/api/categories", (req, res) => {
   const db = loadDB();
   const { categories, changed } = ensureCategories(db);
-  if (changed) saveDB(db); // ✅ Chỉ save khi thật sự có thay đổi
+  if (changed) saveDB(db);
   res.json([...categories].sort((a, b) => (a.order || 0) - (b.order || 0)));
 });
 
-// ✅ BATCH 2: Nhận field `order` từ body
 app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
@@ -913,7 +951,6 @@ app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
       return res.status(400).json({ message: "Danh mục đã tồn tại" });
     }
 
-    // ✅ Validate order nếu user nhập
     let finalOrder;
     if (order !== undefined && order !== null && order !== "") {
       const parsed = Number(order);
@@ -922,7 +959,6 @@ app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
       }
       finalOrder = parsed;
     } else {
-      // Auto: max + 1
       finalOrder = Math.max(0, ...categories.map(c => c.order || 0)) + 1;
     }
 
@@ -934,7 +970,6 @@ app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// ✅ BATCH 2: Nhận field `order` từ body
 app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
@@ -959,7 +994,6 @@ app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 
     if (icon !== undefined) cat.icon = icon;
 
-    // ✅ Validate order nếu user gửi
     if (order !== undefined && order !== null && order !== "") {
       const parsed = Number(order);
       if (!Number.isInteger(parsed) || parsed < 0) {
@@ -1424,15 +1458,16 @@ app.get("/api/sizes", (req, res) => {
 app.get("/api/stats", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
-    const today = new Date().toISOString().slice(0, 10);
-    const todayOrders = db.orders.filter(o => o.created_at?.startsWith(today));
+    const today = getLocalDateStr();
+    const todayOrders = db.orders.filter(
+      (o) => toLocalDateStr(o.created_at) === today
+    );
     const byStatus = {};
     db.orders.forEach(o => { byStatus[o.status] = (byStatus[o.status] || 0) + 1; });
     res.json({
       revenue: todayOrders.reduce((s, o) => s + o.total, 0),
       orderCount: todayOrders.length,
       customerCount: db.users.filter(u => u.role === "CUSTOMER").length,
-      // ✅ FIX #4: fallback mảng rỗng
       lowStock: (db.inventory || []).filter(i => i.qty < i.min).length,
       byStatus: Object.entries(byStatus).map(([_id, count]) => ({ _id, count }))
     });
@@ -1512,7 +1547,7 @@ app.get("/api/inventory/imports", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 
 // ============ ATTENDANCE ============
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return getLocalDateStr();
 }
 
 app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
@@ -1776,8 +1811,10 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
       for (let i = 6; i >= 0; i--) {
         const d = new Date(now);
         d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().slice(0, 10);
-        const dayOrders = completedOrders.filter(o => (o.created_at || "").startsWith(dateStr));
+        const dateStr = getLocalDateStr(d);
+        const dayOrders = completedOrders.filter(
+          (o) => toLocalDateStr(o.created_at) === dateStr
+        );
         const revenue = dayOrders.reduce((s, o) => s + (o.total || 0), 0);
         const dayLabel = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][d.getDay()];
         result.push({ label: dayLabel, date: dateStr, revenue, orders: dayOrders.length });
@@ -1869,7 +1906,6 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 // ============ SETTINGS ============
 app.get("/api/settings", auth(), (req, res) => {
   const db = loadDB();
-  // ✅ Batch 6A: Không fallback STK fake — trả về giá trị thực (có thể rỗng)
   const empty = {
     bank: "VCB",
     account: "",
@@ -1900,7 +1936,7 @@ app.put("/api/settings", auth(["ADMIN"]), (req, res) => {
 // ============ SHIFTS ============
 app.get("/api/shifts/me", auth(), (req, res) => {
   const db = loadDB();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateStr();
   const list = (db.shifts || [])
     .filter(s => s.employee_id === req.user.id && s.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date));
