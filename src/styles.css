@@ -2611,7 +2611,13 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
 
   .topbar-right::before { display: none; }
 
-  .sidebar, aside { width: 260px !important; padding: 16px 12px !important; }
+  /* ✅ FIX: Sidebar mobile — thu gọn, KHÔNG full-screen */
+  .sidebar, aside {
+    width: 78vw !important;
+    max-width: 320px !important;
+    min-width: 260px !important;
+    padding: 16px 12px !important;
+  }
   .sidebar nav a, aside nav a, .nav-link {
     padding: 10px 12px !important;
     font-size: 13px !important;
@@ -3530,10 +3536,6 @@ html.dark-mode .success-state {
 
 /* ============================================================
    PHẦN 30: CURSOR GLOW & BG PARTICLES
-   ============================================================
-   - .cursor-glow: vòng sáng theo chuột (desktop)
-   - .bg-particles: nền hạt động nhẹ
-   Cả 2 đều ẩn trên touch device.
    ============================================================ */
 
 .cursor-glow {
@@ -3568,7 +3570,6 @@ html.dark-mode .cursor-glow {
   mix-blend-mode: screen;
 }
 
-/* Ẩn trên touch device */
 @media (hover: none) {
   .cursor-glow {
     display: none !important;
@@ -3644,10 +3645,9 @@ html.dark-mode .bg-particles {
 .payment-card.active {
   border: 2px solid var(--pm-color, #2634d5);
   background: color-mix(in srgb, var(--pm-color, #2634d5) 8%, transparent);
-  padding: 13px; /* bù cho 2px border */
+  padding: 13px;
 }
 
-/* Icon */
 .payment-card .pm-icon {
   width: 46px;
   height: 46px;
@@ -3662,7 +3662,6 @@ html.dark-mode .bg-particles {
   transform: scale(1.05);
 }
 
-/* Body */
 .payment-card .pm-body {
   flex: 1;
   min-width: 0;
@@ -3690,7 +3689,6 @@ html.dark-mode .bg-particles {
   line-height: 1.4;
 }
 
-/* Badge */
 .payment-card .pm-badge {
   display: inline-block;
   padding: 2px 8px;
@@ -3703,7 +3701,6 @@ html.dark-mode .bg-particles {
   white-space: nowrap;
 }
 
-/* Check circle */
 .payment-card .pm-check {
   width: 24px;
   height: 24px;
@@ -3720,13 +3717,11 @@ html.dark-mode .bg-particles {
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* Focus ring cho keyboard */
 .payment-card:focus-visible {
   outline: 2px solid var(--pm-color, #2634d5);
   outline-offset: 2px;
 }
 
-/* ============ DARK MODE ============ */
 html.dark-mode .payment-card {
   background: #1e293b;
   border-color: #334155;
@@ -3744,7 +3739,6 @@ html.dark-mode .payment-card .pm-body > span {
   color: #94a3b8;
 }
 
-/* ============ MOBILE ============ */
 @media (max-width: 480px) {
   .payment-card {
     padding: 12px;
@@ -3770,13 +3764,11 @@ html.dark-mode .payment-card .pm-body > span {
     padding: 2px 6px;
   }
 }
+
 /* ============================================================
    PHẦN 31: TOPBAR FIX — Căn đều + search rộng
-   ============================================================
-   Fix lệch topbar: search box hẹp, icon thưa, profile xa
    ============================================================ */
 
-/* 1. Topbar: layout cân đối */
 .topbar {
   display: flex !important;
   align-items: center !important;
@@ -3785,7 +3777,6 @@ html.dark-mode .payment-card .pm-body > span {
   height: 64px !important;
 }
 
-/* 2. Nhóm trái: CHO PHÉP GIÃN hết không gian */
 .topbar-left {
   flex: 1 1 auto !important;
   display: flex !important;
@@ -3795,20 +3786,17 @@ html.dark-mode .payment-card .pm-body > span {
   max-width: 100% !important;
 }
 
-/* 3. Search box: RỘNG HƠN, không giới hạn 520px */
 .global-search {
   flex: 1 1 auto !important;
   max-width: 720px !important;
   min-width: 200px !important;
 }
 
-/* 4. Logo: cố định kích thước */
 .topbar-logo {
   flex-shrink: 0 !important;
   margin-right: 0 !important;
 }
 
-/* 5. Nhóm phải: căn sát, đẩy về cuối */
 .topbar-right {
   display: flex !important;
   align-items: center !important;
@@ -3817,12 +3805,10 @@ html.dark-mode .payment-card .pm-body > span {
   margin-left: auto !important;
 }
 
-/* 6. Ẩn divider cũ (đang tạo khoảng trống thừa) */
 .topbar-right::before {
   display: none !important;
 }
 
-/* 7. Profile btn: có divider trước để tách khỏi icons */
 .topbar-profile-btn {
   margin-left: 8px !important;
   padding-left: 14px !important;
@@ -3835,7 +3821,6 @@ html.dark-mode .payment-card .pm-body > span {
   max-width: 220px !important;
 }
 
-/* 8. Icon buttons: kích thước đồng đều */
 .topbar-icon-btn,
 .cart-topbar-icon {
   width: 40px !important;
@@ -3844,7 +3829,6 @@ html.dark-mode .payment-card .pm-body > span {
   flex-shrink: 0 !important;
 }
 
-/* 9. Responsive: ẩn text profile khi màn hình vừa */
 @media (max-width: 1400px) {
   .global-search {
     max-width: 560px !important;
@@ -3860,7 +3844,6 @@ html.dark-mode .payment-card .pm-body > span {
   }
 }
 
-/* 10. Mobile: bỏ divider, bỏ padding lớn */
 @media (max-width: 768px) {
   .topbar {
     padding: 0 12px !important;
@@ -3882,8 +3865,6 @@ html.dark-mode .payment-card .pm-body > span {
 
 /* ============================================================
    PHẦN 32: BANNER IMAGE FIX — object-position để ảnh đẹp
-   ============================================================
-   Giữ đúng trọng tâm ảnh, tránh cắt lệch
    ============================================================ */
 
 .banner-carousel > div > div {
@@ -3892,22 +3873,18 @@ html.dark-mode .payment-card .pm-body > span {
   background-repeat: no-repeat !important;
 }
 
-/* Fix cho slide 1 (voucher) — dịch xuống để thấy người/ vật */
 .banner-carousel > div > div:nth-child(1) {
   background-position: center 30% !important;
 }
 
-/* Slide 2 (signature) — giữ giữa */
 .banner-carousel > div > div:nth-child(2) {
   background-position: center 45% !important;
 }
 
-/* Slide 3 (promotion) — giữa */
 .banner-carousel > div > div:nth-child(3) {
   background-position: center 50% !important;
 }
 
-/* Overlay tối hơn để chữ nổi hơn */
 .banner-carousel > div > div::after {
   content: "" !important;
   position: absolute !important;
@@ -3971,14 +3948,11 @@ html.dark-mode .payment-card .pm-body > span {
 /* ============================================================
    KẾT THÚC PHẦN 31-35
    ============================================================ */
+
 /* ============================================================
    PHẦN 36: BANNER DOTS + CTA FIX
-   ============================================================
-   - Fix dots không hiện (bị overlay che)
-   - Bo góc CTA đẹp hơn
    ============================================================ */
 
-/* 1. Dots: tăng z-index, hiện rõ trên overlay */
 .banner-dots {
   z-index: 100 !important;
   pointer-events: none !important;
@@ -4004,7 +3978,6 @@ html.dark-mode .payment-card .pm-body > span {
   transform: scale(1.15) !important;
 }
 
-/* Dot đang active: dài ra */
 .banner-dots button[aria-current="true"],
 .banner-dots button[aria-selected="true"] {
   width: 28px !important;
@@ -4012,7 +3985,6 @@ html.dark-mode .payment-card .pm-body > span {
   box-shadow: 0 2px 12px rgba(255, 255, 255, 0.6) !important;
 }
 
-/* 2. Overlay nhạt hơn để dots không bị chìm */
 .banner-carousel > div > div::after {
   background: linear-gradient(
     120deg,
@@ -4022,7 +3994,6 @@ html.dark-mode .payment-card .pm-body > span {
   ) !important;
 }
 
-/* 3. Nút CTA banner: bo tròn hơn (pill shape) */
 .banner-btn {
   border-radius: 24px !important;
   padding: 12px 28px !important;
@@ -4040,7 +4011,6 @@ html.dark-mode .payment-card .pm-body > span {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4) !important;
 }
 
-/* 4. Nút prev/next: bo tròn đẹp hơn */
 .banner-nav {
   width: 44px !important;
   height: 44px !important;
@@ -4063,7 +4033,6 @@ html.dark-mode .payment-card .pm-body > span {
 .banner-nav-left { left: 16px !important; }
 .banner-nav-right { right: 16px !important; }
 
-/* 5. Mobile: dots nhỏ hơn */
 @media (max-width: 768px) {
   .banner-dots {
     bottom: 12px !important;
@@ -4086,11 +4055,11 @@ html.dark-mode .payment-card .pm-body > span {
     height: 36px !important;
   }
 }
+
 /* ============================================================
    PHẦN 37: LOGIN V8 — clean version
    ============================================================ */
 
-/* Override rule `main, .main` (PHẦN 2) đang đẩy main sang phải 250px */
 main.v8-login-right {
   margin-left: 0 !important;
   width: auto !important;
@@ -4108,8 +4077,6 @@ main.v8-login-right {
   overflow: hidden !important;
   background: #ffffff;
 }
-
-/* ============ LEFT ============ */
 
 .v8-login-left {
   grid-column: 1 !important;
@@ -4241,8 +4208,6 @@ main.v8-login-right {
   color: #64748b;
 }
 
-/* ============ RIGHT ============ */
-
 main.v8-login-right {
   grid-column: 2 !important;
   width: 100% !important;
@@ -4269,8 +4234,6 @@ main.v8-login-right {
   position: relative;
 }
 
-
-
 .v8-tab.active {
   background: #1f2937;
   color: #fff;
@@ -4281,7 +4244,6 @@ main.v8-login-right {
   color: #172033;
   background: rgba(31, 41, 55, 0.05);
 }
-
 
 .v8-form-title {
   margin: 0 0 8px;
@@ -4537,8 +4499,6 @@ main.v8-login-right {
   margin-top: 8px;
 }
 
-/* ============ DARK MODE ============ */
-
 html.dark-mode .v8-login-page { background: #0f172a; }
 html.dark-mode .v8-login-left {
   background: linear-gradient(135deg, #1e1b4b 0%, #172554 50%, #0c4a6e 100%) !important;
@@ -4560,8 +4520,6 @@ html.dark-mode .v8-social:hover { background: #334155; }
 html.dark-mode .v8-demo { background: #1e293b; border-color: #334155; }
 html.dark-mode .v8-demo-item { background: #0f172a; border-color: #334155; }
 html.dark-mode .v8-label { color: #cbd5e1; }
-
-/* ============ RESPONSIVE ============ */
 
 @media (max-width: 900px) {
   .v8-login-page {
@@ -4594,6 +4552,7 @@ html.dark-mode .v8-label { color: #cbd5e1; }
   .v8-speech-bubble { font-size: 10px; padding: 5px 10px; }
   main.v8-login-right { padding: 24px 16px !important; }
 }
+
 /* ============================================================
    V8 FORM TOP — Logo + Tabs cùng hàng
    ============================================================ */
@@ -4606,7 +4565,6 @@ html.dark-mode .v8-label { color: #cbd5e1; }
   margin-bottom: 24px !important;
 }
 
-/* Logo mark — gradient giống icon app */
 .v8-form-logo {
   margin: 0 !important;
   flex-shrink: 0 !important;
@@ -4626,7 +4584,6 @@ html.dark-mode .v8-label { color: #cbd5e1; }
   flex-shrink: 0 !important;
 }
 
-/* Tabs — thu gọn, không kéo full width */
 .v8-tabs {
   display: inline-flex !important;
   gap: 4px !important;
@@ -4663,7 +4620,6 @@ html.dark-mode .v8-label { color: #cbd5e1; }
   background: rgba(31, 41, 55, 0.05) !important;
 }
 
-/* Dark mode */
 html.dark-mode .v8-tabs { background: #1e293b !important; }
 html.dark-mode .v8-tab { color: #94a3b8 !important; }
 html.dark-mode .v8-tab.active {
@@ -4671,7 +4627,6 @@ html.dark-mode .v8-tab.active {
   color: #0f172a !important;
 }
 
-/* Responsive — mobile logo + tabs vẫn cùng hàng */
 @media (max-width: 480px) {
   .v8-form-top {
     margin-bottom: 20px !important;
@@ -4686,6 +4641,7 @@ html.dark-mode .v8-tab.active {
     font-size: 11.5px !important;
   }
 }
+
 /* ============================================================
    FIX: Khi KHÔNG có page-heading → giảm padding-top
    ============================================================ */
@@ -4703,7 +4659,6 @@ html.dark-mode .v8-tab.active {
    PHẦN 38: BATCH 6D.3 — RESPONSIVE POLISH
    ============================================================ */
 
-/* OwnerShifts: stats grid 2 cột + tab scroll trên mobile */
 @media (max-width: 768px) {
   .shifts-stats-grid {
     grid-template-columns: repeat(2, 1fr) !important;
@@ -4719,12 +4674,10 @@ html.dark-mode .v8-tab.active {
     align-items: stretch !important;
   }
 
-  /* OwnerFinance: account form stack 1 cột */
   .finance-account-grid {
     grid-template-columns: 1fr !important;
   }
 
-  /* OwnerDashboard: quick actions 3 ô */
   .dashboard-quick-actions {
     grid-template-columns: repeat(3, 1fr) !important;
   }
@@ -4744,6 +4697,7 @@ html.dark-mode .v8-tab.active {
    ============================================================
    Dùng body.sidebar-open → đảm bảo match DOM dù React Fragment.
    Fix z-index: sidebar phải > topbar (100) khi mở trên mobile.
+   ✅ PATCH: Mobile sidebar thu gọn (78vw / max 320px), KHÔNG full-screen.
    ============================================================ */
 
 /* Main có transition mượt */
@@ -4762,30 +4716,32 @@ html.dark-mode .v8-tab.active {
   }
 }
 
-/* ===== MOBILE (≤768px): SIDEBAR FULL-SCREEN ===== */
+/* ===== MOBILE (≤768px): SIDEBAR THU GỌN ===== */
 @media (max-width: 768px) {
-  /* 1. Sidebar full màn hình + z-index cao hơn topbar */
+  /* 1. Sidebar chỉ chiếm 78vw, tối đa 320px */
   body.sidebar-open .sidebar,
   body.sidebar-open aside {
-    width: 100vw !important;
-    max-width: 100vw !important;
-    z-index: 9999 !important;   /* > topbar 100 */
-    box-shadow: none !important;
+    width: 78vw !important;
+    max-width: 320px !important;
+    min-width: 260px !important;
+    z-index: 9999 !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35) !important;
     border-right: 0 !important;
   }
 
-  /* 2. Content giữ nguyên, không push (sidebar che full) */
+  /* 2. Content không push (sidebar nổi bên trên) */
   body.sidebar-open .main {
     margin-left: 0 !important;
     width: 100% !important;
   }
 
-  /* 3. Ẩn overlay đen vì sidebar đã full-screen */
+  /* 3. HIỆN overlay đen mờ để user bấm ra ngoài đóng */
   body.sidebar-open .mobile-overlay.active {
-    display: none !important;
+    display: block !important;
+    z-index: 9998 !important;
   }
 
-  /* 4. Nút close (X) trong sidebar phải nằm trên, dễ bấm */
+  /* 4. Nút close (X) luôn hiện rõ */
   body.sidebar-open .sidebar .close-sidebar,
   body.sidebar-open aside .close-sidebar {
     display: grid !important;
