@@ -17,9 +17,8 @@
 //
 // Batch 2:
 //   - ✅ Form giá auto-sync: nhập giá gốc + % → auto tính giá bán
-//     (khớp logic backend). Bỏ nhập giá bán thủ công khi có giá gốc.
-//   - ✅ Validate trùng tên món (client-side, trước khi gọi API)
-//   - ✅ Category có field `order` (thứ tự hiển thị) — optional
+//   - ✅ Validate trùng tên món (client-side)
+//   - ✅ Category có field `order`
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -41,7 +40,6 @@ import ImageUploader from "../../components/ImageUploader";
 const MODAL_Z = 2147483600;
 const DEFAULT_CATEGORY_ICON = "🍽️";
 
-const DEFAULT_PRICE = 30000;
 const MAX_DISCOUNT = 90;
 
 // ============================================================
@@ -74,7 +72,7 @@ export default function OwnerMenu() {
 
   // ---------- Price fields (Batch 2 — controlled) ----------
   const [priceFields, setPriceFields] = useState({
-    price: DEFAULT_PRICE,
+    price: "",
     originalPrice: "",
     discountPercent: 0,
   });
@@ -122,7 +120,7 @@ export default function OwnerMenu() {
   useEffect(() => {
     if (!modal) return;
     setPriceFields({
-      price: Number(modal.price) || DEFAULT_PRICE,
+      price: modal.price != null ? Number(modal.price) : "",
       originalPrice: modal.original_price
         ? String(modal.original_price)
         : "",
@@ -165,12 +163,6 @@ export default function OwnerMenu() {
 
   const hasOriginal = Number(priceFields.originalPrice) > 0;
 
-  /**
-   * User nhập giá gốc:
-   * - Nếu có discount > 0 → auto price
-   * - Nếu discount = 0 → price = original (không giảm)
-   * - Nếu xóa original (rỗng/0) → reset discount = 0, giữ price cho user nhập lại
-   */
   const handleOriginalChange = (v) => {
     const original = Number(v) || 0;
     setPriceFields((prev) => {
@@ -184,11 +176,6 @@ export default function OwnerMenu() {
     });
   };
 
-  /**
-   * User nhập % giảm:
-   * - Chỉ có tác dụng khi đã có original_price
-   * - Clamp 0-90
-   */
   const handleDiscountChange = (v) => {
     const d = Math.max(0, Math.min(MAX_DISCOUNT, Number(v) || 0));
     setPriceFields((prev) => {
@@ -202,9 +189,6 @@ export default function OwnerMenu() {
     });
   };
 
-  /**
-   * User nhập giá bán trực tiếp (chỉ enable khi KHÔNG có original).
-   */
   const handlePriceChange = (v) => {
     setPriceFields((prev) => ({ ...prev, price: v }));
   };
@@ -216,11 +200,12 @@ export default function OwnerMenu() {
     setModal(item || {});
   };
 
+  // ✅ FIX: đóng hàm closeItemModal đúng cách (thêm dấu `};`)
   const closeItemModal = () => {
     setModal(null);
     setImage("");
     setPriceFields({
-      price: DEFAULT_PRICE,
+      price: "",
       originalPrice: "",
       discountPercent: 0,
     });
@@ -260,7 +245,6 @@ export default function OwnerMenu() {
     let price = Number(priceFields.price) || 0;
 
     if (original > 0) {
-      // Auto-compute lại cho chắc (khớp backend)
       price = d > 0 ? Math.round(original * (1 - d / 100)) : original;
     }
 
@@ -312,7 +296,6 @@ export default function OwnerMenu() {
     const oldActive = item.active;
     const newActive = oldActive ? 0 : 1;
 
-    // Optimistic update — nút trượt ngay lập tức
     setList((prev) =>
       prev.map((m) =>
         (m._id || m.id) === id ? { ...m, active: newActive } : m
@@ -322,9 +305,7 @@ export default function OwnerMenu() {
     try {
       await api.menu.update(id, { active: newActive });
       toast(newActive ? "Đã bật món" : "Đã tắt món", "success");
-      // ❌ KHÔNG gọi load() — giữ animation
     } catch (e) {
-      // Revert nếu API fail
       setList((prev) =>
         prev.map((m) =>
           (m._id || m.id) === id ? { ...m, active: oldActive } : m
@@ -334,9 +315,6 @@ export default function OwnerMenu() {
     }
   };
 
-  /**
-   * Xoá món — dùng ConfirmDialog.
-   */
   const removeItem = (item) => {
     setConfirm({
       title: `Xóa món "${item.name}"?`,
@@ -376,7 +354,6 @@ export default function OwnerMenu() {
     if (!name) return toast("Nhập tên danh mục", "error");
     if (catLoading) return;
 
-    // ✅ Batch 2: Validate order nếu có
     const orderStr = String(catForm.order || "").trim();
     let order;
     if (orderStr) {
@@ -392,7 +369,6 @@ export default function OwnerMenu() {
         name,
         icon: catForm.icon,
       };
-      // Chỉ gửi order nếu user nhập (để backend tự sinh khi tạo mới)
       if (order !== undefined) payload.order = order;
 
       if (editingCat) {
@@ -412,9 +388,6 @@ export default function OwnerMenu() {
     }
   };
 
-  /**
-   * Xoá danh mục — dùng ConfirmDialog.
-   */
   const removeCat = (cat) => {
     setConfirm({
       title: `Xóa danh mục "${cat.name}"?`,
@@ -440,9 +413,7 @@ export default function OwnerMenu() {
   return (
     <>
       <div>
-        {/* ============================================================
-            TOOLBAR
-            ============================================================ */}
+        {/* TOOLBAR */}
         <div
           style={{
             display: "flex",
@@ -529,9 +500,7 @@ export default function OwnerMenu() {
           </button>
         </div>
 
-        {/* ============================================================
-            TABLE
-            ============================================================ */}
+        {/* TABLE */}
         <div
           style={{
             background: "var(--card-bg, #fff)",
@@ -775,9 +744,7 @@ export default function OwnerMenu() {
           )}
         </div>
 
-        {/* ============================================================
-            CATEGORY MANAGEMENT MODAL
-            ============================================================ */}
+        {/* CATEGORY MANAGEMENT MODAL */}
         {showCatModal && (
           <Modal onClose={() => !catLoading && setShowCatModal(false)} maxWidth={560}>
             <div style={modalHeaderStyle}>
@@ -793,7 +760,6 @@ export default function OwnerMenu() {
               </button>
             </div>
 
-            {/* Add/Edit form */}
             <div
               style={{
                 background: "var(--bg-tertiary, #f5f7fb)",
@@ -813,7 +779,6 @@ export default function OwnerMenu() {
                 {editingCat ? "✏️ Sửa danh mục" : "➕ Thêm danh mục mới"}
               </div>
 
-              {/* ✅ Batch 2: Thêm cột "Thứ tự" */}
               <div
                 style={{
                   display: "grid",
@@ -941,7 +906,6 @@ export default function OwnerMenu() {
               )}
             </div>
 
-            {/* List */}
             <div
               style={{
                 fontSize: 12,
@@ -1049,9 +1013,7 @@ export default function OwnerMenu() {
           </Modal>
         )}
 
-        {/* ============================================================
-            ITEM MODAL (Add/Edit)
-            ============================================================ */}
+        {/* ITEM MODAL (Add/Edit) */}
         {modal && (
           <Modal onClose={() => !saving && closeItemModal()} maxWidth={560}>
             <div style={modalHeaderStyle}>
@@ -1078,14 +1040,20 @@ export default function OwnerMenu() {
                 disabled={saving}
               />
 
-              <label style={labelStyle}>Danh mục</label>
+              <label style={labelStyle}>Danh mục *</label>
               <select
                 name="category"
-                defaultValue={modal.category || "Cơm"}
+                defaultValue={
+                  modal.category ||
+                  (categories[0]?.name ?? "")
+                }
+                required
                 style={inputStyle}
                 disabled={saving}
               >
-                {categories.length === 0 && <option>Cơm</option>}
+                {categories.length === 0 && (
+                  <option value="">— Chưa có danh mục —</option>
+                )}
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.name}>
                     {cat.icon} {cat.name}
@@ -1093,7 +1061,6 @@ export default function OwnerMenu() {
                 ))}
               </select>
 
-              {/* ✅ Batch 2: Form giá auto-sync */}
               <div
                 style={{
                   display: "grid",
@@ -1141,6 +1108,7 @@ export default function OwnerMenu() {
                     value={priceFields.price}
                     onChange={(e) => handlePriceChange(e.target.value)}
                     required={!hasOriginal}
+                    placeholder="VD: 30000"
                     style={{
                       ...inputStyle,
                       marginBottom: 0,
@@ -1160,7 +1128,6 @@ export default function OwnerMenu() {
                 </div>
               </div>
 
-              {/* Preview info */}
               <div
                 style={{
                   marginBottom: 14,
@@ -1209,7 +1176,8 @@ export default function OwnerMenu() {
                 type="number"
                 min="0"
                 step="1"
-                defaultValue={modal.stock ?? 10}
+                defaultValue={modal.stock ?? ""}
+                placeholder="VD: 20"
                 required
                 style={inputStyle}
                 disabled={saving}
@@ -1323,9 +1291,6 @@ export default function OwnerMenu() {
         `}</style>
       </div>
 
-      {/* ============================================================
-          CONFIRM DIALOG (removeItem / removeCat)
-          ============================================================ */}
       {confirm && (
         <ConfirmDialog
           open
@@ -1529,7 +1494,7 @@ const btnPrimaryStyle = {
   justifyContent: "center",
   gap: 8,
   padding: "10px 16px",
-  background: "#0EA5E9",
+  background: "var(--btn-primary, #2634d5)",
   color: "#fff",
   border: 0,
   borderRadius: 10,
@@ -1544,9 +1509,9 @@ const btnOutlineStyle = {
   alignItems: "center",
   gap: 8,
   background: "var(--card-bg, #fff)",
-  color: "#0EA5E9",
+  color: "var(--btn-primary, #2634d5)",
   padding: "10px 16px",
-  border: "1px solid #0EA5E9",
+  border: "1px solid var(--btn-primary, #2634d5)",
   borderRadius: 10,
   fontWeight: 600,
   cursor: "pointer",

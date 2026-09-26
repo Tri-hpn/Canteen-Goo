@@ -514,7 +514,8 @@ export default function OwnerDashboard() {
           Truy cập nhanh
         </h3>
 
-        <div
+              <div
+          className="dashboard-quick-actions"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
@@ -740,12 +741,15 @@ export default function OwnerDashboard() {
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <table
+              className="dashboard-recent-table"
+              style={{ width: "100%", borderCollapse: "collapse" }}
+            >
               <thead>
                 <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
                   <th style={thStyle}>Mã đơn</th>
                   <th style={thStyle}>Khách</th>
-                  <th style={thStyle}>Giờ</th>
+                  <th className="col-time" style={thStyle}>Giờ</th>
                   <th style={{ ...thStyle, textAlign: "right" }}>Tổng tiền</th>
                   <th style={thStyle}>Trạng thái</th>
                   <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
@@ -783,6 +787,7 @@ export default function OwnerDashboard() {
                       </td>
                       <td style={tdStyle}>{o.customer_name}</td>
                       <td
+                        className="col-time"
                         style={{
                           ...tdStyle,
                           fontSize: 12,
@@ -920,22 +925,21 @@ function KPI({ icon, label, value, trend, color, badge }) {
         >
           {label}
         </span>
-        <div
-          style={{
-            margin: "4px 0",
-            fontSize: 18,
-            fontWeight: 700,
-            lineHeight: 1.3,
-            fontFamily:
-              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-            color: "var(--text-primary, #172033)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {value}
-        </div>
+                <div
+  style={{
+    margin: "4px 0",
+    fontSize: 18,
+    fontWeight: 700,
+    lineHeight: 1.3,
+    fontFamily: "var(--font-sans, inherit)",
+    color: "var(--text-primary, #172033)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  }}
+>
+  {value}
+</div>
 
         {trend && (
           <small
@@ -1047,7 +1051,7 @@ function OrderStatusBadge({ status }) {
   const c = STATUS_COLORS[status] || { bg: "#e2e8f0", fg: "#475569" };
 
   return (
-    <span
+        <span
       style={{
         display: "inline-flex",
         padding: "4px 10px",
@@ -1057,8 +1061,7 @@ function OrderStatusBadge({ status }) {
         background: c.bg,
         color: c.fg,
         whiteSpace: "nowrap",
-        fontFamily:
-          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontFamily: "var(--font-sans, inherit)",
       }}
     >
       {status}

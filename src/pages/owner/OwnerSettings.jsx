@@ -17,7 +17,9 @@
 //   - Account number: chỉ cho nhập số
 //   - Account name: tự uppercase khi blur
 //   - resetForm: dùng ConfirmDialog custom
-//     (thay cho confirm() native → đồng bộ UX toàn app)
+//
+// Batch 6C:
+//   - ✅ Cảnh báo khi chưa cấu hình STK
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -72,7 +74,7 @@ export default function OwnerSettings() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
-  // ---------- ✅ Confirm dialog ----------
+  // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -149,7 +151,10 @@ export default function OwnerSettings() {
     return `https://img.vietqr.io/image/${form.bank}-${form.account.trim()}-compact2.png?${params}`;
   }, [form.bank, form.account, form.accountName]);
 
-  // ---------- ✅ Confirm helpers ----------
+  // ✅ Batch 6C: Cảnh báo nếu chưa cấu hình STK
+  const needsSetup = !original.account || !original.accountName;
+
+  // ---------- Confirm helpers ----------
 
   const closeConfirm = () => {
     if (confirmBusy) return;
@@ -240,7 +245,7 @@ export default function OwnerSettings() {
     }
   };
 
-  // ---------- ✅ Reset form — dùng ConfirmDialog ----------
+  // ---------- Reset form — dùng ConfirmDialog ----------
 
   const resetForm = () => {
     if (!isDirty) return;
@@ -330,6 +335,38 @@ export default function OwnerSettings() {
   return (
     <>
       <div>
+        {/* ============================================================
+            ✅ Batch 6C: CẢNH BÁO CHƯA CẤU HÌNH
+            ============================================================ */}
+        {needsSetup && !isDirty && (
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "flex-start",
+              background: "rgba(245, 158, 11, 0.12)",
+              border: "1px solid rgba(245, 158, 11, 0.4)",
+              color: "#92400e",
+              padding: "14px 18px",
+              borderRadius: 12,
+              marginBottom: 16,
+              fontSize: 13,
+            }}
+          >
+            <AlertCircle size={20} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <b style={{ display: "block", marginBottom: 4 }}>
+                ⚠️ Chưa cấu hình tài khoản nhận tiền
+              </b>
+              <div style={{ fontSize: 12.5, opacity: 0.9 }}>
+                Vui lòng nhập số tài khoản + tên chủ TK để khách có thể
+                thanh toán qua QR. Nếu bỏ trống, khách chỉ thanh toán được
+                bằng tiền mặt hoặc ví Canteen.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ============================================================
             UNSAVED INDICATOR
             ============================================================ */}
@@ -646,7 +683,7 @@ export default function OwnerSettings() {
         `}</style>
       </div>
 
-      {/* ✅ ConfirmDialog */}
+      {/* ConfirmDialog */}
       {confirm && (
         <ConfirmDialog
           open

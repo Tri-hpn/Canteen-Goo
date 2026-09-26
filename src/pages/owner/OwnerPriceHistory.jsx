@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
+import { SkeletonStats } from "../../components/Skeleton";
 
 // ============================================================
 // CONSTANTS
@@ -137,36 +138,46 @@ export default function OwnerPriceHistory() {
 
   return (
     <div>
-      {/* ============================================================
+          {/* ============================================================
           STATS
+          ✅ Batch 6E: Skeleton khi loading
           ============================================================ */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: 16,
-          marginBottom: 20,
-        }}
-      >
-        <StatCard
-          icon={<History size={20} />}
-          label="Tổng lần đổi giá"
-          value={stats.total}
-          color="#2634d5"
-        />
-        <StatCard
-          icon={<TrendingUp size={20} />}
-          label="Tăng giá"
-          value={stats.up}
-          color="#ef4444"
-        />
-        <StatCard
-          icon={<TrendingDown size={20} />}
-          label="Giảm giá"
-          value={stats.down}
-          color="#18a967"
-        />
-      </div>
+      {loading ? (
+        <div style={{ marginBottom: 20 }}>
+          <SkeletonStats
+            count={3}
+            columns="repeat(auto-fit, minmax(200px, 1fr))"
+          />
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          <StatCard
+            icon={<History size={20} />}
+            label="Tổng lần đổi giá"
+            value={stats.total}
+            color="#2634d5"
+          />
+          <StatCard
+            icon={<TrendingUp size={20} />}
+            label="Tăng giá"
+            value={stats.up}
+            color="#ef4444"
+          />
+          <StatCard
+            icon={<TrendingDown size={20} />}
+            label="Giảm giá"
+            value={stats.down}
+            color="#18a967"
+          />
+        </div>
+      )}
 
       {/* ============================================================
           FILTERS

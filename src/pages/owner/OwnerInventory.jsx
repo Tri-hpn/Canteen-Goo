@@ -789,7 +789,7 @@ export default function OwnerInventory() {
                 type="number"
                 min="0"
                 step="0.1"
-                defaultValue={modal.min ?? 10}
+                defaultValue={modal.min ?? ""}
                 required
                 style={inputStyle}
               />
@@ -877,7 +877,8 @@ export default function OwnerInventory() {
                 type="number"
                 min="0.1"
                 step="0.1"
-                defaultValue={10}
+                defaultValue=""
+                placeholder="VD: 10"
                 required
                 autoFocus
                 style={{ ...inputStyle, fontSize: 14 }}

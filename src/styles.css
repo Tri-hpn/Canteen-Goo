@@ -22,6 +22,10 @@
   --text-muted: #64748b;
   --text-light: #8993a3;
 
+  /* ✅ Batch 6D.1: Font vars — chuẩn hóa toàn app */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+
   /* Brand colors */
   --brand: #2634d5;
   --brand-dark: #1c28b0;
@@ -31,6 +35,18 @@
   --danger: #ef4444;
   --warning: #f59e0b;
   --purple: #8b5cf6;
+  /* ✅ Batch 6D.2: Button semantic colors */
+  --btn-primary: #2634d5;
+  --btn-primary-hover: #1c28b0;
+  --btn-success: #18a967;
+  --btn-success-hover: #158a54;
+  --btn-danger: #ef4444;
+  --btn-danger-hover: #dc2626;
+  --btn-warning: #f59e0b;
+  --btn-sky: #0EA5E9;
+  --btn-sky-hover: #0284C7;
+  --btn-ghost-bg: #f5f7fb;
+  --btn-ghost-border: #e5e9ef;
 }
 
 /* Dark mode variables */
@@ -57,8 +73,8 @@ html {
   scrollbar-gutter: stable;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+body { 
+  font-family: var(--font-sans);
   background: #f5f7fb;
   color: #172033;
   font-size: 14px;
@@ -4682,6 +4698,47 @@ html.dark-mode .v8-tab.active {
     padding-top: 12px !important;
   }
 }
+
+/* ============================================================
+   PHẦN 38: BATCH 6D.3 — RESPONSIVE POLISH
+   ============================================================ */
+
+/* OwnerShifts: stats grid 2 cột + tab scroll trên mobile */
+@media (max-width: 768px) {
+  .shifts-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .shifts-tabs {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    scrollbar-width: none !important;
+  }
+  .shifts-tabs::-webkit-scrollbar { display: none; }
+  .shifts-filter-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  /* OwnerFinance: account form stack 1 cột */
+  .finance-account-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* OwnerDashboard: quick actions 3 ô */
+  .dashboard-quick-actions {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .dashboard-recent-table .col-time {
+    display: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-quick-actions {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
 /* ============================================================
    KẾT THÚC FILE
    ============================================================ */

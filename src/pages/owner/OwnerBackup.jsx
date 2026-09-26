@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
-
+import { SkeletonStats } from "../../components/Skeleton";
 // ============================================================
 // CONSTANTS
 // ============================================================
@@ -406,6 +406,11 @@ export default function OwnerBackup() {
             {statsLoading ? "Đang tải..." : "Làm mới"}
           </button>
         </div>
+
+        {/* ✅ Batch 6E: Skeleton khi loading */}
+        {statsLoading && !stats && (
+          <SkeletonStats count={4} columns="repeat(auto-fit, minmax(140px, 1fr))" />
+        )}
 
         {/* Empty state khi chưa có stats */}
         {!stats && !statsLoading && (

@@ -119,12 +119,17 @@ export default function Pagination({
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              style={{
+                           style={{
                 ...btnBase,
                 background:
-                  p === page ? "#0EA5E9" : "var(--card-bg, #fff)",
+                  p === page
+                    ? "var(--btn-primary, #2634d5)"
+                    : "var(--card-bg, #fff)",
                 color: p === page ? "#fff" : "var(--text-primary, #172033)",
-                borderColor: p === page ? "#0EA5E9" : "var(--border-color, #e5e9ef)",
+                borderColor:
+                  p === page
+                    ? "var(--btn-primary, #2634d5)"
+                    : "var(--border-color, #e5e9ef)",
               }}
             >
               {p}

@@ -64,7 +64,7 @@ function buildSeedData() {
     shifts: [],
     wallets: [],
     wallet_transactions: [],
-    settings: { bank: "VCB", account: "", accountName: "CANTEEN VWA", hotline: "", email: "admin@vwa.vn", address: "", qrCustomImage: "" },
+      settings: { bank: "VCB", account: "", accountName: "", hotline: "", email: "", address: "", qrCustomImage: "" },
   };
 }
 
@@ -1869,16 +1869,17 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 // ============ SETTINGS ============
 app.get("/api/settings", auth(), (req, res) => {
   const db = loadDB();
-  const defaults = {
+  // ✅ Batch 6A: Không fallback STK fake — trả về giá trị thực (có thể rỗng)
+  const empty = {
     bank: "VCB",
-    account: "1234567890",
-    accountName: "CANTEEN VWA",
-    hotline: "0328 866 959",
-    email: "admin@vwa.vn",
-    address: "68 Nguyễn Chí Thanh, P. Láng, Hà Nội",
+    account: "",
+    accountName: "",
+    hotline: "",
+    email: "",
+    address: "",
     qrCustomImage: ""
   };
-  res.json({ ...defaults, ...(db.settings || {}) });
+  res.json({ ...empty, ...(db.settings || {}) });
 });
 
 app.put("/api/settings", auth(["ADMIN"]), (req, res) => {

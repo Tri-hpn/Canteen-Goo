@@ -133,7 +133,7 @@ export default function OwnerVouchers() {
   // ---------- UI ----------
   const [modal, setModal] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [formValue, setFormValue] = useState(10000);
+  const [formValue, setFormValue] = useState("");
 
   // ✅ V3: Khởi tạo filter từ localStorage
   const [filters, setFilters] = useState(() => readStoredFilters());
@@ -196,7 +196,7 @@ export default function OwnerVouchers() {
   // Sync formValue khi mở/đổi modal
   useEffect(() => {
     if (modal) {
-      setFormValue(Number(modal.value) || 10000);
+      setFormValue(modal.value != null ? Number(modal.value) : "");
     }
   }, [modal]);
 
@@ -1140,7 +1140,8 @@ export default function OwnerVouchers() {
               min="1000"
               step="1000"
               value={formValue}
-              onChange={(e) => setFormValue(Number(e.target.value) || 0)}
+              onChange={(e) => setFormValue(e.target.value)}
+              placeholder="VD: 50000"
               required
               disabled={saving}
               style={inputStyle}

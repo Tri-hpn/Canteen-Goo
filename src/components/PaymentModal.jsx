@@ -557,7 +557,8 @@ export default function PaymentModal({
                   Chưa có thông tin ngân hàng
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>
-                  Vui lòng chọn phương thức khác hoặc liên hệ admin.
+                  Vui lòng chọn phương thức khác (Tiền mặt / Thẻ).
+                  Admin cần vào <b>Cài đặt → Tài khoản nhận tiền</b> để cấu hình.
                 </div>
               </div>
             ) : (

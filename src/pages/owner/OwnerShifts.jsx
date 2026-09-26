@@ -504,7 +504,8 @@ export default function OwnerShifts() {
       {/* ============================================================
           STATS
           ============================================================ */}
-      <div
+            <div
+        className="shifts-stats-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
@@ -521,7 +522,8 @@ export default function OwnerShifts() {
       {/* ============================================================
           TABS
           ============================================================ */}
-      <div
+            <div
+        className="shifts-tabs"
         style={{
           display: "flex",
           gap: 6,

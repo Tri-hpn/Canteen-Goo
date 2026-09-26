@@ -19,6 +19,7 @@ import {
   Loader2, CalendarX,
 } from "lucide-react";
 import { api } from "../../api";
+import { SkeletonTable, SkeletonStats } from "../../components/Skeleton";
 
 // ============================================================
 // CONSTANTS
@@ -172,42 +173,49 @@ export default function OwnerAttendance() {
 
   return (
     <div>
-      {/* ============================================================
+          {/* ============================================================
           STATS CARDS
+          ✅ Batch 6E: Skeleton khi loading
           ============================================================ */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 16,
-          marginBottom: 20,
-        }}
-      >
-        <StatCard
-          icon={<Calendar />}
-          label="Tổng ngày công"
-          value={stats.total}
-          color="#2634d5"
-        />
-        <StatCard
-          icon={<TrendingUp />}
-          label="Đúng giờ"
-          value={stats.onTime}
-          color="#18a967"
-        />
-        <StatCard
-          icon={<AlertTriangle />}
-          label="Đi muộn"
-          value={stats.late}
-          color="#f59e0b"
-        />
-        <StatCard
-          icon={<Clock />}
-          label="Tổng giờ làm"
-          value={stats.totalHours.toFixed(1) + "h"}
-          color="#8b5cf6"
-        />
-      </div>
+      {loading ? (
+        <div style={{ marginBottom: 20 }}>
+          <SkeletonStats count={4} columns="repeat(4, 1fr)" />
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          <StatCard
+            icon={<Calendar />}
+            label="Tổng ngày công"
+            value={stats.total}
+            color="#2634d5"
+          />
+          <StatCard
+            icon={<TrendingUp />}
+            label="Đúng giờ"
+            value={stats.onTime}
+            color="#18a967"
+          />
+          <StatCard
+            icon={<AlertTriangle />}
+            label="Đi muộn"
+            value={stats.late}
+            color="#f59e0b"
+          />
+          <StatCard
+            icon={<Clock />}
+            label="Tổng giờ làm"
+            value={stats.totalHours.toFixed(1) + "h"}
+            color="#8b5cf6"
+          />
+        </div>
+      )}
 
       {/* ============================================================
           FILTER BAR
