@@ -5,6 +5,7 @@ import App from "./App";
 import { ThemeProvider } from "./components/UI";
 import "./styles.css";
 import "./styles-sky.css";   // ← THÊM DÒNG NÀY (SAU styles.css)
+import "./styles-employee.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

@@ -177,70 +177,40 @@ export default function EmployeeHome() {
       )}
 
       {/* ============ KHU VỰC CHÍNH: CHECK-IN + KPI ============ */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1.2fr",
-          gap: 18,
-          marginBottom: 18,
-        }}
-      >
-        <CheckInOutCard />
+      <div className="emp-home-layout">
+  <CheckInOutCard />
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 12,
-          }}
-        >
-          <KpiCard
-            icon={<ShoppingBag size={22} />}
-            color="#2634d5"
-            value={loading ? "..." : stats2.todayCount}
-            label={t("employee.ordersToday")}
-          />
-          <KpiCard
-            icon={<Clock size={22} />}
-            color="#f59e0b"
-            value={loading ? "..." : stats2.pending}
-            label={t("employee.pendingOrders")}
-          />
-          <KpiCard
-            icon={<Utensils size={22} />}
-            color="#8b5cf6"
-            value={loading ? "..." : stats2.processing}
-            label="Đang chuẩn bị"
-          />
-          <KpiCard
-            icon={<AlertTriangle size={22} />}
-            color="#f59e0b"
-            value={loading ? "..." : lowStockCount}
-            label={t("employee.lowStock")}
-          />
-        </div>
-      </div>
+  <div className="emp-home-kpi-grid">
+    <KpiCard
+      icon={<ShoppingBag size={22} />}
+      color="#2634d5"
+      value={loading ? "..." : stats2.todayCount}
+      label={t("employee.ordersToday")}
+    />
+    <KpiCard
+      icon={<Clock size={22} />}
+      color="#f59e0b"
+      value={loading ? "..." : stats2.pending}
+      label={t("employee.pendingOrders")}
+    />
+    <KpiCard
+      icon={<Utensils size={22} />}
+      color="#8b5cf6"
+      value={loading ? "..." : stats2.processing}
+      label="Đang chuẩn bị"
+    />
+    <KpiCard
+      icon={<AlertTriangle size={22} />}
+      color="#f59e0b"
+      value={loading ? "..." : lowStockCount}
+      label={t("employee.lowStock")}
+    />
+  </div>
+</div>
 
       {/* ============ BẢNG ĐƠN CẦN XỬ LÝ ============ */}
-      <div
-        style={{
-          background: "var(--card-bg, #fff)",
-          border: "1px solid var(--border-color, #e7ebf0)",
-          borderRadius: 12,
-          padding: 20,
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 16,
-            flexWrap: "wrap",
-            gap: 10,
-          }}
-        >
+     <div className="emp-need-action-card">
+  <div className="emp-need-action-head">
           <div>
             <h3
               style={{
@@ -430,33 +400,19 @@ export default function EmployeeHome() {
 
 function KpiCard({ icon, color, value, label }) {
   return (
-    <div
-      style={{
-        background: "var(--card-bg, #fff)",
-        border: "1px solid var(--border-color, #e7ebf0)",
-        borderRadius: 12,
-        padding: 16,
-        display: "flex",
-        gap: 12,
-        alignItems: "center",
-      }}
-    >
-      <div style={{ color, flexShrink: 0 }}>{icon}</div>
-      <div style={{ minWidth: 0 }}>
-        <b style={{ fontSize: 20, color: "var(--text-primary, #172033)" }}>
-          {value}
-        </b>
-        <div
-          style={{
-            fontSize: 12,
-            color: "var(--text-light, #8993a3)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {label}
-        </div>
+    <div className="emp-home-kpi-card">
+      <div
+        className="kpi-icon"
+        style={{
+          background: color + "18",
+          color,
+        }}
+      >
+        {icon}
+      </div>
+      <div className="kpi-body">
+        <b className="kpi-value">{value}</b>
+        <div className="kpi-label">{label}</div>
       </div>
     </div>
   );

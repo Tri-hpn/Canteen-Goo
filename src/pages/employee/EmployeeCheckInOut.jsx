@@ -460,18 +460,16 @@ export default function EmployeeCheckInOut() {
         )}
 
       {/* ============ KHUNG CHÍNH: ĐỒNG HỒ + CHECK-IN/OUT ============ */}
-      <div
-        style={{
-          background: "var(--card-bg, #fff)",
-          border: "1px solid var(--border-color, #e7ebf0)",
-          borderRadius: 16,
-          padding: 24,
-          marginBottom: 20,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 24,
-        }}
-      >
+     <div
+  className="checkin-grid"
+  style={{
+    background: "var(--card-bg, #fff)",
+    border: "1px solid var(--border-color, #e7ebf0)",
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 20,
+  }}
+>
         {/* ----- Cột trái: đồng hồ ----- */}
         <div>
           <div
@@ -496,18 +494,9 @@ export default function EmployeeCheckInOut() {
             </span>
           </div>
 
-          <div
-            style={{
-              fontSize: 56,
-              fontWeight: 800,
-              color: "var(--text-primary, #172033)",
-              fontVariantNumeric: "tabular-nums",
-              lineHeight: 1,
-              letterSpacing: "-1px",
-            }}
-          >
-            {timeStr}
-          </div>
+          <div className="checkin-clock">
+  {timeStr}
+</div>
           <div
             style={{
               fontSize: 13,
@@ -637,13 +626,7 @@ export default function EmployeeCheckInOut() {
               >
                 Chọn ca làm
               </label>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
-                  gap: 6,
-                }}
-              >
+              <div className="checkin-shift-picker">
                 {SHIFTS.map((s) => {
                   const Icon = s.icon;
                   const active = selectedShift === s.id;
@@ -720,9 +703,7 @@ export default function EmployeeCheckInOut() {
             </div>
           )}
 
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
+          <div className="checkin-action-grid">
             <button
               disabled={!!today?.checkIn || checkingIn || checkingOut}
               onClick={handleCheckIn}
@@ -1064,14 +1045,7 @@ export default function EmployeeCheckInOut() {
       </div>
 
       {/* ============ STATS ============ */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 16,
-          marginBottom: 20,
-        }}
-      >
+<div className="emp-cio-stats">
         <StatBox
           icon={<Calendar />}
           label="Tổng ngày công"
@@ -1620,14 +1594,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
           </div>
 
           {/* Grid 7 ngày */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              gap: 4,
-              marginBottom: 16,
-            }}
-          >
+         <div className="emp-register-days">
             {displayWeekDays.map((d) => {
               const isActive = activeDate === d;
               const isAssigned = dateShifts[d] && dateShifts[d].length > 0;
@@ -1718,14 +1685,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
               </span>
             )}
           </label>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 8,
-              marginBottom: 16,
-            }}
-          >
+         <div className="emp-register-shifts">
             {SHIFTS.map((s) => {
               const Icon = s.icon;
               const sel = currentShifts.includes(s.id);

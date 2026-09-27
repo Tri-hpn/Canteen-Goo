@@ -324,16 +324,17 @@ export default function CheckInOutCard() {
         <Clock size={20} style={{ color: "#2634d5", flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <b
-            aria-live="off"
-            style={{
-              fontSize: 22,
-              fontVariantNumeric: "tabular-nums",
-              display: "block",
-              color: "var(--text-primary, #172033)",
-            }}
-          >
-            {time}
-          </b>
+  aria-live="off"
+  className="checkin-clock"
+  style={{
+    fontSize: 22,   // ← fallback, sẽ bị override bởi CSS
+    fontVariantNumeric: "tabular-nums",
+    display: "block",
+    color: "var(--text-primary, #172033)",
+  }}
+>
+  {time}
+</b>
           <span
             style={{
               fontSize: 12,
@@ -683,15 +684,11 @@ export default function CheckInOutCard() {
       )}
 
       {/* ============ NÚT CHECK-IN / CHECK-OUT ============ */}
-      {!loading && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 10,
-            marginTop: 16,
-          }}
-        >
+{!loading && (
+  <div
+    className="checkin-action-grid"
+    style={{ marginTop: 16 }}
+  >
           <button
             disabled={!canCheckIn || actionLoadingId !== null}
             onClick={() => action("in", currentShift?.id)}

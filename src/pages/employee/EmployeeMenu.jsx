@@ -179,15 +179,7 @@ export default function EmployeeMenu() {
       )}
 
       {/* ============ TOOLBAR ============ */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginBottom: 20,
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
+     <div className="emp-menu-toolbar">
         {/* Search */}
         <div
           style={{
@@ -267,6 +259,7 @@ export default function EmployeeMenu() {
         </button>
 
         {/* Summary badges */}
+<div className="emp-menu-summary">
         {summary.inactive > 0 && (
           <span
             style={{
@@ -296,7 +289,7 @@ export default function EmployeeMenu() {
           </span>
         )}
       </div>
-
+</div>
       {/* ============ BẢNG ============ */}
       <div
         style={{

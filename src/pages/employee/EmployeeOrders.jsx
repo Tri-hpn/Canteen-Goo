@@ -268,99 +268,93 @@ export default function EmployeeOrders() {
         )}
 
         {/* ============ FILTER CHIPS + REFRESH ============ */}
-        <div
+        <div className="emp-orders-filter">
+  <div className="emp-orders-chips">
+    {STATUSES.map((s) => {
+      const active = status === s;
+      const count = statusCounts[s] || 0;
+
+      return (
+        <button
+          key={s}
+          onClick={() => setStatus(s)}
           style={{
-            display: "flex",
-            gap: 8,
-            marginBottom: 20,
-            flexWrap: "wrap",
+            padding: "8px 14px",
+            border: active
+              ? "1px solid #2634d5"
+              : "1px solid var(--border-color, #e5e9ef)",
+            background: active
+              ? "#2634d5"
+              : "var(--card-bg, #fff)",
+            color: active
+              ? "#fff"
+              : "var(--text-muted, #475569)",
+            borderRadius: 20,
+            fontSize: 12,
+            cursor: "pointer",
+            fontWeight: active ? 600 : 400,
+            display: "inline-flex",
             alignItems: "center",
+            gap: 6,
+            transition: "all 0.15s",
+            whiteSpace: "nowrap",
           }}
         >
-          {STATUSES.map((s) => {
-            const active = status === s;
-            const count = statusCounts[s] || 0;
+          {s}
+          {count > 0 && (
+            <span
+              style={{
+                background: active
+                  ? "rgba(255,255,255,0.3)"
+                  : "var(--bg-tertiary, #e2e8f0)",
+                color: active ? "#fff" : "var(--text-muted, #64748b)",
+                minWidth: 20,
+                height: 18,
+                padding: "0 6px",
+                borderRadius: 9,
+                fontSize: 10.5,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {count}
+            </span>
+          )}
+        </button>
+      );
+    })}
+  </div>
 
-            return (
-              <button
-                key={s}
-                onClick={() => setStatus(s)}
-                style={{
-                  padding: "8px 14px",
-                  border: active
-                    ? "1px solid #2634d5"
-                    : "1px solid var(--border-color, #e5e9ef)",
-                  background: active
-                    ? "#2634d5"
-                    : "var(--card-bg, #fff)",
-                  color: active
-                    ? "#fff"
-                    : "var(--text-muted, #475569)",
-                  borderRadius: 20,
-                  fontSize: 12,
-                  cursor: "pointer",
-                  fontWeight: active ? 600 : 400,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  transition: "all 0.15s",
-                }}
-              >
-                {s}
-                {count > 0 && (
-                  <span
-                    style={{
-                      background: active
-                        ? "rgba(255,255,255,0.3)"
-                        : "var(--bg-tertiary, #e2e8f0)",
-                      color: active ? "#fff" : "var(--text-muted, #64748b)",
-                      minWidth: 20,
-                      height: 18,
-                      padding: "0 6px",
-                      borderRadius: 9,
-                      fontSize: 10.5,
-                      fontWeight: 700,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-
-          {/* Manual refresh — đẩy sang phải */}
-          <button
-            onClick={() => load(false)}
-            disabled={refreshing}
-            title="Làm mới"
-            aria-label="Làm mới"
-            style={{
-              marginLeft: "auto",
-              padding: "8px 14px",
-              background: "var(--card-bg, #fff)",
-              border: "1px solid var(--border-color, #e5e9ef)",
-              borderRadius: 20,
-              cursor: refreshing ? "not-allowed" : "pointer",
-              fontSize: 12,
-              color: "var(--text-primary, #172033)",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              opacity: refreshing ? 0.6 : 1,
-            }}
-          >
-            {refreshing ? (
-              <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
-            ) : (
-              <RefreshCw size={13} />
-            )}
-            Làm mới
-          </button>
-        </div>
+  <button
+    onClick={() => load(false)}
+    disabled={refreshing}
+    title="Làm mới"
+    aria-label="Làm mới"
+    style={{
+      padding: "8px 14px",
+      background: "var(--card-bg, #fff)",
+      border: "1px solid var(--border-color, #e5e9ef)",
+      borderRadius: 20,
+      cursor: refreshing ? "not-allowed" : "pointer",
+      fontSize: 12,
+      color: "var(--text-primary, #172033)",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      opacity: refreshing ? 0.6 : 1,
+      flexShrink: 0,
+    }}
+  >
+    {refreshing ? (
+      <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+    ) : (
+      <RefreshCw size={13} />
+    )}
+    Làm mới
+  </button>
+</div>
 
         {/* ============ BẢNG ĐƠN HÀNG ============ */}
         <div
@@ -389,8 +383,8 @@ export default function EmployeeOrders() {
 
           {/* Data */}
           {!loading && (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <div className="emp-orders-table-wrap">
+  <table className="emp-orders-table" style={{ borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
                     <th style={thLeft}>{t("orders.code")}</th>
