@@ -11,6 +11,11 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_FILE = path.join(__dirname, "canteen-db.json");
+const DB_FILE = path.join(__dirname, "canteen-db.json");
+
+// ✅ BUILD VERSION — dùng để verify Render đã deploy code mới chưa
+const BUILD_VERSION = "v2-menu-no-filter-" + new Date().toISOString().slice(0, 19);
+console.log("🔖 BUILD VERSION:", BUILD_VERSION);
 
 // ============================================================
 // ✅ Batch 7 / N1: Date helpers — LOCAL timezone (không dùng toISOString)
@@ -2296,7 +2301,33 @@ app.delete("/api/shifts/:id", auth(["ADMIN"]), (req, res) => {
 });
 
 // ============ HEALTH ============
-app.get("/", (_, res) => res.json({ ok: true, name: "Canteen VWA API (JSON)" }));
+app.get("/", (_, res) => res.json({
+  ok: true,
+  name: "Canteen VWA API (JSON)",
+  version: BUILD_VERSION,
+  menuEndpoint: "returns ALL items (no active filter)",
+  timestamp: new Date().toISOString()
+}));
+
+// ✅ DEBUG endpoint — đếm món chính xác từ DB
+app.get("/api/_debug/menu-count", (_, res) => {
+  try {
+    const db = loadDB();
+    const all = db.menu_items || [];
+    const active = all.filter(m => m.active).length;
+    const inactive = all.length - active;
+    res.json({
+      buildVersion: BUILD_VERSION,
+      total: all.length,
+      active,
+      inactive,
+      inactiveItems: all.filter(m => !m.active).map(m => ({ id: m.id, name: m.name, active: m.active })),
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {
+    res.status(500).json({ message: e.message, buildVersion: BUILD_VERSION });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 
