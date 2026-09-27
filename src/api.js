@@ -22,6 +22,8 @@
 //      dùng session (không chỉ JWT)
 //   ✅ Error object có .status + .body — dễ debug/retry
 //   ✅ Error message rõ hơn (network error vs timeout vs HTTP)
+//   ✅ MỚI: Thêm `menu.listActive()` — chỉ lấy món đang bán
+//      (active=1), dùng cho Customer để không thấy món tắt
 // ============================================================
 
 // ✅ Strip trailing slash — tránh BASE + "/menu" = "//menu"
@@ -203,16 +205,33 @@ export const api = {
   // ----------------------------------------------------------
   // MENU — Thực đơn
   // ----------------------------------------------------------
+  // ✅ Backend đã đổi: /menu mặc định trả HẾT (kể cả active=0)
+  //    - Admin/Employee: dùng list() → thấy hết món
+  //    - Customer:       dùng listActive() → chỉ món đang bán
   menu: {
+    // Dùng cho Admin/Employee — lấy TẤT CẢ món (kể cả món tắt)
     list: (q = "", category = "Tất cả", sort = "popular", all = false) => {
       const params = new URLSearchParams();
       if (q) params.set("q", q);
       if (category && category !== "Tất cả") params.set("category", category);
       if (sort) params.set("sort", sort);
+      // `all` giữ lại cho backward-compat — backend giờ mặc định trả hết
       if (all) params.set("all", "1");
       const qs = params.toString();
       return req("/menu" + (qs ? "?" + qs : ""));
     },
+
+    // ✅ MỚI: Dùng cho Customer — chỉ lấy món đang bán (active=1)
+    // Backend dùng query `active_only=1` để filter
+    listActive: (q = "", category = "Tất cả", sort = "popular") => {
+      const params = new URLSearchParams();
+      params.set("active_only", "1");
+      if (q) params.set("q", q);
+      if (category && category !== "Tất cả") params.set("category", category);
+      if (sort) params.set("sort", sort);
+      return req("/menu?" + params.toString());
+    },
+
     get:    (id)          => req(`/menu/${id}`),
     create: (data)        => req("/menu",       { method: "POST",   body: JSON.stringify(data) }),
     update: (id, data)    => req(`/menu/${id}`, { method: "PUT",    body: JSON.stringify(data) }),
