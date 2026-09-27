@@ -11,3 +11,5 @@ data/
 .idea/
 .DS_Store
 .vercel
+
+.vite/
