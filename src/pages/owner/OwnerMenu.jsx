@@ -1,43 +1,33 @@
 // ============================================================
 // OWNERMENU.JSX — Quản lý thực đơn + danh mục (Admin)
 // ============================================================
-// Tính năng:
-//   - Danh sách món + search + filter theo danh mục
-//   - Thêm / Sửa / Xoá món
-//   - Bật / Tắt trạng thái active món (optimistic update)
-//   - Quản lý danh mục (CRUD trong modal)
 //
-// Fixes:
-//   - Fix bug `stock = 0` → dùng `??` thay vì `||`
-//   - Form layout chia rõ: 3 cột giá + cột số lượng
-//   - Image: ưu tiên ImageUploader > URL > ảnh cũ
-//   - Thay confirm() native bằng ConfirmDialog custom
-//   - ✅ FIX toggle: optimistic update, KHÔNG load() lại full list
-//     → nút trượt mượt, không bị remount reset animation
+// 🚨🚨🚨 CẢNH BÁO CỰC KỲ QUAN TRỌNG 🚨🚨🚨
 //
-// Batch 2:
-//   - ✅ Form giá auto-sync: nhập giá gốc + % → auto tính giá bán
-//   - ✅ Validate trùng tên món (client-side)
-//   - ✅ Category có field `order`
+//   TUYỆT ĐỐI KHÔNG được filter `active` ở FE (Admin/Employee).
 //
-// ✅ FIX UX (MỚI):
-//   - Bỏ opacity 0.5 khi món inactive (trước đây bị hiểu nhầm
-//     là "món biến mất" khi tắt)
-//   - Thay bằng: nền vàng nhạt + viền vàng trái + badge "Đã tắt"
-//     → món tắt vẫn HIỂN THỊ RÕ RÀNG trong bảng Owner
+//   Backend GET /api/menu trả VỀ TẤT CẢ món (kể cả active=0).
+//   FE chỉ filter theo `q` + `filterCat`.
 //
-// 🚨 QUAN TRỌNG — KHÔNG ĐƯỢC FILTER `active` Ở BẤT KỲ ĐÂU:
-//   - Admin/Employee PHẢI thấy cả món tắt (để bật lại)
-//   - Backend GET /api/menu trả về TẤT CẢ món (kể cả active=0)
-//   - FE chỉ filter theo `q` + `filterCat` — KHÔNG filter `active`
-//   - Customer pages mới filter `active` (dùng api.menu.listActive)
+//   Nếu bạn thêm `.filter(m => m.active)` vào biến `filtered`
+//   → món tắt sẽ BIẾN MẤT sau khi F5 → bug "tắt món rồi mất món".
+//
+//   Customer mới được filter active — dùng api.menu.listActive().
+//
+// 🚨🚨🚨 CẢNH BÁO CỰC KỲ QUAN TRỌNG 🚨🚨🚨
+//
+// Hai hành động KHÁC NHAU — KHÔNG được nhầm lẫn:
+//   - toggleActive(m)  → PUT /api/menu/:id {active: 0|1}  ← chỉ đổi trạng thái
+//   - removeItem(m)    → DELETE /api/menu/:id              ← XÓA VĨNH VIỄN
+//
 // ============================================================
+
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Plus, Search, Edit, Trash2, FolderPlus, Folder,
   X, Save, Loader2, AlertCircle,
-  UtensilsCrossed,
+  UtensilsCrossed, EyeOff, Eye,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
@@ -51,8 +41,19 @@ import ImageUploader from "../../components/ImageUploader";
 
 const MODAL_Z = 2147483600;
 const DEFAULT_CATEGORY_ICON = "🍽️";
-
 const MAX_DISCOUNT = 90;
+
+// ============================================================
+// HELPER: DEBUG LOG
+// ============================================================
+// Bật/tắt log để debug việc toggle active
+// Đặt DEBUG = false nếu không cần log
+
+const DEBUG = true;
+
+function dbg(...args) {
+  if (DEBUG) console.log("[OwnerMenu]", ...args);
+}
 
 // ============================================================
 // MAIN COMPONENT
@@ -82,7 +83,7 @@ export default function OwnerMenu() {
   const [image, setImage] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // ---------- Price fields (Batch 2 — controlled) ----------
+  // ---------- Price fields ----------
   const [priceFields, setPriceFields] = useState({
     price: "",
     originalPrice: "",
@@ -93,20 +94,30 @@ export default function OwnerMenu() {
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
+  // ---------- Per-action loading (chống double-click) ----------
+  const [togglingId, setTogglingId] = useState(null);
+
   // ---------- Load ----------
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      // ✅ CRITICAL: `all=true` — yêu cầu backend trả về TẤT CẢ món
-      //    kể cả active=0. Admin PHẢI thấy món tắt để có thể bật lại.
+      // ✅ `all=true` để chắc chắn backend trả TẤT CẢ món (kể cả active=0)
       const [items, cats] = await Promise.all([
         api.menu.list("", "Tất cả", "popular", true),
         api.categories.list(),
       ]);
-      setList(Array.isArray(items) ? items : []);
+
+      const itemsArr = Array.isArray(items) ? items : [];
+      setList(itemsArr);
       setCategories(Array.isArray(cats) ? cats : []);
+
+      // 🔍 DEBUG: đếm số món tắt để verify backend OK
+      const inactiveCount = itemsArr.filter((m) => !m.active).length;
+      dbg(
+        `📦 Load xong: ${itemsArr.length} món (${inactiveCount} đã tắt)`
+      );
     } catch (e) {
       setError(e.message || "Không tải được thực đơn");
       setList([]);
@@ -130,23 +141,24 @@ export default function OwnerMenu() {
     return () => window.removeEventListener("keydown", handler);
   }, [modal, showCatModal, catLoading, saving]);
 
-  // ✅ Batch 2: Reset price fields khi mở modal khác
+  // Reset price fields khi mở modal khác
   useEffect(() => {
     if (!modal) return;
     setPriceFields({
       price: modal.price != null ? Number(modal.price) : "",
-      originalPrice: modal.original_price
-        ? String(modal.original_price)
-        : "",
+      originalPrice: modal.original_price ? String(modal.original_price) : "",
       discountPercent: Number(modal.discount_percent) || 0,
     });
   }, [modal]);
 
-  // ---------- Filter (memo) ----------
-  // 🚨 CHỈ FILTER `q` + `filterCat` — TUYỆT ĐỐI KHÔNG filter `active`
-  //    Nếu thêm `.filter(m => m.active)` ở đây → món tắt biến mất sau F5
+  // ---------- Filter (CHỈ q + filterCat — KHÔNG filter active) ----------
+  //
+  // 🚨 NẾU THÊM `.filter(m => m.active)` VÀO ĐÂY → BUG "F5 MẤT MÓN TẮT".
+  //    Đừng làm vậy. Admin/Employee PHẢI thấy món tắt để có thể bật lại.
+  //
   const filtered = useMemo(() => {
     let result = list;
+
     if (q.trim()) {
       const s = q.toLowerCase().trim();
       result = result.filter((m) => m.name?.toLowerCase().includes(s));
@@ -154,7 +166,10 @@ export default function OwnerMenu() {
     if (filterCat) {
       result = result.filter((m) => m.category === filterCat);
     }
-    // ❌ KHÔNG thêm: result = result.filter(m => m.active)
+
+    // ❌❌❌ TUYỆT ĐỐI KHÔNG THÊM DÒNG NÀY ❌❌❌
+    // result = result.filter((m) => m.active);
+
     return result;
   }, [list, q, filterCat]);
 
@@ -175,7 +190,7 @@ export default function OwnerMenu() {
     }
   }, [confirm, confirmBusy]);
 
-  // ---------- Price handlers (Batch 2) ----------
+  // ---------- Price handlers ----------
 
   const hasOriginal = Number(priceFields.originalPrice) > 0;
 
@@ -216,7 +231,6 @@ export default function OwnerMenu() {
     setModal(item || {});
   };
 
-  // ✅ FIX: đóng hàm closeItemModal đúng cách (thêm dấu `};`)
   const closeItemModal = () => {
     setModal(null);
     setImage("");
@@ -236,12 +250,10 @@ export default function OwnerMenu() {
     const category = f.get("category");
     const stock = Number(f.get("stock"));
 
-    // ---- Validate cơ bản ----
     if (!name) {
       return toast("Vui lòng nhập tên món", "error");
     }
 
-    // ✅ Batch 2: Validate trùng tên món
     const currentId = modal._id || modal.id;
     const dup = list.find(
       (m) =>
@@ -255,7 +267,6 @@ export default function OwnerMenu() {
       );
     }
 
-    // ---- Validate giá ----
     const original = Number(priceFields.originalPrice) || 0;
     const d = Number(priceFields.discountPercent) || 0;
     let price = Number(priceFields.price) || 0;
@@ -305,21 +316,36 @@ export default function OwnerMenu() {
   };
 
   // ============================================================
-  // ✅ TOGGLE ACTIVE — Optimistic update, KHÔNG load()
-  // ------------------------------------------------------------
-  // 🚨 QUAN TRỌNG: Không gọi load() sau khi toggle thành công
-  //    vì:
-  //    1. load() sẽ remount list → mất animation switch
-  //    2. Nếu backend version cũ còn filter active → món sẽ
-  //       biến mất khỏi list (bug "F5 mất món")
-  //    Optimistic update giữ nguyên list local, chỉ đổi 1 item.
+  // ✅ TOGGLE ACTIVE — CHỈ đổi trạng thái, KHÔNG xóa
+  // ============================================================
+  //
+  // 🚨 Hàm này CHỈ được gọi từ nút toggle switch (cột "Hiển thị").
+  //    KHÔNG được gọi từ nút Xóa (cột "Thao tác").
+  //
+  //    1. Optimistic update state → UI phản hồi ngay
+  //    2. Gọi PUT /api/menu/:id {active: 0|1}
+  //    3. KHÔNG gọi load() để tránh remount làm mất animation
+  //    4. Rollback nếu API fail
+  //
   // ============================================================
   const toggleActive = async (item) => {
     const id = item._id || item.id;
-    const oldActive = item.active;
+    const oldActive = Number(item.active) || 0;
     const newActive = oldActive ? 0 : 1;
 
-    // Optimistic update — đổi state ngay lập tức
+    // Chống double-click
+    if (togglingId !== null) {
+      dbg(`⏸️ Đang xử lý món khác, bỏ qua toggle id=${id}`);
+      return;
+    }
+
+    dbg(`🔄 TOGGLE món "${item.name}" (id=${id}): ${oldActive} → ${newActive}`);
+    dbg(`   → Sẽ gọi PUT /api/menu/${id} {active: ${newActive}}`);
+    dbg(`   → KHÔNG gọi DELETE (không xóa)`);
+
+    setTogglingId(id);
+
+    // Optimistic update — đổi state ngay, UI mượt
     setList((prev) =>
       prev.map((m) =>
         (m._id || m.id) === id ? { ...m, active: newActive } : m
@@ -327,32 +353,65 @@ export default function OwnerMenu() {
     );
 
     try {
+      // ✅ CHỈ gọi UPDATE — không bao giờ gọi REMOVE
       await api.menu.update(id, { active: newActive });
-      toast(newActive ? "Đã bật món" : "Đã tắt món", "success");
-      // ❌ KHÔNG gọi load() ở đây — giữ nguyên list để tránh mất món
+
+      dbg(`✅ Toggle thành công món "${item.name}"`);
+
+      // Toast phân biệt rõ ràng với xóa
+      if (newActive) {
+        toast(`Đã BẬT bán món "${item.name}"`, "success");
+      } else {
+        toast(
+          `Đã TẮT bán món "${item.name}" (món vẫn còn, chỉ ẩn với khách)`,
+          "success"
+        );
+      }
+
+      // ❌ KHÔNG gọi load() — giữ nguyên list để không mất món tắt
     } catch (e) {
-      // Rollback nếu lỗi
+      dbg(`❌ Toggle THẤT BẠI món "${item.name}":`, e.message);
+
+      // Rollback state nếu API fail
       setList((prev) =>
         prev.map((m) =>
           (m._id || m.id) === id ? { ...m, active: oldActive } : m
         )
       );
       toast(e.message || "Không đổi được trạng thái", "error");
+    } finally {
+      setTogglingId(null);
     }
   };
 
+  // ============================================================
+  // ✅ REMOVE — XÓA VĨNH VIỄN, có confirm dialog 2 lần
+  // ============================================================
+  //
+  // 🚨 Hàm này CHỈ được gọi từ nút Xóa (icon thùng rác cột "Thao tác").
+  //    KHÔNG được gọi từ nút toggle switch.
+  //
+  // ============================================================
   const removeItem = (item) => {
+    const id = item._id || item.id;
+
+    dbg(`🗑️ MỞ CONFIRM XÓA món "${item.name}" (id=${id})`);
+    dbg(`   → Sẽ gọi DELETE /api/menu/${id} nếu user xác nhận`);
+
     setConfirm({
-      title: `Xóa món "${item.name}"?`,
+      title: `Xóa vĩnh viễn món "${item.name}"?`,
       message:
-        "Hành động này không thể hoàn tác. Món sẽ bị xoá khỏi thực đơn " +
-        "và tất cả đánh giá liên quan cũng sẽ bị xoá.",
-      confirmText: "Xóa vĩnh viễn",
-      cancelText: "Hủy",
+        "⚠️ HÀNH ĐỘNG NÀY KHÔNG THỂ HOÀN TÁC.\n\n" +
+        "Món sẽ bị XÓA KHỎI DATABASE.\n" +
+        "Khác với 'Tắt món' (chỉ ẩn khỏi khách, có thể bật lại).\n\n" +
+        "Nếu bạn chỉ muốn ẩn tạm, hãy dùng nút Tắt ở cột Hiển thị.",
+      confirmText: "XÓA VĨNH VIỄN",
+      cancelText: "Hủy — Giữ lại",
       danger: true,
       onConfirm: async () => {
-        await api.menu.remove(item._id || item.id);
-        toast("Đã xóa món", "success");
+        dbg(`🗑️ THỰC THI XÓA món "${item.name}" (id=${id})`);
+        await api.menu.remove(id);
+        toast(`Đã XÓA vĩnh viễn món "${item.name}"`, "success");
         setConfirm(null);
         load();
       },
@@ -391,10 +450,7 @@ export default function OwnerMenu() {
 
     setCatLoading(true);
     try {
-      const payload = {
-        name,
-        icon: catForm.icon,
-      };
+      const payload = { name, icon: catForm.icon };
       if (order !== undefined) payload.order = order;
 
       if (editingCat) {
@@ -436,10 +492,38 @@ export default function OwnerMenu() {
   // RENDER
   // ============================================================
 
+  // Debug stats
+  const stats = useMemo(() => {
+    const total = list.length;
+    const active = list.filter((m) => Number(m.active) === 1).length;
+    const inactive = total - active;
+    return { total, active, inactive };
+  }, [list]);
+
   return (
     <>
       <div>
-        {/* TOOLBAR */}
+        {/* ============ DEBUG BANNER ============ */}
+        {DEBUG && (
+          <div
+            style={{
+              background: "rgba(38, 52, 213, 0.08)",
+              border: "1px solid rgba(38, 52, 213, 0.2)",
+              borderRadius: 10,
+              padding: "10px 14px",
+              marginBottom: 16,
+              fontSize: 12,
+              color: "#2634d5",
+              fontFamily: "monospace",
+            }}
+          >
+            🔍 DEBUG: Tổng <b>{stats.total}</b> món ·{" "}
+            <b style={{ color: "#18a967" }}>{stats.active} đang bán</b> ·{" "}
+            <b style={{ color: "#f59e0b" }}>{stats.inactive} đã tắt</b>
+          </div>
+        )}
+
+        {/* ============ TOOLBAR ============ */}
         <div
           style={{
             display: "flex",
@@ -526,7 +610,7 @@ export default function OwnerMenu() {
           </button>
         </div>
 
-        {/* TABLE */}
+        {/* ============ TABLE ============ */}
         <div
           style={{
             background: "var(--card-bg, #fff)",
@@ -539,13 +623,19 @@ export default function OwnerMenu() {
             <SkeletonTable
               columns={7}
               rows={5}
-              headers={["Ảnh", "Món", "Danh mục", "Giá", "Tồn", "Hiển thị", "Thao tác"]}
+              headers={[
+                "Ảnh",
+                "Món",
+                "Danh mục",
+                "Giá",
+                "Tồn",
+                "Hiển thị",
+                "Thao tác",
+              ]}
             />
           )}
 
-          {!loading && error && (
-            <ErrorBox message={error} onRetry={load} />
-          )}
+          {!loading && error && <ErrorBox message={error} onRetry={load} />}
 
           {!loading && !error && (
             <div style={{ overflowX: "auto" }}>
@@ -557,26 +647,35 @@ export default function OwnerMenu() {
                     <th style={thStyle}>Danh mục</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>Giá</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>Tồn</th>
-                    <th style={{ ...thStyle, textAlign: "center" }}>Hiển thị</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
+                    <th style={{ ...thStyle, textAlign: "center" }}>
+                      Hiển thị
+                    </th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>
+                      Thao tác
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((m) => {
                     const itemId = m._id || m.id;
                     const hasDiscount = m.discount_percent > 0;
-                    const isActive = !!m.active;
+                    const isActive = Number(m.active) === 1;
+                    const isToggling = togglingId === itemId;
 
                     return (
                       <tr
                         key={itemId}
                         style={{
-                          borderBottom: "1px solid var(--border-color, #eef2f7)",
-                          // ✅ FIX UX: Bỏ opacity 0.5 — dùng nền vàng nhạt + viền trái
-                          // để món tắt VẪN RÕ RÀNG, không bị hiểu nhầm là "biến mất"
-                          background: isActive ? "transparent" : "rgba(245, 158, 11, 0.06)",
-                          borderLeft: isActive ? "3px solid transparent" : "3px solid #f59e0b",
+                          borderBottom:
+                            "1px solid var(--border-color, #eef2f7)",
+                          background: isActive
+                            ? "transparent"
+                            : "rgba(245, 158, 11, 0.06)",
+                          borderLeft: isActive
+                            ? "3px solid transparent"
+                            : "3px solid #f59e0b",
                           transition: "background 0.2s, border-left 0.2s",
+                          opacity: isToggling ? 0.6 : 1,
                         }}
                       >
                         <td style={tdStyle}>
@@ -597,7 +696,9 @@ export default function OwnerMenu() {
                           />
                         </td>
                         <td style={tdStyle}>
-                          <b style={{ display: "block", marginBottom: 2 }}>{m.name}</b>
+                          <b style={{ display: "block", marginBottom: 2 }}>
+                            {m.name}
+                          </b>
                           {m.description && (
                             <span
                               style={{
@@ -614,7 +715,12 @@ export default function OwnerMenu() {
                             </span>
                           )}
                         </td>
-                        <td style={{ ...tdStyle, color: "var(--text-muted, #64748b)" }}>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            color: "var(--text-muted, #64748b)",
+                          }}
+                        >
                           {m.category}
                         </td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
@@ -671,12 +777,15 @@ export default function OwnerMenu() {
                           style={{
                             ...tdStyle,
                             textAlign: "right",
-                            color: m.stock === 0 ? "#ef4444" : "inherit",
+                            color:
+                              m.stock === 0 ? "#ef4444" : "inherit",
                             fontWeight: m.stock === 0 ? 700 : 400,
                           }}
                         >
                           {m.stock}
                         </td>
+
+                        {/* ========== CỘT HIỂN THỊ — TOGGLE (KHÔNG XÓA) ========== */}
                         <td style={{ ...tdStyle, textAlign: "center" }}>
                           <div
                             style={{
@@ -687,15 +796,23 @@ export default function OwnerMenu() {
                             }}
                           >
                             <button
+                              type="button"
                               onClick={() => toggleActive(m)}
-                              title={isActive ? "Tắt món" : "Bật món"}
-                              aria-label={isActive ? "Tắt món" : "Bật món"}
+                              disabled={isToggling}
+                              title={
+                                isActive
+                                  ? "TẮT BÁN món này (khách không thấy, món vẫn còn)"
+                                  : "BẬT BÁN món này"
+                              }
+                              aria-label={
+                                isActive ? "Tắt bán món" : "Bật bán món"
+                              }
                               aria-pressed={isActive}
                               role="switch"
                               style={{
                                 background: isActive ? "#18a967" : "#cbd5e1",
                                 border: 0,
-                                cursor: "pointer",
+                                cursor: isToggling ? "wait" : "pointer",
                                 width: 52,
                                 height: 28,
                                 borderRadius: 999,
@@ -708,6 +825,7 @@ export default function OwnerMenu() {
                                 boxShadow: isActive
                                   ? "0 2px 8px rgba(24, 169, 103, 0.35)"
                                   : "inset 0 1px 3px rgba(0, 0, 0, 0.08)",
+                                opacity: isToggling ? 0.7 : 1,
                               }}
                             >
                               <span
@@ -740,6 +858,8 @@ export default function OwnerMenu() {
                             )}
                           </div>
                         </td>
+
+                        {/* ========== CỘT THAO TÁC — SỬA + XÓA ========== */}
                         <td style={{ ...tdStyle, textAlign: "right" }}>
                           <div
                             style={{
@@ -750,13 +870,13 @@ export default function OwnerMenu() {
                           >
                             <IconButton
                               onClick={() => openItemModal(m)}
-                              title="Sửa"
+                              title="Sửa món (không phải tắt)"
                             >
                               <Edit size={15} />
                             </IconButton>
                             <IconButton
                               onClick={() => removeItem(m)}
-                              title="Xóa"
+                              title="XÓA VĨNH VIỄN món này (khác với tắt)"
                               color="#ef4444"
                             >
                               <Trash2 size={15} />
@@ -784,7 +904,7 @@ export default function OwnerMenu() {
                         <div>
                           {q || filterCat
                             ? "Không có món nào khớp bộ lọc"
-                            : "Chưa có món nào — bấm \"Thêm món\" để bắt đầu"}
+                            : 'Chưa có món nào — bấm "Thêm món" để bắt đầu'}
                         </div>
                       </td>
                     </tr>
@@ -795,12 +915,16 @@ export default function OwnerMenu() {
           )}
         </div>
 
-        {/* CATEGORY MANAGEMENT MODAL */}
+        {/* ============ CATEGORY MODAL ============ */}
         {showCatModal && (
-          <Modal onClose={() => !catLoading && setShowCatModal(false)} maxWidth={560}>
+          <Modal
+            onClose={() => !catLoading && setShowCatModal(false)}
+            maxWidth={560}
+          >
             <div style={modalHeaderStyle}>
               <h3 style={modalTitleStyle}>
-                <Folder size={20} style={{ color: "#0EA5E9" }} /> Quản lý danh mục
+                <Folder size={20} style={{ color: "#0EA5E9" }} /> Quản lý danh
+                mục
               </h3>
               <button
                 onClick={() => !catLoading && setShowCatModal(false)}
@@ -903,7 +1027,9 @@ export default function OwnerMenu() {
                   style={{
                     padding: "10px 16px",
                     background:
-                      !catForm.name.trim() || catLoading ? "#94a3b8" : "#0EA5E9",
+                      !catForm.name.trim() || catLoading
+                        ? "#94a3b8"
+                        : "#0EA5E9",
                     color: "#fff",
                     border: 0,
                     borderRadius: 8,
@@ -1064,7 +1190,7 @@ export default function OwnerMenu() {
           </Modal>
         )}
 
-        {/* ITEM MODAL (Add/Edit) */}
+        {/* ============ ITEM MODAL ============ */}
         {modal && (
           <Modal onClose={() => !saving && closeItemModal()} maxWidth={560}>
             <div style={modalHeaderStyle}>
@@ -1094,10 +1220,7 @@ export default function OwnerMenu() {
               <label style={labelStyle}>Danh mục *</label>
               <select
                 name="category"
-                defaultValue={
-                  modal.category ||
-                  (categories[0]?.name ?? "")
-                }
+                defaultValue={modal.category || (categories[0]?.name ?? "")}
                 required
                 style={inputStyle}
                 disabled={saving}
@@ -1170,11 +1293,6 @@ export default function OwnerMenu() {
                       opacity: hasOriginal ? 0.75 : 1,
                     }}
                     disabled={saving || hasOriginal}
-                    title={
-                      hasOriginal
-                        ? "Tự động tính từ giá gốc và % giảm"
-                        : "Nhập giá bán trực tiếp"
-                    }
                   />
                 </div>
               </div>
@@ -1198,8 +1316,7 @@ export default function OwnerMenu() {
               >
                 {hasOriginal ? (
                   <>
-                    💰 Khách sẽ trả{" "}
-                    <b>{money(priceFields.price)}</b>
+                    💰 Khách sẽ trả <b>{money(priceFields.price)}</b>
                     {priceFields.discountPercent > 0 && (
                       <>
                         {" "}
@@ -1209,15 +1326,9 @@ export default function OwnerMenu() {
                         </span>
                       </>
                     )}
-                    {priceFields.discountPercent === 0 && (
-                      <> (không giảm giá)</>
-                    )}
                   </>
                 ) : (
-                  <>
-                    💡 Để trống <b>Giá gốc</b> nếu không giảm giá — nhập thẳng
-                    giá bán.
-                  </>
+                  <>💡 Để trống Giá gốc nếu không giảm giá.</>
                 )}
               </div>
 
@@ -1242,9 +1353,7 @@ export default function OwnerMenu() {
                 disabled={saving}
               />
 
-              <label style={labelStyle}>
-                Lý do đổi giá (nếu có sửa giá)
-              </label>
+              <label style={labelStyle}>Lý do đổi giá (nếu có sửa giá)</label>
               <input
                 name="reason"
                 placeholder="VD: Tăng giá nguyên liệu, khuyến mãi..."
@@ -1271,34 +1380,6 @@ export default function OwnerMenu() {
                     disabled={saving}
                   />
                 </>
-              )}
-
-              {!image && modal.image && (
-                <div
-                  style={{
-                    marginTop: 8,
-                    padding: 10,
-                    background: "var(--bg-tertiary, #f8fafc)",
-                    borderRadius: 8,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <img
-                    src={modal.image}
-                    alt="Ảnh hiện tại"
-                    style={{
-                      width: 60,
-                      height: 60,
-                      borderRadius: 8,
-                      objectFit: "cover",
-                    }}
-                  />
-                  <div style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>
-                    Ảnh hiện tại (sẽ giữ nếu không chọn ảnh mới)
-                  </div>
-                </div>
               )}
 
               <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
@@ -1363,12 +1444,18 @@ export default function OwnerMenu() {
 // SUB-COMPONENTS
 // ============================================================
 
-function IconButton({ children, onClick, title, color = "var(--text-primary, #172033)" }) {
+function IconButton({
+  children,
+  onClick,
+  title,
+  color = "var(--text-primary, #172033)",
+}) {
   return (
     <button
       onClick={onClick}
       title={title}
       aria-label={title}
+      type="button"
       style={{
         padding: 6,
         border: "1px solid var(--border-color, #e5e9ef)",
@@ -1404,14 +1491,13 @@ function ErrorBox({ message, onRetry }) {
       <div style={{ fontWeight: 600, marginBottom: 4 }}>
         Không tải được dữ liệu
       </div>
-      <div
-        style={{ fontSize: 13, opacity: 0.85, marginBottom: onRetry ? 12 : 0 }}
-      >
+      <div style={{ fontSize: 13, opacity: 0.85, marginBottom: onRetry ? 12 : 0 }}>
         {message}
       </div>
       {onRetry && (
         <button
           onClick={onRetry}
+          type="button"
           style={{
             padding: "8px 16px",
             background: "#ef4444",
@@ -1582,10 +1668,4 @@ const btnCancelStyle = {
   alignItems: "center",
   justifyContent: "center",
   gap: 6,
-};
-
-const loadingBoxStyle = {
-  textAlign: "center",
-  padding: 40,
-  color: "var(--text-light, #8993a3)",
 };
