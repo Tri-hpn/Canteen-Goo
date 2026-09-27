@@ -122,8 +122,8 @@ canteengo/
 
 ### Yêu cầu
 
-- Node.js >= 18 (tải tại https://nodejs.org)
-- npm >= 9 (đi kèm Node)
+- Node.js >= 22 (tải tại https://nodejs.org) — vì `concurrently@10` cần Node ≥ 22
+- npm >= 10 (đi kèm Node)
 - (Tuỳ chọn) MongoDB Atlas account - nếu không có sẽ dùng file JSON local
 
 ### Các bước

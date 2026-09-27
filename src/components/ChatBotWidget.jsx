@@ -19,6 +19,8 @@
 //   - ✅ FIX: quickAdd dùng flag từ trong setCart updater
 //     (trước đó đọc cart[key] là stale prop → toast "Đã thêm"
 //     hiện sai khi đã max stock)
+//   - ✅ FIX: cleanup fetch menu+settings bằng cancelled flag
+//     tránh warning "setState on unmounted component"
 // ============================================================
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -117,17 +119,36 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   const lastUserIdRef = useRef(user?.id);
 
   // ---------- Load menu + settings ----------
+  // ✅ FIX: cleanup bằng cancelled flag — tránh setState sau unmount
 
   useEffect(() => {
+    let cancelled = false;
+
     api.menu
       .list("", "Tất cả", "popular")
-      .then((d) => setMenuItems(Array.isArray(d) ? d : []))
-      .catch(() => setMenuItems([]));
+      .then((d) => {
+        if (cancelled) return;
+        setMenuItems(Array.isArray(d) ? d : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMenuItems([]);
+      });
 
     api.settings
       .get()
-      .then(setSettings)
-      .catch(() => setSettings(null));
+      .then((d) => {
+        if (cancelled) return;
+        setSettings(d);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSettings(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ---------- Reset AI khi user đổi ----------

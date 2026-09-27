@@ -1,6 +1,5 @@
 ﻿node_modules/
 dist/
-build/
 .env
 .env.local
 .env.*.local
@@ -11,5 +10,4 @@ data/
 .vscode/
 .idea/
 .DS_Store
-Thumbs.db
 .vercel

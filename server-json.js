@@ -31,6 +31,7 @@ function toLocalDateStr(iso) {
 
 // ============================================================
 // ✅ FIX M5: helper sinh mã đơn unique (an toàn hơn)
+// ✅ FIX M5b: throw nếu không tạo được sau 10 lần
 // ============================================================
 function generateOrderCode(db) {
   let code;
@@ -40,6 +41,11 @@ function generateOrderCode(db) {
     code = "VWA-" + Date.now().toString().slice(-8) + "-" + rand;
     attempts++;
   } while ((db.orders || []).some((o) => o.code === code) && attempts < 10);
+
+  // ✅ FIX M5b: throw nếu không tạo được code unique
+  if (attempts >= 10) {
+    throw new Error("Không tạo được mã đơn unique — vui lòng thử lại");
+  }
   return code;
 }
 
@@ -548,11 +554,23 @@ app.delete("/api/users/:id", auth(["ADMIN"]), (req, res) => {
 });
 
 // ============================================================
-// ✅ FIX H2/H3/H4/M5: POST /api/orders — validate TRƯỚC, mutate SAU
+// ✅ FIX H2/H3/H4/M5/M5b: POST /api/orders
+//   - Validate TRƯỚC, mutate SAU
+//   - Rollback nếu có exception sau khi đã mutate
 // ============================================================
 app.post("/api/orders", auth(), (req, res) => {
+  const db = loadDB();
+
+  // Biến tracking để rollback
+  let touchedItems = [];   // [{ m, q }]
+  let wallet = null;
+  let total = 0;
+  let isWalletPay = false;
+  let customer = null;
+  let pointsEarned = 0;
+  let walletTx = null;     // transaction đã push (để rollback)
+
   try {
-    const db = loadDB();
     const { items, payment = "Tiền mặt", note = "", discount = 0, voucherCode } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Giỏ hàng trống" });
@@ -561,7 +579,6 @@ app.post("/api/orders", auth(), (req, res) => {
     // ---------- BƯỚC 1: Validate toàn bộ, KHÔNG mutate ----------
     let subtotal = 0;
     const detailed = [];
-    const touchedItems = []; // { m, q } để mutate sau
 
     for (const it of items) {
       const q = Number(it.qty);
@@ -592,11 +609,10 @@ app.post("/api/orders", auth(), (req, res) => {
       touchedItems.push({ m, q });
     }
 
-    const total = Math.max(0, subtotal - Number(discount) || 0);
+    total = Math.max(0, subtotal - Number(discount) || 0);
 
     // ---------- BƯỚC 2: Validate ví (nếu cần) — KHÔNG trừ ----------
-    const isWalletPay = payment === "Ví Canteen" || payment === "WALLET";
-    let wallet = null;
+    isWalletPay = payment === "Ví Canteen" || payment === "WALLET";
 
     if (isWalletPay) {
       wallet = getOrCreateWallet(db, req.user.id);
@@ -615,28 +631,28 @@ app.post("/api/orders", auth(), (req, res) => {
       m.sold = (m.sold || 0) + q;
     });
 
-    // ---------- BƯỚC 4: Trừ ví + tạo wallet transaction ----------
+    // ---------- BƯỚC 4: Trừ ví ----------
     if (isWalletPay) {
       wallet.balance -= total;
       wallet.updated_at = new Date().toISOString();
     }
 
     // ---------- BƯỚC 5: Cộng điểm ----------
-    const pointsEarned = Math.floor(total * 0.01);
-    const customer = db.users.find(u => u.id === req.user.id);
+    pointsEarned = Math.floor(total * 0.01);
+    customer = db.users.find(u => u.id === req.user.id);
     if (customer) customer.points = (customer.points || 0) + pointsEarned;
 
     // ---------- BƯỚC 6: Tạo đơn ----------
     const id = Math.max(0, ...db.orders.map(o => o.id)) + 1;
 
-    // ✅ FIX M5: dùng helper generateOrderCode (10 lần retry, 5 char random)
+    // ✅ FIX M5 + M5b: generateOrderCode sẽ throw nếu không tạo được
     const code = generateOrderCode(db);
 
     // Wallet transaction — gắn order_code sau khi có code
     if (isWalletPay) {
       if (!db.wallet_transactions) db.wallet_transactions = [];
       const wtxId = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
-      db.wallet_transactions.push({
+      walletTx = {
         id: wtxId,
         code: "PAY" + Date.now().toString().slice(-8),
         user_id: req.user.id,
@@ -650,7 +666,8 @@ app.post("/api/orders", auth(), (req, res) => {
         order_code: code,
         created_at: new Date().toISOString(),
         approved_at: new Date().toISOString()
-      });
+      };
+      db.wallet_transactions.push(walletTx);
     }
 
     const order = {
@@ -688,9 +705,36 @@ app.post("/api/orders", auth(), (req, res) => {
     saveDB(db);
     res.status(201).json({ ...order, _id: order.id });
   } catch (e) {
+    // ✅ FIX H2/M5b: ROLLBACK nếu có exception sau khi đã mutate
+    console.error("ORDER CREATE ERROR:", e);
+
+    // 1. Hoàn stock
+    touchedItems.forEach(({ m, q }) => {
+      m.stock = (m.stock || 0) + q;
+      m.sold = Math.max(0, (m.sold || 0) - q);
+    });
+
+    // 2. Hoàn ví + xoá wallet transaction nếu đã push
+    if (isWalletPay && wallet) {
+      wallet.balance += total;
+      wallet.updated_at = new Date().toISOString();
+
+      if (walletTx && db.wallet_transactions) {
+        db.wallet_transactions = db.wallet_transactions.filter(
+          (t) => t.id !== walletTx.id
+        );
+      }
+    }
+
+    // 3. Hoàn điểm
+    if (customer && pointsEarned > 0) {
+      customer.points = Math.max(0, (customer.points || 0) - pointsEarned);
+    }
+
     res.status(400).json({ message: e.message });
   }
 });
+
 app.get("/api/orders/me", auth(), (req, res) => {
   const db = loadDB();
   const enrich = (o) => {
