@@ -1,7 +1,7 @@
 ﻿# ============================================================
 # CANTEEN VWA — API TEST COLLECTION
 # ============================================================
-# Base URL: https://canteen-go-43oc.onrender.com
+# Base URL: https://canteen-goo.onrender.com
 #
 # CÁCH DÙNG:
 #   1. Chạy request [AUTH] Login đầu tiên → copy token
@@ -24,7 +24,7 @@
 #   - Bỏ query param ?all=1 (không còn cần thiết)
 # ============================================================
 
-@baseUrl = https://canteen-go-43oc.onrender.com
+@baseUrl = https://canteen-goo.onrender.com
 @token = PASTE_TOKEN_HERE
 
 
