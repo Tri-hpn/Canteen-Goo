@@ -126,7 +126,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     let cancelled = false;
 
     api.menu
-      .list("", "Tất cả", "popular")
+       .listActive("", "Tất cả", "popular")
       .then((d) => {
         if (cancelled) return;
         setMenuItems(Array.isArray(d) ? d : []);

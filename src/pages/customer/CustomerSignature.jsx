@@ -50,7 +50,7 @@ export default function CustomerSignature() {
     setError("");
 
     try {
-      const data = await api.menu.list("", "Tất cả", "popular");
+      const data = await api.menu.listActive("", "Tất cả", "popular");
       const list = Array.isArray(data) ? data : [];
       setItems(list.slice(0, SIGNATURE_LIMIT));
     } catch (e) {

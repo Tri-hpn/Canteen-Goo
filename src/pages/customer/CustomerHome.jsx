@@ -154,7 +154,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
     try {
       const [menuRes, promoRes, pubVoucherRes] = await Promise.all([
-        api.menu.list("", "Tất cả", "popular").catch(() => []),
+        api.menu.listActive("", "Tất cả", "popular").catch(() => []),
         api.promotions.list().catch(() => []),
         api.vouchers.public().catch(() => []),
       ]);

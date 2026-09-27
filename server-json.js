@@ -372,12 +372,34 @@ app.put("/api/auth/profile", auth(), (req, res) => {
 
 // ============ MENU ============
 app.get("/api/menu", (req, res) => {
-  const db = loadDB();
-  const { q = "", category = "Tất cả", all } = req.query;
-  let items = all === "1" ? [...db.menu_items] : db.menu_items.filter(m => m.active);
-  if (q) items = items.filter(m => m.name.toLowerCase().includes(q.toLowerCase()));
-  if (category && category !== "Tất cả") items = items.filter(m => m.category === category);
-  res.json(items);
+  try {
+    const db = loadDB();
+    const { q = "", category = "Tất cả", active_only } = req.query;
+
+    // ✅ FIX CRITICAL: KHÔNG filter active ở backend nữa.
+    // Luôn trả về TẤT CẢ món (bao gồm cả active=0).
+    // Frontend tự filter:
+    //   - Customer: gọi ?active_only=1 → chỉ nhận món đang bán
+    //   - Admin/Employee: gọi mặc định → nhận HẾT (kể cả món tắt)
+    let items = [...(db.menu_items || [])];
+
+    // Backward-compat: ?active_only=1 → filter món active cho Customer
+    if (active_only === "1") {
+      items = items.filter((m) => m.active);
+    }
+
+    if (q) {
+      const ql = String(q).toLowerCase();
+      items = items.filter((m) => (m.name || "").toLowerCase().includes(ql));
+    }
+    if (category && category !== "Tất cả") {
+      items = items.filter((m) => m.category === category);
+    }
+    res.json(items);
+  } catch (e) {
+    console.error("GET /api/menu error:", e);
+    res.status(500).json({ message: e.message });
+  }
 });
 
 app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
