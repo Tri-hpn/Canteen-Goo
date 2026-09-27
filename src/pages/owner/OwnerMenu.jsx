@@ -25,6 +25,12 @@
 //     là "món biến mất" khi tắt)
 //   - Thay bằng: nền vàng nhạt + viền vàng trái + badge "Đã tắt"
 //     → món tắt vẫn HIỂN THỊ RÕ RÀNG trong bảng Owner
+//
+// 🚨 QUAN TRỌNG — KHÔNG ĐƯỢC FILTER `active` Ở BẤT KỲ ĐÂU:
+//   - Admin/Employee PHẢI thấy cả món tắt (để bật lại)
+//   - Backend GET /api/menu trả về TẤT CẢ món (kể cả active=0)
+//   - FE chỉ filter theo `q` + `filterCat` — KHÔNG filter `active`
+//   - Customer pages mới filter `active` (dùng api.menu.listActive)
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -93,6 +99,8 @@ export default function OwnerMenu() {
     setLoading(true);
     setError("");
     try {
+      // ✅ CRITICAL: `all=true` — yêu cầu backend trả về TẤT CẢ món
+      //    kể cả active=0. Admin PHẢI thấy món tắt để có thể bật lại.
       const [items, cats] = await Promise.all([
         api.menu.list("", "Tất cả", "popular", true),
         api.categories.list(),
@@ -135,7 +143,8 @@ export default function OwnerMenu() {
   }, [modal]);
 
   // ---------- Filter (memo) ----------
-
+  // 🚨 CHỈ FILTER `q` + `filterCat` — TUYỆT ĐỐI KHÔNG filter `active`
+  //    Nếu thêm `.filter(m => m.active)` ở đây → món tắt biến mất sau F5
   const filtered = useMemo(() => {
     let result = list;
     if (q.trim()) {
@@ -145,6 +154,7 @@ export default function OwnerMenu() {
     if (filterCat) {
       result = result.filter((m) => m.category === filterCat);
     }
+    // ❌ KHÔNG thêm: result = result.filter(m => m.active)
     return result;
   }, [list, q, filterCat]);
 
@@ -296,12 +306,20 @@ export default function OwnerMenu() {
 
   // ============================================================
   // ✅ TOGGLE ACTIVE — Optimistic update, KHÔNG load()
+  // ------------------------------------------------------------
+  // 🚨 QUAN TRỌNG: Không gọi load() sau khi toggle thành công
+  //    vì:
+  //    1. load() sẽ remount list → mất animation switch
+  //    2. Nếu backend version cũ còn filter active → món sẽ
+  //       biến mất khỏi list (bug "F5 mất món")
+  //    Optimistic update giữ nguyên list local, chỉ đổi 1 item.
   // ============================================================
   const toggleActive = async (item) => {
     const id = item._id || item.id;
     const oldActive = item.active;
     const newActive = oldActive ? 0 : 1;
 
+    // Optimistic update — đổi state ngay lập tức
     setList((prev) =>
       prev.map((m) =>
         (m._id || m.id) === id ? { ...m, active: newActive } : m
@@ -311,7 +329,9 @@ export default function OwnerMenu() {
     try {
       await api.menu.update(id, { active: newActive });
       toast(newActive ? "Đã bật món" : "Đã tắt món", "success");
+      // ❌ KHÔNG gọi load() ở đây — giữ nguyên list để tránh mất món
     } catch (e) {
+      // Rollback nếu lỗi
       setList((prev) =>
         prev.map((m) =>
           (m._id || m.id) === id ? { ...m, active: oldActive } : m

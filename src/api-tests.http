@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # CANTEEN VWA — API TEST COLLECTION
 # ============================================================
 # Base URL: https://canteen-go-43oc.onrender.com
@@ -17,6 +17,11 @@
 #   - Render free tier cold start ~30s lần request đầu
 #   - Token hết hạn sau 7 ngày
 #   - KHÔNG chạy [BACKUP] Reset bừa — sẽ xoá hết dữ liệu
+#
+# ✅ UPDATE (theo fix mới):
+#   - GET /api/menu         → trả về TẤT CẢ món (kể cả active=0)
+#   - GET /api/menu?active_only=1 → chỉ trả món đang bán (Customer dùng)
+#   - Bỏ query param ?all=1 (không còn cần thiết)
 # ============================================================
 
 @baseUrl = https://canteen-go-43oc.onrender.com
@@ -79,12 +84,22 @@ curl --location --request PUT '{{baseUrl}}/api/auth/password' \
 # 2️⃣  MENU — Thực đơn
 # ============================================================
 
-### 2.1. Lấy tất cả món (kể cả inactive)
-curl --location --request GET '{{baseUrl}}/api/menu?all=1' \
+### 2.1. Lấy TẤT CẢ món (kể cả active=0) — dùng cho Admin/Employee
+# ✅ ĐÃ UPDATE: bỏ ?all=1, endpoint mặc định trả hết
+curl --location --request GET '{{baseUrl}}/api/menu' \
+--header 'accept: application/json'
+
+### 2.1b. Chỉ lấy món ĐANG BÁN (active=1) — dùng cho Customer
+# ✅ MỚI: dùng ?active_only=1
+curl --location --request GET '{{baseUrl}}/api/menu?active_only=1' \
 --header 'accept: application/json'
 
 ### 2.2. Tìm kiếm + lọc theo category
 curl --location --request GET '{{baseUrl}}/api/menu?q=cơm&category=Cơm&sort=popular' \
+--header 'accept: application/json'
+
+### 2.2b. Tìm kiếm + lọc cho Customer (chỉ món đang bán)
+curl --location --request GET '{{baseUrl}}/api/menu?q=cơm&active_only=1' \
 --header 'accept: application/json'
 
 ### 2.3. Lấy chi tiết 1 món
@@ -117,6 +132,9 @@ curl --location --request PUT '{{baseUrl}}/api/menu/1' \
 }'
 
 ### 2.6. Tắt món (ADMIN) — set active = 0
+# ✅ SAU KHI FIX: món tắt vẫn xuất hiện ở:
+#   - GET /api/menu (không param) → Admin/Employee thấy
+#   - KHÔNG xuất hiện ở GET /api/menu?active_only=1 → Customer không thấy
 curl --location --request PUT '{{baseUrl}}/api/menu/1' \
 --header 'accept: application/json' \
 --header 'content-type: application/json' \
