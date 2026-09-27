@@ -3,16 +3,32 @@
 // ============================================================
 // - BASE: tự động lấy từ .env hoặc fallback "/api"
 // - Token: lưu trong sessionStorage (mất khi đóng tab)
-// - req(): wrapper fetch với error handling
+// - req(): wrapper fetch với error handling + timeout
 // - api.*: các endpoint chia theo nhóm chức năng
 //
 // Cách dùng:
 //   import { api } from "./api";
 //   const user = await api.me();
 //   const orders = await api.orders.myOrders();
+//
+// Fixes (so với bản cũ):
+//   ✅ Timeout 15s với AbortController — không treo vô hạn
+//   ✅ Parse body theo content-type — không che lỗi khi proxy
+//      trả HTML (502/504)
+//   ✅ Content-Type chỉ set khi có body (tránh 1 số WAF chặn
+//      GET có Content-Type)
+//   ✅ Strip trailing slash của BASE — tránh URL //menu
+//   ✅ credentials: "same-origin" — gửi cookie nếu backend
+//      dùng session (không chỉ JWT)
+//   ✅ Error object có .status + .body — dễ debug/retry
+//   ✅ Error message rõ hơn (network error vs timeout vs HTTP)
 // ============================================================
 
-const BASE = import.meta.env.VITE_API_URL || "/api";
+// ✅ Strip trailing slash — tránh BASE + "/menu" = "//menu"
+const BASE = (import.meta.env.VITE_API_URL || "/api").replace(/\/+$/, "");
+
+// Timeout mặc định cho mọi request (ms)
+const DEFAULT_TIMEOUT_MS = 15000;
 
 // ============================================================
 // TOKEN HELPERS
@@ -31,26 +47,75 @@ export function setToken(t) {
 // FETCH WRAPPER
 // ============================================================
 
+/**
+ * Wrapper fetch với:
+ *   - Timeout 15s (AbortController)
+ *   - Auth header tự động
+ *   - Parse body theo content-type (JSON / text / HTML)
+ *   - 401 interceptor → clear token + fire "auth-expired"
+ *
+ * @param {string} path  — path tương đối, VD "/auth/login"
+ * @param {object} [options]
+ * @param {number} [options.timeoutMs] — override timeout
+ * @returns {Promise<any>} parsed data
+ * @throws {Error} với .status + .body nếu HTTP lỗi
+ */
 async function req(path, options = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
+  // ---------- Timeout setup ----------
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  // ---------- Headers ----------
+  const headers = { ...(options.headers || {}) };
+
+  // Chỉ set Content-Type khi thực sự có body
+  // (tránh 1 số WAF/proxy chặn GET có Content-Type)
+  if (options.body && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(BASE + path, {
-    ...options,
-    headers,
-    cache: "no-store",
-  });
+  // ---------- Fetch ----------
+  let res;
+  try {
+    res = await fetch(BASE + path, {
+      ...options,
+      headers,
+      cache: "no-store",
+      credentials: "same-origin", // gửi cookie nếu backend dùng session
+      signal: controller.signal,
+    });
+  } catch (e) {
+    clearTimeout(timeoutId);
 
-  // ✅ FIX M2: bắt 401 (token hết hạn / không hợp lệ)
-  //   - Clear token khỏi sessionStorage
-  //   - Phát event "auth-expired" để App cleanup user + cart
-  //   KHÔNG tự navigate ở đây vì api.js là module thuần,
-  //   không có React Router context.
+    // AbortError → timeout
+    if (e.name === "AbortError") {
+      const err = new Error(
+        "Yêu cầu quá thời gian. Vui lòng kiểm tra kết nối và thử lại."
+      );
+      err.status = 0;
+      err.isTimeout = true;
+      throw err;
+    }
+
+    // Network error (mất mạng, DNS fail, CORS...)
+    const err = new Error(
+      "Không kết nối được máy chủ: " + (e.message || "unknown error")
+    );
+    err.status = 0;
+    err.isNetworkError = true;
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  // ---------- 401 interceptor ----------
+  //   - Clear token
+  //   - Fire "auth-expired" để App cleanup user + cart
+  //   KHÔNG navigate ở đây vì api.js là module thuần
   if (res.status === 401 && token) {
     setToken(null);
     try {
@@ -58,8 +123,38 @@ async function req(path, options = {}) {
     } catch {}
   }
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+  // ---------- Parse body an toàn ----------
+  //   - JSON → res.json()
+  //   - text/HTML → res.text() (giữ message gốc khi proxy lỗi)
+  const contentType = res.headers.get("content-type") || "";
+  let data;
+
+  try {
+    if (contentType.includes("application/json")) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+      data = text ? { message: text.slice(0, 300) } : {};
+    }
+  } catch {
+    // Body rỗng / không parse được
+    data = {};
+  }
+
+  // ---------- Error handling ----------
+  if (!res.ok) {
+    const message =
+      data.message ||
+      data.error ||
+      data.description ||
+      `HTTP ${res.status}${res.statusText ? " " + res.statusText : ""}`;
+
+    const err = new Error(message);
+    err.status = res.status;
+    err.body = data;
+    throw err;
+  }
+
   return data;
 }
 

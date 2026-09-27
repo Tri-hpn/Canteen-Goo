@@ -1,49 +1,15 @@
-﻿# Dependencies
-node_modules/
-
-# Build output
+﻿node_modules/
 dist/
-.vite/
 build/
-
-# Environment
 .env
 .env.local
 .env.*.local
-
-# Database local
 canteen-db.local.json
-canteen-db*.json
-!canteen-db.example.json
-
-# Editor
+canteen-db-auto-backup-*.json
+data/
+*.log
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-
-# OS
 .DS_Store
 Thumbs.db
-desktop.ini
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Backup files
-*canteen-db-auto-backup-*.json
-
-# Unused configs (keep on disk, not in Git)
-Dockerfile
-Dockerfile.backend
-Makefile
-nginx.conf
-
-.dockerignore
-
-render.yaml
+.vercel
