@@ -19,6 +19,12 @@
 //   - ✅ Form giá auto-sync: nhập giá gốc + % → auto tính giá bán
 //   - ✅ Validate trùng tên món (client-side)
 //   - ✅ Category có field `order`
+//
+// ✅ FIX UX (MỚI):
+//   - Bỏ opacity 0.5 khi món inactive (trước đây bị hiểu nhầm
+//     là "món biến mất" khi tắt)
+//   - Thay bằng: nền vàng nhạt + viền vàng trái + badge "Đã tắt"
+//     → món tắt vẫn HIỂN THỊ RÕ RÀNG trong bảng Owner
 // ============================================================
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -546,8 +552,11 @@ export default function OwnerMenu() {
                         key={itemId}
                         style={{
                           borderBottom: "1px solid var(--border-color, #eef2f7)",
-                          opacity: isActive ? 1 : 0.5,
-                          transition: "opacity 0.2s",
+                          // ✅ FIX UX: Bỏ opacity 0.5 — dùng nền vàng nhạt + viền trái
+                          // để món tắt VẪN RÕ RÀNG, không bị hiểu nhầm là "biến mất"
+                          background: isActive ? "transparent" : "rgba(245, 158, 11, 0.06)",
+                          borderLeft: isActive ? "3px solid transparent" : "3px solid #f59e0b",
+                          transition: "background 0.2s, border-left 0.2s",
                         }}
                       >
                         <td style={tdStyle}>
@@ -649,45 +658,67 @@ export default function OwnerMenu() {
                           {m.stock}
                         </td>
                         <td style={{ ...tdStyle, textAlign: "center" }}>
-                          <button
-                            onClick={() => toggleActive(m)}
-                            title={isActive ? "Tắt món" : "Bật món"}
-                            aria-label={isActive ? "Tắt món" : "Bật món"}
-                            aria-pressed={isActive}
-                            role="switch"
+                          <div
                             style={{
-                              background: isActive ? "#18a967" : "#cbd5e1",
-                              border: 0,
-                              cursor: "pointer",
-                              width: 52,
-                              height: 28,
-                              borderRadius: 999,
-                              padding: 0,
-                              position: "relative",
-                              display: "inline-block",
-                              margin: "0 auto",
-                              verticalAlign: "middle",
-                              transition: "background-color 0.25s ease",
-                              boxShadow: isActive
-                                ? "0 2px 8px rgba(24, 169, 103, 0.35)"
-                                : "inset 0 1px 3px rgba(0, 0, 0, 0.08)",
+                              display: "inline-flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              gap: 4,
                             }}
                           >
-                            <span
+                            <button
+                              onClick={() => toggleActive(m)}
+                              title={isActive ? "Tắt món" : "Bật món"}
+                              aria-label={isActive ? "Tắt món" : "Bật món"}
+                              aria-pressed={isActive}
+                              role="switch"
                               style={{
-                                position: "absolute",
-                                top: 3,
-                                left: isActive ? 27 : 3,
-                                width: 22,
-                                height: 22,
-                                borderRadius: "50%",
-                                background: "#ffffff",
-                                boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-                                transition:
-                                  "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                                background: isActive ? "#18a967" : "#cbd5e1",
+                                border: 0,
+                                cursor: "pointer",
+                                width: 52,
+                                height: 28,
+                                borderRadius: 999,
+                                padding: 0,
+                                position: "relative",
+                                display: "inline-block",
+                                margin: "0 auto",
+                                verticalAlign: "middle",
+                                transition: "background-color 0.25s ease",
+                                boxShadow: isActive
+                                  ? "0 2px 8px rgba(24, 169, 103, 0.35)"
+                                  : "inset 0 1px 3px rgba(0, 0, 0, 0.08)",
                               }}
-                            />
-                          </button>
+                            >
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  top: 3,
+                                  left: isActive ? 27 : 3,
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: "50%",
+                                  background: "#ffffff",
+                                  boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+                                  transition:
+                                    "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                                }}
+                              />
+                            </button>
+                            {!isActive && (
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  fontWeight: 700,
+                                  color: "#f59e0b",
+                                  textTransform: "uppercase",
+                                  letterSpacing: 0.3,
+                                }}
+                              >
+                                Đã tắt
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
                           <div
