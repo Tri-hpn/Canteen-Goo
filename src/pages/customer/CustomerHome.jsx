@@ -10,7 +10,7 @@
 //   - Testimonials
 //   - QR truy cập menu (auto-detect origin)
 //
-// Fixes (so với bản gốc):
+// Fixes:
 //   - ✅ Banner data tách ra file ../../bannerSlides.js
 //   - QR dùng window.location.origin (không hardcode localhost)
 //   - Carousel pause khi tab ẩn (visibilitychange)
@@ -19,9 +19,8 @@
 //   - Error state + nút retry
 //   - Flash track: unique key
 //   - Memo các computed values
-//   - Xoá dòng thừa
 //   - ✅ MEDIUM FIX: Skeleton loading cho section "Bán chạy nhất"
-//     (thay vì text "Đang tải món...")
+//   - ✅ FIX CRITICAL: Backend trả HẾT món. FE filter active.
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -47,11 +46,8 @@ const BEST_SELLERS_LIMIT = 5;
 const NEW_ITEMS_LIMIT = 4;
 const FLASH_PROMOS_LIMIT = 4;
 const FLASH_VOUCHERS_LIMIT = 2;
-
-// Số skeleton card hiển thị khi loading
 const SKELETON_COUNT = 5;
 
-// Fallback flash items khi không có voucher/promo
 const DEFAULT_FLASH_ITEMS = [
   { text: "🎉 Ưu đãi sinh viên — Giảm 10% khi đặt món qua app" },
   { text: "⚡ Chuẩn bị món 5-8 phút — Nhận ngay tại quầy" },
@@ -83,13 +79,11 @@ const TESTIMONIALS = [
 // HELPERS
 // ============================================================
 
-/** Lấy origin hiện tại — dùng cho QR code, không hardcode. */
 function getPublicMenuUrl() {
   if (typeof window === "undefined") return "";
   return `${window.location.origin}/customer/menu`;
 }
 
-/** Render icon theo key trong slide.chips. */
 function renderChipIcon(iconName, size = 13) {
   switch (iconName) {
     case "clock":
@@ -105,7 +99,6 @@ function renderChipIcon(iconName, size = 13) {
   }
 }
 
-/** Format số nguyên VN. */
 function fmtNumber(n) {
   return typeof n === "number" ? n.toLocaleString("vi-VN") : String(n ?? "");
 }
@@ -118,14 +111,12 @@ export default function CustomerHome({ user, cart, setCart }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
-  // ---------- Data ----------
   const [items, setItems] = useState([]);
   const [newItems, setNewItems] = useState([]);
   const [promotions, setPromotions] = useState([]);
   const [publicVouchers, setPublicVouchers] = useState([]);
   const [flashItems, setFlashItems] = useState(DEFAULT_FLASH_ITEMS);
 
-  // ---------- UI state ----------
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -135,12 +126,10 @@ export default function CustomerHome({ user, cart, setCart }) {
   const [selected, setSelected] = useState(null);
   const [mode, setMode] = useState("cart");
 
-  // Track visibility tab
   const [tabVisible, setTabVisible] = useState(
     typeof document === "undefined" || !document.hidden
   );
 
-  // Refs
   const inFlightRef = useRef(false);
 
   // ---------- Load ----------
@@ -154,28 +143,27 @@ export default function CustomerHome({ user, cart, setCart }) {
 
     try {
       const [menuRes, promoRes, pubVoucherRes] = await Promise.all([
-        api.menu.listActive("", "Tất cả", "popular").catch(() => []),
+        api.menu.list("", "Tất cả", "popular").catch(() => []),
         api.promotions.list().catch(() => []),
         api.vouchers.public().catch(() => []),
       ]);
 
-      const list = Array.isArray(menuRes) ? menuRes : [];
+      const rawList = Array.isArray(menuRes) ? menuRes : [];
+      // ✅ FIX CRITICAL: Chỉ món đang bán (backend trả hết)
+      const list = rawList.filter((m) => m.active);
 
-      // Best sellers: sort theo sold giảm dần
       const bestSellers = [...list]
         .filter((m) => (m.sold || 0) > 0)
         .sort((a, b) => (b.sold || 0) - (a.sold || 0))
         .slice(0, BEST_SELLERS_LIMIT);
       setItems(bestSellers);
 
-      // Món mới: sort theo id giảm dần
       const sortedById = [...list].sort((a, b) => (b.id || 0) - (a.id || 0));
       setNewItems(sortedById.slice(0, NEW_ITEMS_LIMIT));
 
       setPromotions(Array.isArray(promoRes) ? promoRes : []);
       setPublicVouchers(Array.isArray(pubVoucherRes) ? pubVoucherRes : []);
 
-      // Build flash items
       const flash = [];
       (Array.isArray(pubVoucherRes) ? pubVoucherRes : []).forEach((v) => {
         flash.push({
@@ -213,7 +201,6 @@ export default function CustomerHome({ user, cart, setCart }) {
     return () => clearInterval(timer);
   }, [paused, tabVisible]);
 
-  // Track visibilitychange
   useEffect(() => {
     const handler = () => setTabVisible(!document.hidden);
     document.addEventListener("visibilitychange", handler);
@@ -237,7 +224,6 @@ export default function CustomerHome({ user, cart, setCart }) {
     )}&margin=0`;
   }, [publicMenuUrl]);
 
-  // Chia flash items thành 3 phần cho marquee (key unique)
   const flashTrack = useMemo(() => {
     if (!flashItems.length) return [];
     const out = [];
@@ -569,7 +555,6 @@ export default function CustomerHome({ user, cart, setCart }) {
                   </div>
                 )}
 
-                {/* Banner button: dùng <button> thay vì <a href> */}
                 <button
                   type="button"
                   className="banner-btn"
@@ -595,7 +580,6 @@ export default function CustomerHome({ user, cart, setCart }) {
           ))}
         </div>
 
-        {/* Nav buttons */}
         <button
           onClick={goPrev}
           aria-label="Slide trước"
@@ -611,7 +595,6 @@ export default function CustomerHome({ user, cart, setCart }) {
           <ChevronRight size={20} />
         </button>
 
-        {/* Dots */}
         <div className="banner-dots">
           {SLIDES.map((_, i) => (
             <button
@@ -696,7 +679,6 @@ export default function CustomerHome({ user, cart, setCart }) {
 
           <div style={{ marginBottom: 26 }}>
             <div className="home-food-grid-5">
-              {/* Voucher cards */}
               {publicVouchers.slice(0, FLASH_VOUCHERS_LIMIT).map((v) => (
                 <Link
                   key={`voucher-${v.id}`}
@@ -808,7 +790,6 @@ export default function CustomerHome({ user, cart, setCart }) {
                 </Link>
               ))}
 
-              {/* Promo cards */}
               {promotions.slice(0, FLASH_PROMOS_LIMIT).map((m) => (
                 <div
                   key={`promo-${m.id}`}
@@ -948,7 +929,6 @@ export default function CustomerHome({ user, cart, setCart }) {
       </h3>
 
       <div className="home-food-grid-5" style={{ marginBottom: 26 }}>
-        {/* ✅ Loading: Skeleton cards thay vì text */}
         {loading && items.length === 0 && (
           <>
             {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
@@ -957,7 +937,6 @@ export default function CustomerHome({ user, cart, setCart }) {
           </>
         )}
 
-        {/* Empty state (chỉ hiện khi đã load xong) */}
         {!loading && items.length === 0 && (
           <div
             style={{
@@ -998,7 +977,6 @@ export default function CustomerHome({ user, cart, setCart }) {
           </div>
         )}
 
-        {/* Data */}
         {items.map(renderFoodCard)}
       </div>
 

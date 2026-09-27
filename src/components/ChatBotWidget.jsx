@@ -3,7 +3,7 @@
 // ============================================================
 // 2 mode: AI (gợi ý món) + Nhà hàng (chat với nhân viên)
 //
-// Fixes (so với bản gốc):
+// Fixes:
 //   - Bỏ setTimeout hack trong sendAI + sendStaff
 //   - Race-safe loadStaff (reqIdRef)
 //   - Smart scroll: chỉ scroll khi ở gần đáy hoặc tin của mình
@@ -17,11 +17,9 @@
 //   - Reset AI messages khi user đổi
 //   - role="dialog" + aria-modal cho panel
 //   - ✅ FIX: quickAdd dùng flag từ trong setCart updater
-//     (trước đó đọc cart[key] là stale prop → toast "Đã thêm"
-//     hiện sai khi đã max stock)
 //   - ✅ FIX: cleanup fetch menu+settings bằng cancelled flag
-//     tránh warning "setState on unmounted component"
 //   - ✅ FIX UX: FAB z-index 45 (không đè BottomNav z-index 50)
+//   - ✅ FIX CRITICAL: Chỉ gợi ý món đang bán (active=1)
 // ============================================================
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -72,9 +70,6 @@ function fmtTime(iso) {
   }
 }
 
-/**
- * Tính max qty cho item — món hết hàng (stock=0) không cho tăng vô hạn.
- */
 function getMaxQty(item) {
   if (typeof item?.stock === "number") {
     return Math.max(1, item.stock);
@@ -90,25 +85,21 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("ai"); // "ai" | "staff"
 
-  // ---------- AI ----------
   const [aiMessages, setAiMessages] = useState([]);
   const [aiText, setAiText] = useState("");
   const [aiTyping, setAiTyping] = useState(false);
 
-  // ---------- Nhà hàng ----------
   const [staffMessages, setStaffMessages] = useState([]);
   const [staffText, setStaffText] = useState("");
   const [staffSending, setStaffSending] = useState(false);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffError, setStaffError] = useState("");
 
-  // ---------- Chung ----------
   const [menuItems, setMenuItems] = useState([]);
   const [settings, setSettings] = useState(null);
   const [selected, setSelected] = useState(null);
   const [hasNew, setHasNew] = useState(false);
 
-  // ---------- Refs ----------
   const staffReqIdRef = useRef(0);
   const aiTimerRef = useRef(null);
   const lastAiCountRef = useRef(0);
@@ -120,16 +111,16 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   const lastUserIdRef = useRef(user?.id);
 
   // ---------- Load menu + settings ----------
-  // ✅ FIX: cleanup bằng cancelled flag — tránh setState sau unmount
-
   useEffect(() => {
     let cancelled = false;
 
     api.menu
-       .listActive("", "Tất cả", "popular")
+      .list("", "Tất cả", "popular")
       .then((d) => {
         if (cancelled) return;
-        setMenuItems(Array.isArray(d) ? d : []);
+        const list = Array.isArray(d) ? d : [];
+        // ✅ FIX CRITICAL: Chỉ món đang bán
+        setMenuItems(list.filter((m) => m.active));
       })
       .catch(() => {
         if (cancelled) return;
@@ -153,7 +144,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   }, []);
 
   // ---------- Reset AI khi user đổi ----------
-
   useEffect(() => {
     if (lastUserIdRef.current !== user?.id) {
       lastUserIdRef.current = user?.id;
@@ -165,7 +155,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   }, [user?.id]);
 
   // ---------- Welcome AI ----------
-
   useEffect(() => {
     if (!open || mode !== "ai") return;
     if (aiMessages.length > 0) return;
@@ -192,7 +181,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   }, []);
 
   // ---------- Load staff (race-safe) ----------
-
   const loadStaff = useCallback(async (silent = true) => {
     const myReqId = ++staffReqIdRef.current;
 
@@ -203,9 +191,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
 
     try {
       const data = await api.chat.myMessages();
-
       if (myReqId !== staffReqIdRef.current) return;
-
       setStaffMessages(Array.isArray(data) ? data : []);
     } catch (e) {
       if (myReqId === staffReqIdRef.current && !silent) {
@@ -216,7 +202,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     }
   }, []);
 
-  // Polling khi mở tab staff
   useEffect(() => {
     if (!open || mode !== "staff") return;
 
@@ -226,7 +211,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   }, [open, mode, loadStaff]);
 
   // ---------- Smart scroll AI ----------
-
   useEffect(() => {
     if (!open || mode !== "ai") return;
     const container = aiScrollRef.current;
@@ -253,7 +237,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   }, [open, mode, aiMessages, aiTyping]);
 
   // ---------- Smart scroll Staff ----------
-
   useEffect(() => {
     if (!open || mode !== "staff") return;
     const container = staffScrollRef.current;
@@ -279,14 +262,12 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     lastStaffCountRef.current = staffMessages.length;
   }, [open, mode, staffMessages]);
 
-  // ---------- hasNew: hiện badge khi có tin staff mới ----------
-
+  // ---------- hasNew ----------
   useEffect(() => {
     if (open) {
       setHasNew(false);
       return;
     }
-    // Khi widget đóng mà có tin từ staff chưa xem → hiện badge
     if (staffMessages.length > 0) {
       const last = staffMessages[staffMessages.length - 1];
       if (last?.from === "staff") setHasNew(true);
@@ -294,7 +275,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   }, [open, staffMessages]);
 
   // ---------- ESC đóng panel + body scroll lock ----------
-
   useEffect(() => {
     if (!open) return;
 
@@ -303,7 +283,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     };
     window.addEventListener("keydown", handler);
 
-    // Lock body scroll khi panel mở (mobile)
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -338,7 +317,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     ]);
     setAiTyping(true);
 
-    // Clear timeout cũ nếu có
     if (aiTimerRef.current) clearTimeout(aiTimerRef.current);
 
     aiTimerRef.current = setTimeout(() => {
@@ -374,7 +352,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       const msg = await api.chat.send({ content: val });
       setStaffText("");
       setStaffMessages((m) => [...m, msg]);
-      // Poll 3s tới sẽ sync — không cần setTimeout
     } catch (e) {
       toast(e.message || "Không gửi được", "error");
     } finally {
@@ -382,11 +359,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     }
   };
 
-  /**
-   * ✅ Thêm vào giỏ với flag từ trong updater.
-   * Tránh bug: đọc `cart[key]` là stale prop (chưa update từ setCart
-   * vừa gọi) → toast "Đã thêm" hiện sai khi đã max stock.
-   */
   const quickAdd = (m) => {
     const id = m._id || m.id;
     const key = `${id}-S-`;
@@ -420,8 +392,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       };
     });
 
-    // React 18: setState sync trước re-render trong event handler
-    // → đọc flag `added` ngay sau đó
     if (added) {
       toast(`Đã thêm ${m.name} vào giỏ!`, "success");
     } else {
@@ -437,7 +407,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
 
   return (
     <>
-      {/* ============ NÚT FAB ============ */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
@@ -500,7 +469,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
         </button>
       )}
 
-      {/* ============ KHUNG CHAT ============ */}
       {open && (
         <div
           className="chatbot-panel"
@@ -525,7 +493,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
             border: "1px solid var(--border-color, #e5e9ef)",
           }}
         >
-          {/* ---------- Header ---------- */}
           <div
             style={{
               padding: "12px 14px",
@@ -594,7 +561,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
               </button>
             </div>
 
-            {/* Toggle AI / Nhà hàng */}
             <div
               style={{
                 display: "grid",
@@ -655,7 +621,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
             </div>
           </div>
 
-          {/* ---------- NỘI DUNG ---------- */}
           {mode === "ai" ? (
             <AIContent
               messages={aiMessages}
@@ -685,7 +650,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
         </div>
       )}
 
-      {/* ============ MODAL MÓN ĂN ============ */}
       {selected && (
         <FoodDetailModal
           item={selected}
@@ -782,7 +746,6 @@ function AIContent({
                   {m.content}
                 </div>
 
-                {/* Items gợi ý */}
                 {!isUser && m.items && m.items.length > 0 && (
                   <div
                     style={{
@@ -899,7 +862,6 @@ function AIContent({
           );
         })}
 
-        {/* Typing */}
         {typing && (
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             <div
@@ -936,7 +898,6 @@ function AIContent({
         <div ref={bottomRef} />
       </div>
 
-      {/* Quick replies */}
       <div
         style={{
           padding: "8px 10px 0",
@@ -973,7 +934,6 @@ function AIContent({
         ))}
       </div>
 
-      {/* Input */}
       <div style={{ padding: 10, display: "flex", gap: 6 }}>
         <input
           value={text}
@@ -1054,7 +1014,6 @@ function StaffContent({
           background: "var(--bg-tertiary, #f5f7fb)",
         }}
       >
-        {/* Error */}
         {error && !loading && (
           <div
             style={{
@@ -1094,7 +1053,6 @@ function StaffContent({
           </div>
         )}
 
-        {/* Loading */}
         {loading && (
           <div
             style={{
@@ -1112,7 +1070,6 @@ function StaffContent({
           </div>
         )}
 
-        {/* Empty */}
         {!loading && !error && messages.length === 0 && (
           <div
             style={{
@@ -1142,7 +1099,6 @@ function StaffContent({
           </div>
         )}
 
-        {/* Messages */}
         {messages.map((m) => (
           <div
             key={m.id}
@@ -1204,7 +1160,6 @@ function StaffContent({
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div style={{ padding: 10, display: "flex", gap: 6 }}>
         <input
           value={text}

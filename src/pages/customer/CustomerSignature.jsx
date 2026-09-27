@@ -11,6 +11,8 @@
 //   - Empty state khi không có món
 //   - Image fallback SVG
 //   - loading="lazy" cho ảnh
+//   - ✅ FIX CRITICAL: Chỉ lấy món đang bán (active=1)
+//     Backend giờ trả hết → FE filter.
 // ============================================================
 
 import { useEffect, useState, useCallback } from "react";
@@ -50,9 +52,11 @@ export default function CustomerSignature() {
     setError("");
 
     try {
-      const data = await api.menu.listActive("", "Tất cả", "popular");
+      const data = await api.menu.list("", "Tất cả", "popular");
       const list = Array.isArray(data) ? data : [];
-      setItems(list.slice(0, SIGNATURE_LIMIT));
+      // ✅ FIX CRITICAL: Chỉ món đang bán
+      const activeList = list.filter((m) => m.active);
+      setItems(activeList.slice(0, SIGNATURE_LIMIT));
     } catch (e) {
       setError(e.message || "Không tải được danh sách món");
       setItems([]);

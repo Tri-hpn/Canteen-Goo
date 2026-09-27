@@ -9,19 +9,18 @@
 //   - Điều hướng theo role (customer/employee/owner)
 //   - Sync sang trang Menu qua URL param ?q=
 //
-// Fixes (so với bản gốc):
+// Fixes:
 //   - Bỏ dead state orders/users (luôn rỗng)
-//   - Route theo role: /customer/menu, /employee/menu, /owner/menu
+//   - Route theo role
 //   - Race-safe search (reqIdRef)
-//   - ✅ FIX: điều hướng bằng URL query `?q=` thay vì location.state
-//     → CustomerMenu (đọc searchParams) nhận được giá trị tìm kiếm.
-//     Trước đây dùng `navigate(..., { state })` nhưng Menu lắng nghe
-//     window event "globalsearch" → 2 cơ chế không gặp nhau.
+//   - ✅ FIX: điều hướng bằng URL query `?q=`
 //   - Keyboard nav (↑ ↓ Enter Esc)
 //   - Loading state với spinner
 //   - Highlight keyword trong tên món
 //   - Memo derived values
 //   - aria: role="combobox" + aria-expanded
+//   - ✅ FIX CRITICAL: Customer chỉ thấy món đang bán.
+//     Admin/Employee thấy hết (kể cả món tắt).
 // ============================================================
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
@@ -50,17 +49,12 @@ const FALLBACK_IMG =
 // HELPERS
 // ============================================================
 
-/** Route đến trang menu theo role. */
 function getMenuPath(role) {
   if (role === "ADMIN") return "/owner/menu";
   if (role === "EMPLOYEE") return "/employee/menu";
   return "/customer/menu";
 }
 
-/**
- * Highlight keyword trong text.
- * Trả về React fragment với <mark> bao quanh phần khớp đầu tiên.
- */
 function highlightText(text, query) {
   if (!text || !query) return text;
   const lower = text.toLowerCase();
@@ -102,12 +96,9 @@ export default function GlobalSearch({ role }) {
   const reqIdRef = useRef(0);
   const navigate = useNavigate();
 
-  // ---------- Menu path theo role ----------
-
   const menuPath = useMemo(() => getMenuPath(role), [role]);
 
-  // ---------- Click outside để đóng ----------
-
+  // ---------- Click outside ----------
   useEffect(() => {
     const handler = (e) => {
       if (boxRef.current && !boxRef.current.contains(e.target)) {
@@ -119,7 +110,6 @@ export default function GlobalSearch({ role }) {
   }, []);
 
   // ---------- Search (debounced + race-safe) ----------
-
   useEffect(() => {
     const trimmed = q.trim();
 
@@ -137,10 +127,16 @@ export default function GlobalSearch({ role }) {
       try {
         const menu = await api.menu.list(trimmed, "Tất cả", "popular");
 
-        // Bỏ qua nếu có request mới hơn
         if (myReqId !== reqIdRef.current) return;
 
-        const list = Array.isArray(menu) ? menu : [];
+        let list = Array.isArray(menu) ? menu : [];
+
+        // ✅ FIX CRITICAL: Customer chỉ thấy món đang bán.
+        // Admin/Employee thấy hết (kể cả món tắt).
+        if (role === "CUSTOMER") {
+          list = list.filter((m) => m.active);
+        }
+
         setMenuResults(list.slice(0, MAX_RESULTS));
       } catch {
         if (myReqId === reqIdRef.current) setMenuResults([]);
@@ -150,7 +146,7 @@ export default function GlobalSearch({ role }) {
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [q]);
+  }, [q, role]);
 
   // Reset active index khi results đổi
   useEffect(() => {
@@ -172,14 +168,8 @@ export default function GlobalSearch({ role }) {
     setActiveIdx(-1);
   };
 
-  /**
-   * Điều hướng đến trang Menu kèm query `?q=...` để Menu filter.
-   * ✅ FIX: Dùng URL param thay vì location.state → CustomerMenu
-   *         (đọc searchParams) sẽ nhận được giá trị.
-   */
   const goToMenu = useCallback(
     (item = null) => {
-      // Nếu click 1 món cụ thể → tìm theo tên món đó
       const searchVal = item ? item.name : q.trim();
 
       const params = new URLSearchParams();
@@ -239,7 +229,6 @@ export default function GlobalSearch({ role }) {
 
   return (
     <div ref={boxRef} className="global-search">
-      {/* ============ INPUT ============ */}
       <div
         className="global-search-input"
         role="combobox"
@@ -296,14 +285,12 @@ export default function GlobalSearch({ role }) {
         )}
       </div>
 
-      {/* ============ DROPDOWN ============ */}
       {open && hasQuery && (
         <div
           className="global-search-dropdown"
           id="global-search-listbox"
           role="listbox"
         >
-          {/* Loading state (lần đầu, chưa có kết quả) */}
           {loading && total === 0 && (
             <div
               style={{
@@ -324,7 +311,6 @@ export default function GlobalSearch({ role }) {
             </div>
           )}
 
-          {/* Empty state */}
           {!loading && total === 0 && (
             <div
               style={{
@@ -338,7 +324,6 @@ export default function GlobalSearch({ role }) {
             </div>
           )}
 
-          {/* Results */}
           {total > 0 && (
             <div>
               <div className="dropdown-section-title">
@@ -419,7 +404,6 @@ export default function GlobalSearch({ role }) {
             </div>
           )}
 
-          {/* Hint footer */}
           {total > 0 && (
             <div
               style={{
@@ -455,7 +439,6 @@ export default function GlobalSearch({ role }) {
         </div>
       )}
 
-      {/* Spinner animation fallback */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }

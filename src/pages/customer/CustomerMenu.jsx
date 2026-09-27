@@ -18,6 +18,8 @@
 //   - Empty state theo context (category / search)
 //   - Deps của useSearchParams effect dùng .toString()
 //   - ✅ FIX: đọc `?q=` từ URL (GlobalSearch navigate) → setSearch
+//   - ✅ FIX CRITICAL: Backend giờ trả HẾT món (kể cả active=0).
+//     FE tự filter món đang bán (active) → Customer không thấy món tắt.
 // ============================================================
 
 import { SkeletonCard } from "../../components/Skeleton";
@@ -77,10 +79,16 @@ export default function CustomerMenu({ cart, setCart, user }) {
 
     try {
       const [menuRes, catRes] = await Promise.all([
-        api.menu.listActive("", ALL_CATEGORY, "popular").catch(() => []),
+        api.menu.list("", ALL_CATEGORY, "popular").catch(() => []),
         api.categories.list().catch(() => []),
       ]);
-      setItems(Array.isArray(menuRes) ? menuRes : []);
+
+      // ✅ FIX CRITICAL: Backend giờ trả HẾT món (kể cả active=0).
+      // Customer chỉ thấy món đang bán → filter active ở client.
+      const rawList = Array.isArray(menuRes) ? menuRes : [];
+      const activeOnly = rawList.filter((m) => m.active);
+
+      setItems(activeOnly);
       setCategories(Array.isArray(catRes) ? catRes : []);
     } catch (e) {
       if (!silent) setError(e.message || "Không tải được thực đơn");
@@ -95,8 +103,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
   }, [load]);
 
   // ---------- ✅ Sync BOTH category + search với URL ----------
-  // Đọc `?category=` VÀ `?q=` từ URL khi mount / khi URL đổi
-  // (bao gồm cả trường hợp GlobalSearch navigate tới `?q=...`)
   const searchParamsStr = searchParams.toString();
 
   useEffect(() => {
@@ -108,8 +114,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
   }, [searchParamsStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- Listen global search (giữ tương thích) ----------
-  // Vẫn giữ window event "globalsearch" để nếu component nào cũ
-  // fire event thì vẫn hoạt động.
   useEffect(() => {
     const handler = (e) => setSearch(e.detail || "");
     window.addEventListener("globalsearch", handler);
@@ -118,7 +122,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
 
   // ---------- Category list (memo) ----------
 
-  // Gộp "Tất cả" + categories từ API
   const categoryChips = useMemo(() => {
     const fromApi = categories.map((cat) => ({
       id: cat.name,
@@ -128,7 +131,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
     return [{ id: ALL_CATEGORY, label: ALL_CATEGORY }, ...fromApi];
   }, [categories]);
 
-  // Set các category hợp lệ để validate
   const validCategoryIds = useMemo(
     () => new Set(categoryChips.map((c) => c.id)),
     [categoryChips]
@@ -139,12 +141,10 @@ export default function CustomerMenu({ cart, setCart, user }) {
   const filtered = useMemo(() => {
     let list = items;
 
-    // Filter theo category (chỉ khi category hợp lệ)
     if (category !== ALL_CATEGORY && validCategoryIds.has(category)) {
       list = list.filter((m) => m.category === category);
     }
 
-    // Search
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       list = list.filter((m) => {
@@ -162,7 +162,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
   const selectCategory = (id) => {
     setCategory(id);
 
-    // Giữ lại `?q=` nếu có
     const params = {};
     if (id !== ALL_CATEGORY) params.category = id;
     if (search.trim()) params.q = search.trim();
@@ -172,7 +171,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
 
   const clearSearch = () => {
     setSearch("");
-    // Xoá `?q=` khỏi URL nhưng giữ `?category=`
     const params = {};
     if (category !== ALL_CATEGORY) params.category = category;
     setSearchParams(params);
@@ -319,7 +317,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
           {search && ` — tìm "${search}"`}
         </span>
 
-        {/* Clear filters button khi có filter */}
         {hasFilter && (
           <button
             onClick={clearAllFilters}
@@ -342,7 +339,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         )}
       </div>
 
-          {/* ============ LOADING (skeleton grid) ============ */}
+      {/* ============ LOADING (skeleton grid) ============ */}
       {loading && (
         <div
           className="menu-food-grid"
@@ -423,7 +420,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
                   flexDirection: "column",
                 }}
               >
-                {/* Phần ảnh + info — click mở modal mode cart */}
                 <div
                   onClick={() => openWithMode(m, "cart")}
                   style={{ cursor: "pointer" }}
@@ -490,7 +486,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
                   </div>
                 </div>
 
-                {/* Giá + 2 nút */}
                 <div
                   style={{
                     padding: "0 14px 14px",
