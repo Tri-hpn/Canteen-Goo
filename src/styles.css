@@ -4760,7 +4760,46 @@ html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !
     display: none !important;
   }
 }
+/* ============================================================
+   FIX: Toast center option — căn giữa màn hình
+   ============================================================ */
 
+.toast-container.toast-container--center {
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.toast--center {
+  animation: toastCenterPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  min-width: 320px !important;
+  max-width: 480px !important;
+  padding: 18px 24px !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35),
+              0 8px 20px rgba(0, 0, 0, 0.2) !important;
+  border-radius: 14px !important;
+}
+
+@keyframes toastCenterPop {
+  0%   { opacity: 0; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 480px) {
+  .toast--center {
+    min-width: 0 !important;
+    max-width: calc(100vw - 32px) !important;
+    padding: 16px 20px !important;
+    font-size: 14px !important;
+  }
+}
 /* ============================================================
    KẾT THÚC FILE
    ============================================================ */

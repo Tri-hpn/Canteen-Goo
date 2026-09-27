@@ -184,7 +184,7 @@ export default function App() {
           ? "/employee"
           : "/customer";
       navigate(home);
-      toast("Xin chào " + res.user.name + "!", "success");
+      toast("Xin chào " + res.user.name + "!", "success", { center: true });
       return true;
     } catch (e) {
       return false;

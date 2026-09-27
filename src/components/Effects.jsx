@@ -161,7 +161,12 @@ export function toast(message, type = "info", options = {}) {
 
   const duration = Math.max(1000, options.duration || DEFAULT_DURATION);
 
-  const container = getContainer();
+    const container = getContainer();
+
+  // ✅ FIX: nếu center → thêm class căn giữa màn hình
+  if (options.center) {
+    container.classList.add("toast-container--center");
+  }
 
   // Dedupe nếu có id
   if (options.id) {
@@ -179,7 +184,8 @@ export function toast(message, type = "info", options = {}) {
 
   // Tạo element toast
   const el = document.createElement("div");
-  el.className = `toast toast--${safeType}`;
+    el.className =
+    `toast toast--${safeType}` + (options.center ? " toast--center" : "");
   if (options.id) el.dataset.toastId = options.id;
   el.setAttribute("role", "alert");
 
