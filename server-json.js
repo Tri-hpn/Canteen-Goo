@@ -1,4 +1,4 @@
-﻿import express from "express";
+﻿﻿import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -12,21 +12,58 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_FILE = path.join(__dirname, "canteen-db.json");
 
-// âœ… BUILD VERSION â€” dÃ¹ng Ä‘á»ƒ verify Render Ä‘Ã£ deploy code má»›i chÆ°a
-const BUILD_VERSION = "v2-menu-no-filter-" + new Date().toISOString().slice(0, 19);
-console.log("ðŸ”– BUILD VERSION:", BUILD_VERSION);
+// ✅ BUILD VERSION — dùng để verify Render đã deploy code mới chưa
+const BUILD_VERSION = "v3-timezone-fixed-" + new Date().toISOString().slice(0, 19);
 
 
 // ============================================================
-// âœ… Batch 7 / N1: Date helpers â€” LOCAL timezone (khÃ´ng dÃ¹ng toISOString)
+// ✅ FIX TIMEZONE: Date helpers — LUÔN theo giờ Việt Nam (UTC+7)
 // ============================================================
+// Lý do: Render/Heroku/Vercel chạy server ở UTC. Dùng
+// getFullYear/getMonth/getDate sẽ trả về ngày UTC, gây LỆCH NGÀY
+// cho tất cả logic "hôm nay", báo cáo, chấm công từ 00:00-06:59 VN.
+//
+// Giải pháp: dùng Intl.DateTimeFormat với timeZone Asia/Ho_Chi_Minh
+// → luôn trả về ngày đúng ở VN, bất kể server ở múi giờ nào.
+// ============================================================
+
+const VN_TIMEZONE = "Asia/Ho_Chi_Minh";
+
+// Cache formatter — tạo 1 lần, tái sử dụng (nhanh hơn nhiều)
+const VN_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: VN_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const VN_HOUR_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: VN_TIMEZONE,
+  hour: "2-digit",
+  hour12: false,
+});
+
+const VN_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: VN_TIMEZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/**
+ * Lấy "YYYY-MM-DD" theo GIỜ VIỆT NAM từ một Date (hoặc mặc định now).
+ * en-CA format trả về sẵn "YYYY-MM-DD" → khỏi phải pad.
+ */
 function getLocalDateStr(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dt = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dt}`;
+  if (!(d instanceof Date) || isNaN(d.getTime())) {
+    d = new Date();
+  }
+  return VN_DATE_FORMATTER.format(d);
 }
 
+/**
+ * Chuyển ISO string → "YYYY-MM-DD" theo giờ VN.
+ */
 function toLocalDateStr(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -34,8 +71,31 @@ function toLocalDateStr(iso) {
   return getLocalDateStr(d);
 }
 
+/**
+ * Lấy GIỜ VIỆT NAM (0-23) từ Date.
+ */
+function getVNHour(d = new Date()) {
+  if (!(d instanceof Date) || isNaN(d.getTime())) {
+    d = new Date();
+  }
+  return parseInt(VN_HOUR_FORMATTER.format(d), 10);
+}
+
+/**
+ * Lấy giờ + phút VN từ Date → { hour: 6, minute: 30 }.
+ */
+function getVNTime(d = new Date()) {
+  if (!(d instanceof Date) || isNaN(d.getTime())) {
+    d = new Date();
+  }
+  const parts = VN_TIME_FORMATTER.formatToParts(d);
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
+  const minute = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
+  return { hour, minute };
+}
+
 // ============================================================
-// âœ… FIX M5 + M5b: helper sinh mÃ£ Ä‘Æ¡n unique (an toÃ n hÆ¡n)
+// ✅ FIX M5 + M5b: helper sinh mã đơn unique (an toàn hơn)
 // ============================================================
 function generateOrderCode(db) {
   let code;
@@ -46,21 +106,21 @@ function generateOrderCode(db) {
     attempts++;
   } while ((db.orders || []).some((o) => o.code === code) && attempts < 10);
 
-  // âœ… FIX M5b: throw náº¿u khÃ´ng táº¡o Ä‘Æ°á»£c code unique
+  // ✅ FIX M5b: throw nếu không tạo được code unique
   if (attempts >= 10) {
-    throw new Error("KhÃ´ng táº¡o Ä‘Æ°á»£c mÃ£ Ä‘Æ¡n unique â€” vui lÃ²ng thá»­ láº¡i");
+    throw new Error("Không tạo được mã đơn unique — vui lòng thử lại");
   }
   return code;
 }
 
 // ============================================================
-// MONGODB â€” LÆ°u DB dÆ°á»›i dáº¡ng 1 document JSON
+// MONGODB — Lưu DB dưới dạng 1 document JSON
 // ============================================================
 const MONGO_URI = process.env.MONGO_URI;
 let MongoModel = null;
 let dbCache = null;
 
-// âœ… FIX M1/L10: flag xÃ¡c nháº­n Mongo Ä‘Ã£ connect thÃ nh cÃ´ng
+// ✅ FIX M1/L10: flag xác nhận Mongo đã connect thành công
 let mongoReady = false;
 
 if (MONGO_URI) {
@@ -80,15 +140,15 @@ if (MONGO_URI) {
 function buildSeedData() {
   return {
     users: [
-      { id: 1, name: "Quáº£n trá»‹ viÃªn", email: "admin@vwa.vn", password: bcrypt.hashSync("123456", 10), role: "ADMIN", status: "Hoáº¡t Ä‘á»™ng", phone: "0900000001", points: 0, created_at: "2025-01-01T00:00:00.000Z" },
-      { id: 2, name: "Tráº§n VÄƒn TrÃ­", email: "nhanvien@vwa.vn", password: bcrypt.hashSync("123456", 10), role: "EMPLOYEE", status: "Hoáº¡t Ä‘á»™ng", phone: "", points: 50, created_at: "2025-01-01T00:00:00.000Z" },
-      { id: 3, name: "Tráº§n VÄƒn TrÃ­", email: "sinhvien@vwa.vn", password: bcrypt.hashSync("123456", 10), role: "CUSTOMER", status: "Hoáº¡t Ä‘á»™ng", phone: "", points: 1959, created_at: "2025-01-01T00:00:00.000Z" },
+      { id: 1, name: "Quản trị viên", email: "admin@vwa.vn", password: bcrypt.hashSync("123456", 10), role: "ADMIN", status: "Hoạt động", phone: "0900000001", points: 0, created_at: "2025-01-01T00:00:00.000Z" },
+      { id: 2, name: "Trần Văn Trí", email: "nhanvien@vwa.vn", password: bcrypt.hashSync("123456", 10), role: "EMPLOYEE", status: "Hoạt động", phone: "", points: 50, created_at: "2025-01-01T00:00:00.000Z" },
+      { id: 3, name: "Trần Văn Trí", email: "sinhvien@vwa.vn", password: bcrypt.hashSync("123456", 10), role: "CUSTOMER", status: "Hoạt động", phone: "", points: 1959, created_at: "2025-01-01T00:00:00.000Z" },
     ],
     menu_items: [],
     categories: [
-      { id: 1, name: "CÆ¡m", icon: "ðŸš", order: 1 },
-      { id: 2, name: "BÃºn", icon: "ðŸœ", order: 2 },
-      { id: 3, name: "Äá»“ uá»‘ng", icon: "ðŸ¥¤", order: 3 },
+      { id: 1, name: "Cơm", icon: "🍚", order: 1 },
+      { id: 2, name: "Bún", icon: "🍜", order: 2 },
+      { id: 3, name: "Đồ uống", icon: "🥤", order: 3 },
     ],
     sizes: [
       { id: 1, name: "S", extra_price: 0 },
@@ -114,12 +174,12 @@ function buildSeedData() {
 
 async function initMongo() {
   if (!MONGO_URI || !MongoModel) {
-    console.log("âš ï¸ KhÃ´ng cÃ³ MONGO_URI â†’ dÃ¹ng file JSON local");
+    console.log("⚠️ Không có MONGO_URI → dùng file JSON local");
     if (!fs.existsSync(DB_FILE)) {
       const seed = buildSeedData();
       fs.writeFileSync(DB_FILE, JSON.stringify(seed, null, 2), "utf-8");
       dbCache = seed;
-      console.log("âœ… ÄÃ£ táº¡o file DB seed");
+      console.log("✅ Đã tạo file DB seed");
     } else {
       dbCache = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
     }
@@ -128,31 +188,31 @@ async function initMongo() {
 
   try {
     await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 10000 });
-    console.log("âœ… ÄÃ£ káº¿t ná»‘i MongoDB");
+    console.log("✅ Đã kết nối MongoDB");
 
     let doc = await MongoModel.findById("main");
     if (!doc) {
-      console.log("ðŸ“¦ DB chÆ°a cÃ³ trÃªn MongoDB â†’ khá»Ÿi táº¡o seed...");
+      console.log("📦 DB chưa có trên MongoDB → khởi tạo seed...");
       const seed = buildSeedData();
       await MongoModel.create({ _id: "main", data: seed });
       dbCache = seed;
-      console.log("âœ… ÄÃ£ seed DB lÃªn MongoDB");
-      console.log("   ðŸ‘¤ admin@vwa.vn / 123456");
-      console.log("   ðŸ‘¤ nhanvien@vwa.vn / 123456");
-      console.log("   ðŸ‘¤ sinhvien@vwa.vn / 123456");
+      console.log("✅ Đã seed DB lên MongoDB");
+      console.log("   👤 admin@vwa.vn / 123456");
+      console.log("   👤 nhanvien@vwa.vn / 123456");
+      console.log("   👤 sinhvien@vwa.vn / 123456");
     } else {
       dbCache = doc.data;
       console.log(
-        "âœ… ÄÃ£ load DB tá»« MongoDB: " +
-          (dbCache.menu_items?.length || 0) + " mÃ³n, " +
+        "✅ Đã load DB từ MongoDB: " +
+          (dbCache.menu_items?.length || 0) + " món, " +
           (dbCache.users?.length || 0) + " users"
       );
     }
     mongoReady = true;
     return true;
   } catch (e) {
-    console.error("âŒ MongoDB lá»—i:", e.message);
-    console.log("âš ï¸ Fallback sang file JSON local");
+    console.error("❌ MongoDB lỗi:", e.message);
+    console.log("⚠️ Fallback sang file JSON local");
     mongoReady = false;
     return false;
   }
@@ -165,7 +225,7 @@ function loadDB() {
 
 function saveDB(data) {
   dbCache = data;
-  // âœ… FIX M1/L10: chá»‰ ghi Mongo khi Ä‘Ã£ connect thÃ nh cÃ´ng
+  // ✅ FIX M1/L10: chỉ ghi Mongo khi đã connect thành công
   if (mongoReady && MongoModel) {
     MongoModel.updateOne(
       { _id: "main" },
@@ -188,8 +248,8 @@ function notifyNewOrder(db, order) {
     const id = Math.max(0, ...db.notifications.map(n => n.id)) + 1;
     db.notifications.push({
       id, user_id: s.id,
-      title: "ÄÆ¡n hÃ ng má»›i",
-      content: order.customer_name + " vá»«a Ä‘áº·t Ä‘Æ¡n " + order.code + " (" + order.total.toLocaleString("vi-VN") + "Ä‘)",
+      title: "Đơn hàng mới",
+      content: order.customer_name + " vừa đặt đơn " + order.code + " (" + order.total.toLocaleString("vi-VN") + "đ)",
       type: "order",
       link: s.role === "ADMIN" ? "/owner" : "/employee/orders",
       read: false, created_at: new Date().toISOString()
@@ -202,20 +262,20 @@ function notifyOrderStatus(db, order, newStatus) {
   const id = Math.max(0, ...db.notifications.map(n => n.id)) + 1;
   db.notifications.push({
     id, user_id: order.customer_id,
-    title: "ÄÆ¡n hÃ ng " + order.code + " Ä‘Ã£ " + newStatus.toLowerCase(),
-    content: "ÄÆ¡n hÃ ng cá»§a báº¡n Ä‘ang á»Ÿ tráº¡ng thÃ¡i: " + newStatus,
+    title: "Đơn hàng " + order.code + " đã " + newStatus.toLowerCase(),
+    content: "Đơn hàng của bạn đang ở trạng thái: " + newStatus,
     type: "status", link: "/customer/orders", read: false,
     created_at: new Date().toISOString()
   });
 }
 
 // ============================================================
-// âœ… FIX H1: HoÃ n kho + hoÃ n Ä‘iá»ƒm khi há»§y Ä‘Æ¡n
+// ✅ FIX H1: Hoàn kho + hoàn điểm khi hủy đơn
 // ============================================================
 function rollbackCancelledOrder(db, order) {
   if (!order || order._stock_rolled_back) return;
 
-  // 1. HoÃ n kho + sold
+  // 1. Hoàn kho + sold
   (order.items || []).forEach((it) => {
     const m = (db.menu_items || []).find((x) => x.id == it.menu_item_id);
     if (!m) return;
@@ -223,7 +283,7 @@ function rollbackCancelledOrder(db, order) {
     m.sold = Math.max(0, (m.sold || 0) - (it.qty || 0));
   });
 
-  // 2. Trá»« láº¡i Ä‘iá»ƒm Ä‘Ã£ cá»™ng khi táº¡o Ä‘Æ¡n
+  // 2. Trừ lại điểm đã cộng khi tạo đơn
   const earned = Number(order.points_earned) || 0;
   if (earned > 0) {
     const customer = (db.users || []).find((u) => u.id === order.customer_id);
@@ -250,8 +310,8 @@ app.use(express.json({ limit: "10mb" }));
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
-  console.error("âŒ FATAL: JWT_SECRET chÆ°a Ä‘Æ°á»£c set trong env!");
-  console.error("   Render: Settings â†’ Environment Variables â†’ Add JWT_SECRET");
+  console.error("❌ FATAL: JWT_SECRET chưa được set trong env!");
+  console.error("   Render: Settings → Environment Variables → Add JWT_SECRET");
   process.exit(1);
 }
 
@@ -259,15 +319,15 @@ function auth(roles = []) {
   return (req, res, next) => {
     const header = req.headers.authorization || "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-    if (!token) return res.status(401).json({ message: "ChÆ°a Ä‘Äƒng nháº­p" });
+    if (!token) return res.status(401).json({ message: "Chưa đăng nhập" });
     try {
       const payload = jwt.verify(token, JWT_SECRET);
       if (roles.length && !roles.includes(payload.role))
-        return res.status(403).json({ message: "KhÃ´ng cÃ³ quyá»n" });
+        return res.status(403).json({ message: "Không có quyền" });
       req.user = payload;
       next();
     } catch {
-      res.status(401).json({ message: "Token khÃ´ng há»£p lá»‡" });
+      res.status(401).json({ message: "Token không hợp lệ" });
     }
   };
 }
@@ -276,12 +336,12 @@ function auth(roles = []) {
 app.post("/api/auth/login", (req, res) => {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ message: "Thiáº¿u email/máº­t kháº©u" });
+    if (!email || !password) return res.status(400).json({ message: "Thiếu email/mật khẩu" });
     const db = loadDB();
     const user = db.users.find(u => u.email === email.toLowerCase());
-    if (!user) return res.status(401).json({ message: "Sai tÃ i khoáº£n hoáº·c máº­t kháº©u" });
+    if (!user) return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
     const ok = bcrypt.compareSync(password, user.password);
-    if (!ok) return res.status(401).json({ message: "Sai tÃ i khoáº£n hoáº·c máº­t kháº©u" });
+    if (!ok) return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: "7d" });
     res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
   } catch (e) {
@@ -293,14 +353,14 @@ app.post("/api/auth/login", (req, res) => {
 app.post("/api/auth/register", (req, res) => {
   try {
     const { email, password, name, phone } = req.body || {};
-    if (!email || !password || !name) return res.status(400).json({ message: "Thiáº¿u thÃ´ng tin" });
-    if (password.length < 6) return res.status(400).json({ message: "Máº­t kháº©u pháº£i tá»« 6 kÃ½ tá»±" });
+    if (!email || !password || !name) return res.status(400).json({ message: "Thiếu thông tin" });
+    if (password.length < 6) return res.status(400).json({ message: "Mật khẩu phải từ 6 ký tự" });
     const db = loadDB();
     if (db.users.find(u => u.email === email.toLowerCase()))
-      return res.status(400).json({ message: "Email Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng" });
+      return res.status(400).json({ message: "Email đã được sử dụng" });
     const hash = bcrypt.hashSync(password, 10);
     const id = Math.max(0, ...db.users.map(u => u.id)) + 1;
-    const user = { id, email: email.toLowerCase(), password: hash, name, phone: phone || "", role: "CUSTOMER", status: "Hoáº¡t Ä‘á»™ng", points: 0 };
+    const user = { id, email: email.toLowerCase(), password: hash, name, phone: phone || "", role: "CUSTOMER", status: "Hoạt động", points: 0 };
     db.users.push(user);
     saveDB(db);
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: "7d" });
@@ -315,19 +375,19 @@ app.put("/api/auth/password", auth(), (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: "Thiáº¿u thÃ´ng tin" });
+      return res.status(400).json({ message: "Thiếu thông tin" });
     }
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: "Máº­t kháº©u pháº£i tá»« 6 kÃ½ tá»±" });
+      return res.status(400).json({ message: "Mật khẩu phải từ 6 ký tự" });
     }
     const db = loadDB();
     const u = db.users.find(x => x.id === req.user.id);
-    if (!u) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
+    if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
     const ok = bcrypt.compareSync(currentPassword, u.password);
-    if (!ok) return res.status(401).json({ message: "Máº­t kháº©u hiá»‡n táº¡i khÃ´ng Ä‘Ãºng" });
+    if (!ok) return res.status(401).json({ message: "Mật khẩu hiện tại không đúng" });
     u.password = bcrypt.hashSync(newPassword, 10);
     saveDB(db);
-    res.json({ ok: true, message: "Äá»•i máº­t kháº©u thÃ nh cÃ´ng" });
+    res.json({ ok: true, message: "Đổi mật khẩu thành công" });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -336,7 +396,7 @@ app.put("/api/auth/password", auth(), (req, res) => {
 app.get("/api/auth/me", auth(), (req, res) => {
   const db = loadDB();
   const u = db.users.find(x => x.id === req.user.id);
-  if (!u) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
+  if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
   res.json({ id: u.id, email: u.email, name: u.name, role: u.role, points: u.points || 0, phone: u.phone || "", address: u.address || "", avatar: u.avatar || "" });
 });
 
@@ -344,14 +404,14 @@ app.put("/api/auth/profile", auth(), (req, res) => {
   try {
     const db = loadDB();
     const u = db.users.find(x => x.id === req.user.id);
-    if (!u) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
+    if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
     const { name, phone, avatar, address, email } = req.body;
     if (email && email !== u.email) {
       const emailNorm = email.toLowerCase().trim();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm))
-        return res.status(400).json({ message: "Email khÃ´ng há»£p lá»‡" });
+        return res.status(400).json({ message: "Email không hợp lệ" });
       if (db.users.find(x => x.id !== u.id && x.email === emailNorm))
-        return res.status(400).json({ message: "Email Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng" });
+        return res.status(400).json({ message: "Email đã được sử dụng" });
       u.email = emailNorm;
     }
     if (name !== undefined && name.trim()) u.name = name.trim();
@@ -368,16 +428,16 @@ app.put("/api/auth/profile", auth(), (req, res) => {
 // ============================================================
 // MENU
 // ============================================================
-// âœ… FIX CRITICAL: LUÃ”N tráº£ vá» Táº¤T Cáº¢ mÃ³n (ká»ƒ cáº£ active=0).
-// KHÃ”NG filter active á»Ÿ backend.
-//   - Admin/Employee â†’ tháº¥y Háº¾T (ká»ƒ cáº£ mÃ³n táº¯t)
-//   - Customer â†’ FE tá»± filter m.active á»Ÿ client
-// Äáº£m báº£o mÃ³n KHÃ”NG BAO GIá»œ bá»‹ "biáº¿n máº¥t" khi táº¯t.
+// ✅ FIX CRITICAL: LUÔN trả về TẤT CẢ món (kể cả active=0).
+// KHÔNG filter active ở backend.
+//   - Admin/Employee → thấy HẾT (kể cả món tắt)
+//   - Customer → FE tự filter m.active ở client
+// Đảm bảo món KHÔNG BAO GIỜ bị "biến mất" khi tắt.
 // ============================================================
 app.get("/api/menu", (req, res) => {
   try {
     const db = loadDB();
-    const { q = "", category = "Táº¥t cáº£" } = req.query;
+    const { q = "", category = "Tất cả" } = req.query;
 
     let items = [...(db.menu_items || [])];
 
@@ -385,7 +445,7 @@ app.get("/api/menu", (req, res) => {
       const ql = String(q).toLowerCase();
       items = items.filter((m) => (m.name || "").toLowerCase().includes(ql));
     }
-    if (category && category !== "Táº¥t cáº£") {
+    if (category && category !== "Tất cả") {
       items = items.filter((m) => m.category === category);
     }
     res.json(items);
@@ -402,19 +462,19 @@ app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     const body = { ...req.body };
 
     if (!body.name || !body.name.trim()) {
-      return res.status(400).json({ message: "TÃªn mÃ³n khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng" });
+      return res.status(400).json({ message: "Tên món không được để trống" });
     }
     if (body.price !== undefined && (isNaN(Number(body.price)) || Number(body.price) < 0)) {
-      return res.status(400).json({ message: "GiÃ¡ khÃ´ng Ä‘Æ°á»£c Ã¢m" });
+      return res.status(400).json({ message: "Giá không được âm" });
     }
     if (body.discount_percent !== undefined) {
       const d = Number(body.discount_percent);
       if (isNaN(d) || d < 0 || d > 90) {
-        return res.status(400).json({ message: "Giáº£m giÃ¡ pháº£i tá»« 0-90%" });
+        return res.status(400).json({ message: "Giảm giá phải từ 0-90%" });
       }
     }
     if (body.original_price !== undefined && (isNaN(Number(body.original_price)) || Number(body.original_price) < 0)) {
-      return res.status(400).json({ message: "GiÃ¡ gá»‘c khÃ´ng Ä‘Æ°á»£c Ã¢m" });
+      return res.status(400).json({ message: "Giá gốc không được âm" });
     }
 
     if (body.original_price && body.discount_percent !== undefined) {
@@ -437,21 +497,21 @@ app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
     const i = db.menu_items.findIndex(m => m.id == req.params.id);
-    if (i < 0) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y mÃ³n" });
+    if (i < 0) return res.status(404).json({ message: "Không tìm thấy món" });
     const oldItem = db.menu_items[i];
     const newData = { ...req.body };
 
     if (newData.price !== undefined && (isNaN(Number(newData.price)) || Number(newData.price) < 0)) {
-      return res.status(400).json({ message: "GiÃ¡ khÃ´ng Ä‘Æ°á»£c Ã¢m" });
+      return res.status(400).json({ message: "Giá không được âm" });
     }
     if (newData.discount_percent !== undefined) {
       const d = Number(newData.discount_percent);
       if (isNaN(d) || d < 0 || d > 90) {
-        return res.status(400).json({ message: "Giáº£m giÃ¡ pháº£i tá»« 0-90%" });
+        return res.status(400).json({ message: "Giảm giá phải từ 0-90%" });
       }
     }
     if (newData.original_price !== undefined && (isNaN(Number(newData.original_price)) || Number(newData.original_price) < 0)) {
-      return res.status(400).json({ message: "GiÃ¡ gá»‘c khÃ´ng Ä‘Æ°á»£c Ã¢m" });
+      return res.status(400).json({ message: "Giá gốc không được âm" });
     }
 
     if (newData.original_price && newData.discount_percent !== undefined) {
@@ -462,7 +522,7 @@ app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
       }
     }
 
-    // âœ… FIX L2: ghi price_history khi giÃ¡ THAY Äá»”I
+    // ✅ FIX L2: ghi price_history khi giá THAY ĐỔI
     if (newData.price !== undefined && Number(newData.price) !== Number(oldItem.price)) {
       if (!db.price_history) db.price_history = [];
       const historyId = Math.max(0, ...db.price_history.map(h => h.id)) + 1;
@@ -510,16 +570,16 @@ app.post("/api/users", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const emailNorm = (req.body.email || "").toLowerCase().trim();
-    if (!emailNorm) return res.status(400).json({ message: "Thiáº¿u email" });
+    if (!emailNorm) return res.status(400).json({ message: "Thiếu email" });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
-      return res.status(400).json({ message: "Email khÃ´ng há»£p lá»‡" });
+      return res.status(400).json({ message: "Email không hợp lệ" });
     }
     if (db.users.find(u => u.email === emailNorm)) {
-      return res.status(400).json({ message: "Email Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng" });
+      return res.status(400).json({ message: "Email đã được sử dụng" });
     }
     const id = Math.max(0, ...db.users.map(u => u.id)) + 1;
     const hash = bcrypt.hashSync(req.body.password || "123456", 10);
-    const user = { id, email: emailNorm, password: hash, name: req.body.name, phone: req.body.phone || "", role: req.body.role || "EMPLOYEE", status: "Hoáº¡t Ä‘á»™ng", points: 0 };
+    const user = { id, email: emailNorm, password: hash, name: req.body.name, phone: req.body.phone || "", role: req.body.role || "EMPLOYEE", status: "Hoạt động", points: 0 };
     db.users.push(user);
     saveDB(db);
     res.status(201).json({ ...user, password: undefined });
@@ -532,20 +592,20 @@ app.put("/api/users/:id", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const i = db.users.findIndex(u => u.id == req.params.id);
-    if (i < 0) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
+    if (i < 0) return res.status(404).json({ message: "Không tìm thấy user" });
 
     const data = { ...req.body };
 
     if (data.email !== undefined) {
       const emailNorm = String(data.email).toLowerCase().trim();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
-        return res.status(400).json({ message: "Email khÃ´ng há»£p lá»‡" });
+        return res.status(400).json({ message: "Email không hợp lệ" });
       }
       const dup = db.users.find(
         (u) => u.id != req.params.id && u.email === emailNorm
       );
       if (dup) {
-        return res.status(400).json({ message: "Email Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng" });
+        return res.status(400).json({ message: "Email đã được sử dụng" });
       }
       data.email = emailNorm;
     }
@@ -574,7 +634,7 @@ app.delete("/api/users/:id", auth(["ADMIN"]), (req, res) => {
 app.post("/api/orders", auth(), (req, res) => {
   const db = loadDB();
 
-  // Biáº¿n tracking Ä‘á»ƒ rollback
+  // Biến tracking để rollback
   let touchedItems = [];
   let wallet = null;
   let total = 0;
@@ -584,36 +644,36 @@ app.post("/api/orders", auth(), (req, res) => {
   let walletTx = null;
 
   try {
-    const { items, payment = "Tiá»n máº·t", note = "", discount = 0, voucherCode } = req.body;
+    const { items, payment = "Tiền mặt", note = "", discount = 0, voucherCode } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: "Giá» hÃ ng trá»‘ng" });
+      return res.status(400).json({ message: "Giỏ hàng trống" });
     }
 
-    // ---------- BÆ¯á»šC 1: Validate toÃ n bá»™ ----------
+    // ---------- BƯỚC 1: Validate toàn bộ ----------
     let subtotal = 0;
     const detailed = [];
 
     for (const it of items) {
       const q = Number(it.qty);
 
-      // âœ… FIX H4
+      // ✅ FIX H4
       if (!Number.isFinite(q) || q <= 0 || !Number.isInteger(q)) {
-        return res.status(400).json({ message: "Sá»‘ lÆ°á»£ng mÃ³n khÃ´ng há»£p lá»‡" });
+        return res.status(400).json({ message: "Số lượng món không hợp lệ" });
       }
 
       const m = db.menu_items.find(x => x.id == it.menuItem);
       if (!m) {
-        return res.status(400).json({ message: "MÃ³n khÃ´ng tá»“n táº¡i (id=" + it.menuItem + ")" });
+        return res.status(400).json({ message: "Món không tồn tại (id=" + it.menuItem + ")" });
       }
 
-      // âœ… FIX H3
+      // ✅ FIX H3
       if (!m.active) {
-        return res.status(400).json({ message: `${m.name} Ä‘Ã£ táº¡m ngá»«ng bÃ¡n` });
+        return res.status(400).json({ message: `${m.name} đã tạm ngừng bán` });
       }
 
       if ((m.stock || 0) < q) {
         return res.status(400).json({
-          message: `${m.name} khÃ´ng Ä‘á»§ hÃ ng (cÃ²n ${m.stock || 0}, cáº§n ${q})`,
+          message: `${m.name} không đủ hàng (còn ${m.stock || 0}, cần ${q})`,
         });
       }
 
@@ -624,38 +684,38 @@ app.post("/api/orders", auth(), (req, res) => {
 
     total = Math.max(0, subtotal - Number(discount) || 0);
 
-    // ---------- BÆ¯á»šC 2: Validate vÃ­ ----------
-    isWalletPay = payment === "VÃ­ Canteen" || payment === "WALLET";
+    // ---------- BƯỚC 2: Validate ví ----------
+    isWalletPay = payment === "Ví Canteen" || payment === "WALLET";
 
     if (isWalletPay) {
       wallet = getOrCreateWallet(db, req.user.id);
       if (wallet.balance < total) {
         return res.status(400).json({
           message:
-            "Sá»‘ dÆ° vÃ­ khÃ´ng Ä‘á»§. Vui lÃ²ng náº¡p thÃªm " +
-            (total - wallet.balance).toLocaleString("vi-VN") + "Ä‘",
+            "Số dư ví không đủ. Vui lòng nạp thêm " +
+            (total - wallet.balance).toLocaleString("vi-VN") + "đ",
         });
       }
     }
 
-    // ---------- BÆ¯á»šC 3: Mutate stock ----------
+    // ---------- BƯỚC 3: Mutate stock ----------
     touchedItems.forEach(({ m, q }) => {
       m.stock = (m.stock || 0) - q;
       m.sold = (m.sold || 0) + q;
     });
 
-    // ---------- BÆ¯á»šC 4: Trá»« vÃ­ ----------
+    // ---------- BƯỚC 4: Trừ ví ----------
     if (isWalletPay) {
       wallet.balance -= total;
       wallet.updated_at = new Date().toISOString();
     }
 
-    // ---------- BÆ¯á»šC 5: Cá»™ng Ä‘iá»ƒm ----------
+    // ---------- BƯỚC 5: Cộng điểm ----------
     pointsEarned = Math.floor(total * 0.01);
     customer = db.users.find(u => u.id === req.user.id);
     if (customer) customer.points = (customer.points || 0) + pointsEarned;
 
-    // ---------- BÆ¯á»šC 6: Táº¡o Ä‘Æ¡n ----------
+    // ---------- BƯỚC 6: Tạo đơn ----------
     const id = Math.max(0, ...db.orders.map(o => o.id)) + 1;
     const code = generateOrderCode(db);
 
@@ -672,7 +732,7 @@ app.post("/api/orders", auth(), (req, res) => {
         amount: total,
         method: "WALLET",
         status: "approved",
-        note: "Thanh toÃ¡n Ä‘Æ¡n " + code,
+        note: "Thanh toán đơn " + code,
         order_code: code,
         created_at: new Date().toISOString(),
         approved_at: new Date().toISOString()
@@ -689,7 +749,7 @@ app.post("/api/orders", auth(), (req, res) => {
       discount: Number(discount) || 0,
       total,
       points_earned: pointsEarned,
-      status: "Chá» xÃ¡c nháº­n",
+      status: "Chờ xác nhận",
       payment,
       note,
       items: detailed,
@@ -697,7 +757,7 @@ app.post("/api/orders", auth(), (req, res) => {
     };
     db.orders.push(order);
 
-    // ---------- BÆ¯á»šC 7: Ãp voucher ----------
+    // ---------- BƯỚC 7: Áp voucher ----------
     if (voucherCode) {
       const vc = (db.vouchers || []).find(v =>
         v.code.toUpperCase() === voucherCode.toUpperCase() &&
@@ -715,7 +775,7 @@ app.post("/api/orders", auth(), (req, res) => {
     saveDB(db);
     res.status(201).json({ ...order, _id: order.id });
   } catch (e) {
-    // âœ… FIX H2/M5b: ROLLBACK
+    // ✅ FIX H2/M5b: ROLLBACK
     console.error("ORDER CREATE ERROR:", e);
 
     touchedItems.forEach(({ m, q }) => {
@@ -757,27 +817,27 @@ app.get("/api/orders", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   const db = loadDB();
   const { status } = req.query;
   let list = db.orders;
-  if (status && status !== "Táº¥t cáº£") {
+  if (status && status !== "Tất cả") {
     list = list.filter(o => o.status === status);
   }
   res.json(list.map(o => ({ ...o, _id: o.id })));
 });
 
-const VALID_ORDER_STATUSES = ["Chá» xÃ¡c nháº­n", "ÄÃ£ xÃ¡c nháº­n", "Äang chuáº©n bá»‹", "Sáºµn sÃ ng nháº­n", "HoÃ n thÃ nh", "ÄÃ£ há»§y"];
+const VALID_ORDER_STATUSES = ["Chờ xác nhận", "Đã xác nhận", "Đang chuẩn bị", "Sẵn sàng nhận", "Hoàn thành", "Đã hủy"];
 
 app.patch("/api/orders/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   try {
     const db = loadDB();
     const o = db.orders.find(x => x.id == req.params.id);
-    if (!o) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n" });
+    if (!o) return res.status(404).json({ message: "Không tìm thấy đơn" });
 
     const newStatus = req.body.status;
     if (!VALID_ORDER_STATUSES.includes(newStatus)) {
-      return res.status(400).json({ message: "Tráº¡ng thÃ¡i khÃ´ng há»£p lá»‡: " + newStatus });
+      return res.status(400).json({ message: "Trạng thái không hợp lệ: " + newStatus });
     }
 
-    // âœ… FIX H1: rollback khi chuyá»ƒn sang "ÄÃ£ há»§y"
-    if (newStatus === "ÄÃ£ há»§y" && o.status !== "ÄÃ£ há»§y") {
+    // ✅ FIX H1: rollback khi chuyển sang "Đã hủy"
+    if (newStatus === "Đã hủy" && o.status !== "Đã hủy") {
       rollbackCancelledOrder(db, o);
     }
 
@@ -794,14 +854,14 @@ app.patch("/api/orders/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 app.post("/api/orders/:id/received", auth(), (req, res) => {
   const db = loadDB();
   const o = db.orders.find(x => x.id == req.params.id);
-  if (!o) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n" });
-  if (o.customer_id !== req.user.id) return res.status(403).json({ message: "KhÃ´ng cÃ³ quyá»n" });
-  if (o.status !== "Sáºµn sÃ ng nháº­n") return res.status(400).json({ message: "ÄÆ¡n chÆ°a sáºµn sÃ ng nháº­n" });
-  o.status = "HoÃ n thÃ nh";
+  if (!o) return res.status(404).json({ message: "Không tìm thấy đơn" });
+  if (o.customer_id !== req.user.id) return res.status(403).json({ message: "Không có quyền" });
+  if (o.status !== "Sẵn sàng nhận") return res.status(400).json({ message: "Đơn chưa sẵn sàng nhận" });
+  o.status = "Hoàn thành";
   o.received_at = new Date().toISOString();
   const customer = db.users.find(u => u.id === o.customer_id);
   if (customer) customer.points = (customer.points || 0) + 5;
-  notifyOrderStatus(db, o, "HoÃ n thÃ nh");
+  notifyOrderStatus(db, o, "Hoàn thành");
   saveDB(db);
   res.json({ ok: true, order: o });
 });
@@ -809,15 +869,15 @@ app.post("/api/orders/:id/received", auth(), (req, res) => {
 app.post("/api/orders/:id/cancel", auth(), (req, res) => {
   const db = loadDB();
   const o = db.orders.find(x => x.id == req.params.id);
-  if (!o) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n" });
-  if (o.customer_id !== req.user.id) return res.status(403).json({ message: "KhÃ´ng cÃ³ quyá»n" });
-  if (o.status !== "Chá» xÃ¡c nháº­n") return res.status(400).json({ message: "Chá»‰ há»§y Ä‘Æ°á»£c Ä‘Æ¡n chá» xÃ¡c nháº­n" });
+  if (!o) return res.status(404).json({ message: "Không tìm thấy đơn" });
+  if (o.customer_id !== req.user.id) return res.status(403).json({ message: "Không có quyền" });
+  if (o.status !== "Chờ xác nhận") return res.status(400).json({ message: "Chỉ hủy được đơn chờ xác nhận" });
 
   rollbackCancelledOrder(db, o);
 
-  o.status = "ÄÃ£ há»§y";
+  o.status = "Đã hủy";
   o.updated_at = new Date().toISOString();
-  notifyOrderStatus(db, o, "ÄÃ£ há»§y");
+  notifyOrderStatus(db, o, "Đã hủy");
   saveDB(db);
   res.json({ ok: true });
 });
@@ -832,7 +892,7 @@ app.get("/api/reviews/can-review/:menuItemId", auth(), (req, res) => {
 
   const hasPurchased = (db.orders || []).some(o =>
     o.customer_id === req.user.id &&
-    o.status === "HoÃ n thÃ nh" &&
+    o.status === "Hoàn thành" &&
     (o.items || []).some(it => it.menu_item_id == menuItemId)
   );
 
@@ -859,8 +919,8 @@ app.post("/api/reviews", auth(), (req, res) => {
   try {
     const db = loadDB();
     const { menuItemId, rating, comment } = req.body;
-    if (!menuItemId || !rating) return res.status(400).json({ message: "Thiáº¿u thÃ´ng tin" });
-    if (rating < 1 || rating > 5) return res.status(400).json({ message: "ÄÃ¡nh giÃ¡ pháº£i 1-5 sao" });
+    if (!menuItemId || !rating) return res.status(400).json({ message: "Thiếu thông tin" });
+    if (rating < 1 || rating > 5) return res.status(400).json({ message: "Đánh giá phải 1-5 sao" });
 
     if (!db.reviews) db.reviews = [];
 
@@ -868,17 +928,17 @@ app.post("/api/reviews", auth(), (req, res) => {
       r.user_id === req.user.id && r.menu_item_id == menuItemId
     );
     if (alreadyReviewed) {
-      return res.status(400).json({ message: "Báº¡n Ä‘Ã£ Ä‘Ã¡nh giÃ¡ mÃ³n nÃ y rá»“i" });
+      return res.status(400).json({ message: "Bạn đã đánh giá món này rồi" });
     }
 
     const hasPurchased = (db.orders || []).some(o =>
       o.customer_id === req.user.id &&
-      o.status === "HoÃ n thÃ nh" &&
+      o.status === "Hoàn thành" &&
       (o.items || []).some(it => it.menu_item_id == menuItemId)
     );
     if (!hasPurchased) {
       return res.status(403).json({
-        message: "Báº¡n cáº§n mua mÃ³n nÃ y Ä‘á»ƒ cÃ³ thá»ƒ Ä‘Ã¡nh giÃ¡"
+        message: "Bạn cần mua món này để có thể đánh giá"
       });
     }
 
@@ -916,7 +976,7 @@ app.post("/api/reviews", auth(), (req, res) => {
 app.get("/api/points/me", auth(), (req, res) => {
   const db = loadDB();
   const u = db.users.find(x => x.id === req.user.id);
-  if (!u) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
+  if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
 
   const orderHistory = (db.orders || [])
     .filter(o => o.customer_id === req.user.id)
@@ -936,10 +996,10 @@ app.post("/api/points/redeem", auth(), (req, res) => {
   try {
     const db = loadDB();
     const { points } = req.body;
-    if (!points || points < 100) return res.status(400).json({ message: "Cáº§n Ã­t nháº¥t 100 Ä‘iá»ƒm" });
+    if (!points || points < 100) return res.status(400).json({ message: "Cần ít nhất 100 điểm" });
     const u = db.users.find(x => x.id === req.user.id);
-    if (!u) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
-    if ((u.points || 0) < points) return res.status(400).json({ message: "KhÃ´ng Ä‘á»§ Ä‘iá»ƒm" });
+    if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
+    if ((u.points || 0) < points) return res.status(400).json({ message: "Không đủ điểm" });
     u.points -= points;
     const value = points * 100;
     if (!db.vouchers) db.vouchers = [];
@@ -965,7 +1025,7 @@ app.post("/api/vouchers", auth(["ADMIN"]), (req, res) => {
     const db = loadDB();
     if (!db.vouchers) db.vouchers = [];
     const { code, value, user_id, points_used } = req.body;
-    if (!code || !value) return res.status(400).json({ message: "Thiáº¿u mÃ£ hoáº·c giÃ¡ trá»‹" });
+    if (!code || !value) return res.status(400).json({ message: "Thiếu mã hoặc giá trị" });
     const id = Math.max(0, ...db.vouchers.map(v => v.id)) + 1;
     const voucher = {
       id,
@@ -985,7 +1045,7 @@ app.post("/api/vouchers", auth(["ADMIN"]), (req, res) => {
 app.put("/api/vouchers/:id", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const v = (db.vouchers || []).find(x => x.id == req.params.id);
-  if (!v) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y" });
+  if (!v) return res.status(404).json({ message: "Không tìm thấy" });
   if (req.body.value !== undefined) v.value = +req.body.value;
   if (req.body.used !== undefined) v.used = req.body.used;
   if (req.body.code) v.code = req.body.code.toUpperCase();
@@ -1009,9 +1069,9 @@ app.post("/api/vouchers/validate", auth(), (req, res) => {
   try {
     const db = loadDB();
     const { code } = req.body;
-    if (!code) return res.status(400).json({ message: "Thiáº¿u mÃ£ voucher" });
+    if (!code) return res.status(400).json({ message: "Thiếu mã voucher" });
     const voucher = (db.vouchers || []).find(v => v.code.toUpperCase() === code.toUpperCase() && v.user_id === req.user.id && !v.used);
-    if (!voucher) return res.status(404).json({ message: "MÃ£ voucher khÃ´ng há»£p lá»‡ hoáº·c Ä‘Ã£ dÃ¹ng" });
+    if (!voucher) return res.status(404).json({ message: "Mã voucher không hợp lệ hoặc đã dùng" });
     res.json({ valid: true, value: voucher.value, code: voucher.code });
   } catch (e) {
     res.status(500).json({ message: e.message });
@@ -1039,12 +1099,12 @@ app.post("/api/vouchers/claim/:id", auth(), (req, res) => {
     const template = (db.vouchers || []).find(v =>
       v.id == req.params.id && !v.user_id
     );
-    if (!template) return res.status(404).json({ message: "Voucher khÃ´ng tá»“n táº¡i hoáº·c Ä‘Ã£ háº¿t" });
+    if (!template) return res.status(404).json({ message: "Voucher không tồn tại hoặc đã hết" });
 
     const alreadyClaimed = (db.vouchers || []).find(v =>
       v.user_id === req.user.id && v.claimed_from === template.id
     );
-    if (alreadyClaimed) return res.status(400).json({ message: "Báº¡n Ä‘Ã£ nháº­n voucher nÃ y rá»“i" });
+    if (alreadyClaimed) return res.status(400).json({ message: "Bạn đã nhận voucher này rồi" });
 
     const id = Math.max(0, ...db.vouchers.map(v => v.id)) + 1;
     const newVoucher = {
@@ -1088,13 +1148,13 @@ app.get("/api/promotions", (req, res) => {
 
 // ============ CATEGORIES ============
 const DEFAULT_CATEGORIES = [
-  { id: 1, name: "CÆ¡m", icon: "ðŸš", order: 1 },
-  { id: 2, name: "MÃ³n máº·n", icon: "ðŸ¥˜", order: 2 },
-  { id: 3, name: "MÃ³n chay", icon: "ðŸ¥—", order: 3 },
-  { id: 4, name: "MÃ³n phá»¥", icon: "ðŸ²", order: 4 },
-  { id: 5, name: "Äá»“ Äƒn nhanh", icon: "ðŸ”", order: 5 },
-  { id: 6, name: "Äá»“ uá»‘ng", icon: "ðŸ¥¤", order: 6 },
-  { id: 7, name: "Combo", icon: "ðŸ±", order: 7 }
+  { id: 1, name: "Cơm", icon: "🍚", order: 1 },
+  { id: 2, name: "Món mặn", icon: "🍖", order: 2 },
+  { id: 3, name: "Món chay", icon: "🥗", order: 3 },
+  { id: 4, name: "Món phụ", icon: "🍜", order: 4 },
+  { id: 5, name: "Đồ ăn nhanh", icon: "🍔", order: 5 },
+  { id: 6, name: "Đồ uống", icon: "🥤", order: 6 },
+  { id: 7, name: "Combo", icon: "🍱", order: 7 }
 ];
 
 function ensureCategories(db) {
@@ -1117,17 +1177,17 @@ app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     const db = loadDB();
     const { categories } = ensureCategories(db);
     const { name, icon, order } = req.body;
-    if (!name || !name.trim()) return res.status(400).json({ message: "Thiáº¿u tÃªn danh má»¥c" });
+    if (!name || !name.trim()) return res.status(400).json({ message: "Thiếu tên danh mục" });
     const trimmed = name.trim();
     if (categories.find(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
-      return res.status(400).json({ message: "Danh má»¥c Ä‘Ã£ tá»“n táº¡i" });
+      return res.status(400).json({ message: "Danh mục đã tồn tại" });
     }
 
     let finalOrder;
     if (order !== undefined && order !== null && order !== "") {
       const parsed = Number(order);
       if (!Number.isInteger(parsed) || parsed < 0) {
-        return res.status(400).json({ message: "Thá»© tá»± pháº£i lÃ  sá»‘ nguyÃªn >= 0" });
+        return res.status(400).json({ message: "Thứ tự phải là số nguyên >= 0" });
       }
       finalOrder = parsed;
     } else {
@@ -1135,7 +1195,7 @@ app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     }
 
     const id = Math.max(0, ...categories.map(c => c.id)) + 1;
-    const cat = { id, name: trimmed, icon: icon || "ðŸ½ï¸", order: finalOrder };
+    const cat = { id, name: trimmed, icon: icon || "🍽️", order: finalOrder };
     categories.push(cat);
     saveDB(db);
     res.status(201).json(cat);
@@ -1147,14 +1207,14 @@ app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     const db = loadDB();
     const { categories } = ensureCategories(db);
     const cat = categories.find(c => c.id == req.params.id);
-    if (!cat) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y danh má»¥c" });
+    if (!cat) return res.status(404).json({ message: "Không tìm thấy danh mục" });
     const oldName = cat.name;
     const { name, icon, order } = req.body;
 
     if (name && name.trim()) {
       const trimmed = name.trim();
       if (categories.find(c => c.id != req.params.id && c.name.toLowerCase() === trimmed.toLowerCase())) {
-        return res.status(400).json({ message: "TÃªn danh má»¥c Ä‘Ã£ tá»“n táº¡i" });
+        return res.status(400).json({ message: "Tên danh mục đã tồn tại" });
       }
       cat.name = trimmed;
       if (trimmed !== oldName) {
@@ -1169,7 +1229,7 @@ app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     if (order !== undefined && order !== null && order !== "") {
       const parsed = Number(order);
       if (!Number.isInteger(parsed) || parsed < 0) {
-        return res.status(400).json({ message: "Thá»© tá»± pháº£i lÃ  sá»‘ nguyÃªn >= 0" });
+        return res.status(400).json({ message: "Thứ tự phải là số nguyên >= 0" });
       }
       cat.order = parsed;
     }
@@ -1184,11 +1244,11 @@ app.delete("/api/categories/:id", auth(["ADMIN"]), (req, res) => {
     const db = loadDB();
     const { categories } = ensureCategories(db);
     const cat = categories.find(c => c.id == req.params.id);
-    if (!cat) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y danh má»¥c" });
+    if (!cat) return res.status(404).json({ message: "Không tìm thấy danh mục" });
     const usedCount = (db.menu_items || []).filter(m => m.category === cat.name).length;
     if (usedCount > 0) {
       return res.status(400).json({
-        message: "KhÃ´ng thá»ƒ xÃ³a â€” cÃ³ " + usedCount + " mÃ³n Ä‘ang dÃ¹ng danh má»¥c nÃ y"
+        message: "Không thể xóa — có " + usedCount + " món đang dùng danh mục này"
       });
     }
     db.categories = categories.filter(c => c.id != req.params.id);
@@ -1244,9 +1304,9 @@ app.post("/api/wallet/deposit", auth(), (req, res) => {
     const db = loadDB();
     const { amount, method, note } = req.body;
     const amt = +amount;
-    if (!amt || amt < 10000) return res.status(400).json({ message: "Sá»‘ tiá»n tá»‘i thiá»ƒu 10.000Ä‘" });
-    if (amt > 50000000) return res.status(400).json({ message: "Sá»‘ tiá»n tá»‘i Ä‘a 50.000.000Ä‘" });
-    if (!["QR", "CASH"].includes(method)) return res.status(400).json({ message: "PhÆ°Æ¡ng thá»©c khÃ´ng há»£p lá»‡" });
+    if (!amt || amt < 10000) return res.status(400).json({ message: "Số tiền tối thiểu 10.000đ" });
+    if (amt > 50000000) return res.status(400).json({ message: "Số tiền tối đa 50.000.000đ" });
+    if (!["QR", "CASH"].includes(method)) return res.status(400).json({ message: "Phương thức không hợp lệ" });
 
     if (!db.wallet_transactions) db.wallet_transactions = [];
     const id = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
@@ -1276,10 +1336,10 @@ app.post("/api/wallet/withdraw", auth(), (req, res) => {
     const db = loadDB();
     const { amount, note } = req.body;
     const amt = +amount;
-    if (!amt || amt < 20000) return res.status(400).json({ message: "Sá»‘ tiá»n rÃºt tá»‘i thiá»ƒu 20.000Ä‘" });
+    if (!amt || amt < 20000) return res.status(400).json({ message: "Số tiền rút tối thiểu 20.000đ" });
     const w = getOrCreateWallet(db, req.user.id);
-    if (w.balance < amt) return res.status(400).json({ message: "Sá»‘ dÆ° khÃ´ng Ä‘á»§" });
-    if (!w.bank_account) return res.status(400).json({ message: "ChÆ°a liÃªn káº¿t tÃ i khoáº£n ngÃ¢n hÃ ng" });
+    if (w.balance < amt) return res.status(400).json({ message: "Số dư không đủ" });
+    if (!w.bank_account) return res.status(400).json({ message: "Chưa liên kết tài khoản ngân hàng" });
 
     if (!db.wallet_transactions) db.wallet_transactions = [];
     const id = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
@@ -1314,7 +1374,7 @@ app.post("/api/wallet/link-bank", auth(), (req, res) => {
     const db = loadDB();
     const { bank_name, bank_account, bank_account_name } = req.body;
     if (!bank_name || !bank_account || !bank_account_name) {
-      return res.status(400).json({ message: "Thiáº¿u thÃ´ng tin ngÃ¢n hÃ ng" });
+      return res.status(400).json({ message: "Thiếu thông tin ngân hàng" });
     }
     const w = getOrCreateWallet(db, req.user.id);
     w.bank_name = bank_name;
@@ -1366,8 +1426,8 @@ app.patch("/api/wallet/requests/:id/approve", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const tx = (db.wallet_transactions || []).find(t => t.id == req.params.id);
-    if (!tx) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch" });
-    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dá»‹ch Ä‘Ã£ xá»­ lÃ½" });
+    if (!tx) return res.status(404).json({ message: "Không tìm thấy giao dịch" });
+    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dịch đã xử lý" });
 
     const w = getOrCreateWallet(db, tx.user_id);
     if (tx.type === "deposit") {
@@ -1387,8 +1447,8 @@ app.patch("/api/wallet/requests/:id/reject", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const tx = (db.wallet_transactions || []).find(t => t.id == req.params.id);
-    if (!tx) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch" });
-    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dá»‹ch Ä‘Ã£ xá»­ lÃ½" });
+    if (!tx) return res.status(404).json({ message: "Không tìm thấy giao dịch" });
+    if (tx.status !== "pending") return res.status(400).json({ message: "Giao dịch đã xử lý" });
 
     const w = getOrCreateWallet(db, tx.user_id);
     if (tx.type === "withdraw") {
@@ -1409,9 +1469,9 @@ app.post("/api/wallet/pay", auth(), (req, res) => {
     const db = loadDB();
     const { amount, order_code } = req.body;
     const amt = +amount;
-    if (!amt || amt <= 0) return res.status(400).json({ message: "Sá»‘ tiá»n khÃ´ng há»£p lá»‡" });
+    if (!amt || amt <= 0) return res.status(400).json({ message: "Số tiền không hợp lệ" });
     const w = getOrCreateWallet(db, req.user.id);
-    if (w.balance < amt) return res.status(400).json({ message: "Sá»‘ dÆ° vÃ­ khÃ´ng Ä‘á»§" });
+    if (w.balance < amt) return res.status(400).json({ message: "Số dư ví không đủ" });
 
     if (!db.wallet_transactions) db.wallet_transactions = [];
     const id = Math.max(0, ...db.wallet_transactions.map(t => t.id)) + 1;
@@ -1424,7 +1484,7 @@ app.post("/api/wallet/pay", auth(), (req, res) => {
       amount: amt,
       method: "WALLET",
       status: "approved",
-      note: "Thanh toÃ¡n Ä‘Æ¡n " + (order_code || ""),
+      note: "Thanh toán đơn " + (order_code || ""),
       order_code: order_code || "",
       created_at: new Date().toISOString(),
       approved_at: new Date().toISOString()
@@ -1485,7 +1545,7 @@ app.get("/api/vouchers/user/:userId", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const userId = +req.params.userId;
   const user = db.users.find(u => u.id === userId);
-  if (!user) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
+  if (!user) return res.status(404).json({ message: "Không tìm thấy user" });
   const list = (db.vouchers || []).filter(v => v.user_id === userId);
   res.json({
     user: { id: user.id, name: user.name, email: user.email, phone: user.phone, points: user.points || 0 },
@@ -1502,8 +1562,8 @@ app.get("/api/vouchers/user/:userId", auth(["ADMIN"]), (req, res) => {
 app.delete("/api/vouchers/revoke/:id", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const v = (db.vouchers || []).find(x => x.id == req.params.id);
-  if (!v) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y voucher" });
-  if (v.used) return res.status(400).json({ message: "KhÃ´ng thá»ƒ thu há»“i voucher Ä‘Ã£ dÃ¹ng" });
+  if (!v) return res.status(404).json({ message: "Không tìm thấy voucher" });
+  if (v.used) return res.status(400).json({ message: "Không thể thu hồi voucher đã dùng" });
   db.vouchers = db.vouchers.filter(x => x.id != req.params.id);
   saveDB(db);
   res.json({ ok: true });
@@ -1523,7 +1583,7 @@ app.get("/api/chat/conversations", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     const uid = normalizeUserId(m.user_id);
     if (uid === null) return;
     if (!convMap[uid]) {
-      convMap[uid] = { user_id: uid, user_name: m.user_name || "KhÃ¡ch", last_message: m.content, last_time: m.created_at, unread: 0 };
+      convMap[uid] = { user_id: uid, user_name: m.user_name || "Khách", last_message: m.content, last_time: m.created_at, unread: 0 };
     }
     if (m.from === "customer" && !m.read) convMap[uid].unread += 1;
     if (new Date(m.created_at) > new Date(convMap[uid].last_time)) {
@@ -1561,16 +1621,16 @@ app.post("/api/chat/send", auth(), (req, res) => {
   try {
     const db = loadDB();
     const { content, toUserId } = req.body;
-    if (!content?.trim()) return res.status(400).json({ message: "Tin nháº¯n trá»‘ng" });
+    if (!content?.trim()) return res.status(400).json({ message: "Tin nhắn trống" });
     if (!db.messages) db.messages = [];
     const id = Math.max(0, ...db.messages.map((m) => m.id)) + 1;
     const isStaff = req.user.role === "ADMIN" || req.user.role === "EMPLOYEE";
     let userId, userName;
     if (isStaff) {
       userId = normalizeUserId(toUserId);
-      if (userId === null) return res.status(400).json({ message: "Thiáº¿u toUserId" });
+      if (userId === null) return res.status(400).json({ message: "Thiếu toUserId" });
       const customer = db.users.find((u) => normalizeUserId(u.id) === userId);
-      userName = customer?.name || "KhÃ¡ch";
+      userName = customer?.name || "Khách";
     } else {
       userId = normalizeUserId(req.user.id);
       userName = req.user.name;
@@ -1620,9 +1680,9 @@ app.get("/api/toppings", (req, res) => {
 app.get("/api/sizes", (req, res) => {
   const db = loadDB();
   res.json(db.sizes || [
-    { id: "S", name: "Nhá»", extra_price: 0 },
-    { id: "M", name: "Vá»«a", extra_price: 5000 },
-    { id: "L", name: "Lá»›n", extra_price: 10000 }
+    { id: "S", name: "Nhỏ", extra_price: 0 },
+    { id: "M", name: "Vừa", extra_price: 5000 },
+    { id: "L", name: "Lớn", extra_price: 10000 }
   ]);
 });
 
@@ -1659,8 +1719,8 @@ app.post("/api/inventory", auth(["ADMIN"]), (req, res) => {
     const db = loadDB();
     if (!db.inventory) db.inventory = [];
     const { code, name, qty, unit, min } = req.body;
-    if (!code || !name) return res.status(400).json({ message: "Thiáº¿u mÃ£ hoáº·c tÃªn" });
-    if (db.inventory.find(x => x.code === code)) return res.status(400).json({ message: "MÃ£ nguyÃªn liá»‡u Ä‘Ã£ tá»“n táº¡i" });
+    if (!code || !name) return res.status(400).json({ message: "Thiếu mã hoặc tên" });
+    if (db.inventory.find(x => x.code === code)) return res.status(400).json({ message: "Mã nguyên liệu đã tồn tại" });
     const item = { code, name, qty: +qty || 0, unit: unit || "kg", min: +min || 0 };
     db.inventory.push(item);
     saveDB(db);
@@ -1674,7 +1734,7 @@ app.put("/api/inventory/:code", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const item = db.inventory?.find(x => x.code === req.params.code);
-    if (!item) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y nguyÃªn liá»‡u" });
+    if (!item) return res.status(404).json({ message: "Không tìm thấy nguyên liệu" });
     Object.assign(item, req.body);
     saveDB(db);
     res.json(item);
@@ -1694,9 +1754,9 @@ app.post("/api/inventory/:code/import", auth(["ADMIN", "EMPLOYEE"]), (req, res) 
   try {
     const db = loadDB();
     const item = db.inventory?.find(x => x.code === req.params.code);
-    if (!item) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y nguyÃªn liá»‡u" });
+    if (!item) return res.status(404).json({ message: "Không tìm thấy nguyên liệu" });
     const { qty, note, supplier } = req.body;
-    if (!qty || +qty <= 0) return res.status(400).json({ message: "Sá»‘ lÆ°á»£ng khÃ´ng há»£p lá»‡" });
+    if (!qty || +qty <= 0) return res.status(400).json({ message: "Số lượng không hợp lệ" });
     const importQty = +qty;
     const before = item.qty;
     item.qty += importQty;
@@ -1706,7 +1766,7 @@ app.post("/api/inventory/:code/import", auth(["ADMIN", "EMPLOYEE"]), (req, res) 
     const record = { id, code: item.code, name: item.name, qty: importQty, before, after: item.qty, unit: item.unit, supplier: supplier || "", note: note || "", imported_by: req.user.name, imported_by_id: req.user.id, created_at: new Date().toISOString() };
     db.imports.push(record);
     saveDB(db);
-    res.status(201).json({ message: "Nháº­p kho thÃ nh cÃ´ng", item, record });
+    res.status(201).json({ message: "Nhập kho thành công", item, record });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -1722,8 +1782,8 @@ function todayStr() {
   return getLocalDateStr();
 }
 
-const SHIFT_START_HOUR = { "Ca sÃ¡ng": 6, "Ca chiá»u": 12, "Ca tá»‘i": 18 };
-const SHIFT_END_HOUR   = { "Ca sÃ¡ng": 12, "Ca chiá»u": 18, "Ca tá»‘i": 22 };
+const SHIFT_START_HOUR = { "Ca sáng": 6, "Ca chiều": 12, "Ca tối": 18 };
+const SHIFT_END_HOUR   = { "Ca sáng": 12, "Ca chiều": 18, "Ca tối": 22 };
 
 app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
   try {
@@ -1731,16 +1791,17 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
     if (!db.attendances) db.attendances = [];
     const today = todayStr();
     const now = new Date();
-    const hour = now.getHours();
-    const minute = now.getMinutes();
+
+    // ✅ FIX TIMEZONE: dùng giờ VN thay vì giờ server
+    const { hour, minute } = getVNTime(now);
 
     const { shift: bodyShift } = req.body || {};
     let shift = bodyShift || "";
     if (!shift) {
-      if (hour >= 6 && hour < 12) shift = "Ca sÃ¡ng";
-      else if (hour >= 12 && hour < 18) shift = "Ca chiá»u";
-      else if (hour >= 18 && hour < 22) shift = "Ca tá»‘i";
-      else shift = "NgoÃ i giá»";
+      if (hour >= 6 && hour < 12) shift = "Ca sáng";
+      else if (hour >= 12 && hour < 18) shift = "Ca chiều";
+      else if (hour >= 18 && hour < 22) shift = "Ca tối";
+      else shift = "Ngoài giờ";
     }
 
     const existing = db.attendances.find(a =>
@@ -1750,13 +1811,13 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
       a.checkIn
     );
     if (existing) {
-      return res.status(400).json({ message: "Báº¡n Ä‘Ã£ check-in " + shift + " hÃ´m nay rá»“i" });
+      return res.status(400).json({ message: "Bạn đã check-in " + shift + " hôm nay rồi" });
     }
 
     const startHour = SHIFT_START_HOUR[shift] || 8;
     const late = hour > startHour || (hour === startHour && minute > 15);
 
-    const status = late ? "Äi muá»™n" : "ÄÃºng giá»";
+    const status = late ? "Đi muộn" : "Đúng giờ";
     const id = Math.max(0, ...db.attendances.map(a => a.id)) + 1;
     const attendance = {
       id,
@@ -1773,7 +1834,7 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
     };
     db.attendances.push(attendance);
     saveDB(db);
-    res.status(201).json({ message: "Check-in " + shift + " thÃ nh cÃ´ng", attendance });
+    res.status(201).json({ message: "Check-in " + shift + " thành công", attendance });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -1788,11 +1849,12 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
     const { shift: bodyShift } = req.body || {};
     let shift = bodyShift || "";
     if (!shift) {
-      const hour = now.getHours();
-      if (hour >= 6 && hour < 12) shift = "Ca sÃ¡ng";
-      else if (hour >= 12 && hour < 18) shift = "Ca chiá»u";
-      else if (hour >= 18 && hour < 22) shift = "Ca tá»‘i";
-      else shift = "NgoÃ i giá»";
+      // ✅ FIX TIMEZONE
+      const hour = getVNHour(now);
+      if (hour >= 6 && hour < 12) shift = "Ca sáng";
+      else if (hour >= 12 && hour < 18) shift = "Ca chiều";
+      else if (hour >= 18 && hour < 22) shift = "Ca tối";
+      else shift = "Ngoài giờ";
     }
 
     const att = db.attendances?.find(a =>
@@ -1802,17 +1864,18 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
       a.checkIn &&
       !a.checkOut
     );
-    if (!att) return res.status(400).json({ message: "Báº¡n chÆ°a check-in " + shift + " hÃ´m nay" });
+    if (!att) return res.status(400).json({ message: "Bạn chưa check-in " + shift + " hôm nay" });
 
     att.checkOut = now.toISOString();
     att.hours = Math.round(((now - new Date(att.checkIn)) / 3600000) * 100) / 100;
 
     const endHour = SHIFT_END_HOUR[shift];
-    if (endHour !== undefined && now.getHours() < endHour && att.status === "ÄÃºng giá»") {
-      att.status = "Vá» sá»›m";
+    // ✅ FIX TIMEZONE
+    if (endHour !== undefined && getVNHour(now) < endHour && att.status === "Đúng giờ") {
+      att.status = "Về sớm";
     }
     saveDB(db);
-    res.json({ message: "Check-out " + shift + " thÃ nh cÃ´ng", attendance: att });
+    res.json({ message: "Check-out " + shift + " thành công", attendance: att });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -1850,29 +1913,29 @@ app.get("/api/attendance/employees", auth(["ADMIN"]), (req, res) => {
 
 // ============ PERMISSIONS ============
 const ALL_PERMISSIONS = [
-  { key: "menu.view", label: "Xem thá»±c Ä‘Æ¡n" },
-  { key: "menu.create", label: "ThÃªm mÃ³n" },
-  { key: "menu.update", label: "Sá»­a mÃ³n" },
-  { key: "menu.toggle", label: "Táº¯t / Báº­t mÃ³n" },
-  { key: "menu.delete", label: "XÃ³a mÃ³n" },
-  { key: "orders.view", label: "Xem Ä‘Æ¡n hÃ ng" },
-  { key: "orders.process", label: "Xá»­ lÃ½ Ä‘Æ¡n hÃ ng" },
-  { key: "orders.cancel", label: "Há»§y Ä‘Æ¡n hÃ ng" },
+  { key: "menu.view", label: "Xem thực đơn" },
+  { key: "menu.create", label: "Thêm món" },
+  { key: "menu.update", label: "Sửa món" },
+  { key: "menu.toggle", label: "Tắt / Bật món" },
+  { key: "menu.delete", label: "Xóa món" },
+  { key: "orders.view", label: "Xem đơn hàng" },
+  { key: "orders.process", label: "Xử lý đơn hàng" },
+  { key: "orders.cancel", label: "Hủy đơn hàng" },
   { key: "inventory.view", label: "Xem kho" },
-  { key: "inventory.import", label: "Nháº­p kho" },
-  { key: "inventory.manage", label: "Quáº£n lÃ½ kho" },
-  { key: "customers.view", label: "Xem khÃ¡ch hÃ ng" },
-  { key: "customers.manage", label: "Quáº£n lÃ½ khÃ¡ch hÃ ng" },
-  { key: "employees.view", label: "Xem nhÃ¢n viÃªn" },
-  { key: "employees.manage", label: "Quáº£n lÃ½ nhÃ¢n viÃªn" },
-  { key: "attendance.view", label: "Xem cháº¥m cÃ´ng" },
-  { key: "attendance.manage", label: "Quáº£n lÃ½ cháº¥m cÃ´ng" },
-  { key: "reports.view", label: "Xem bÃ¡o cÃ¡o" },
-  { key: "backup.export", label: "Xuáº¥t backup" },
-  { key: "backup.import", label: "Nháº­p backup" },
+  { key: "inventory.import", label: "Nhập kho" },
+  { key: "inventory.manage", label: "Quản lý kho" },
+  { key: "customers.view", label: "Xem khách hàng" },
+  { key: "customers.manage", label: "Quản lý khách hàng" },
+  { key: "employees.view", label: "Xem nhân viên" },
+  { key: "employees.manage", label: "Quản lý nhân viên" },
+  { key: "attendance.view", label: "Xem chấm công" },
+  { key: "attendance.manage", label: "Quản lý chấm công" },
+  { key: "reports.view", label: "Xem báo cáo" },
+  { key: "backup.export", label: "Xuất backup" },
+  { key: "backup.import", label: "Nhập backup" },
   { key: "backup.reset", label: "Reset database" },
-  { key: "settings.view", label: "Xem cÃ i Ä‘áº·t" },
-  { key: "settings.manage", label: "Quáº£n lÃ½ cÃ i Ä‘áº·t" }
+  { key: "settings.view", label: "Xem cài đặt" },
+  { key: "settings.manage", label: "Quản lý cài đặt" }
 ];
 
 const ROLE_PERMISSIONS = {
@@ -1888,7 +1951,7 @@ app.get("/api/permissions", auth(["ADMIN"]), (req, res) => {
 app.get("/api/permissions/me", auth(), (req, res) => {
   const db = loadDB();
   const u = db.users.find(x => x.id === req.user.id);
-  if (!u) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
+  if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
   const rolePerms = ROLE_PERMISSIONS[u.role] || [];
   const customPerms = u.permissions || [];
   const allPerms = [...new Set([...rolePerms, ...customPerms])];
@@ -1898,7 +1961,7 @@ app.get("/api/permissions/me", auth(), (req, res) => {
 app.get("/api/permissions/:userId", auth(["ADMIN"]), (req, res) => {
   const db = loadDB();
   const u = db.users.find(x => x.id == req.params.userId);
-  if (!u) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
+  if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
   const rolePerms = ROLE_PERMISSIONS[u.role] || [];
   const customPerms = u.permissions || [];
   const allPerms = [...new Set([...rolePerms, ...customPerms])];
@@ -1909,10 +1972,10 @@ app.put("/api/permissions/:userId", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const u = db.users.find(x => x.id == req.params.userId);
-    if (!u) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y user" });
-    if (u.role === "ADMIN") return res.status(400).json({ message: "KhÃ´ng thá»ƒ sá»­a quyá»n ADMIN" });
+    if (!u) return res.status(404).json({ message: "Không tìm thấy user" });
+    if (u.role === "ADMIN") return res.status(400).json({ message: "Không thể sửa quyền ADMIN" });
     const { custom } = req.body;
-    if (!Array.isArray(custom)) return res.status(400).json({ message: "custom pháº£i lÃ  array" });
+    if (!Array.isArray(custom)) return res.status(400).json({ message: "custom phải là array" });
     u.permissions = custom.filter(p => ALL_PERMISSIONS.some(ap => ap.key === p));
     saveDB(db);
     res.json({ ok: true, user: { id: u.id, permissions: u.permissions } });
@@ -1930,17 +1993,17 @@ app.get("/api/backup/export", auth(["ADMIN"]), (req, res) => {
 app.post("/api/backup/import", auth(["ADMIN"]), (req, res) => {
   try {
     const { data } = req.body;
-    if (!data) return res.status(400).json({ message: "File backup khÃ´ng há»£p lá»‡" });
-    if (!data.users || !data.menu_items) return res.status(400).json({ message: "File backup thiáº¿u dá»¯ liá»‡u cáº§n thiáº¿t" });
+    if (!data) return res.status(400).json({ message: "File backup không hợp lệ" });
+    if (!data.users || !data.menu_items) return res.status(400).json({ message: "File backup thiếu dữ liệu cần thiết" });
     const current = loadDB();
     const backupFile = path.join(__dirname, "canteen-db-auto-backup-" + Date.now() + ".json");
     try {
       fs.writeFileSync(backupFile, JSON.stringify(current, null, 2), "utf-8");
     } catch {
-      // Bá» qua náº¿u filesystem khÃ´ng ghi Ä‘Æ°á»£c
+      // Bỏ qua nếu filesystem không ghi được
     }
     saveDB(data);
-    res.json({ message: "Import thÃ nh cÃ´ng!", stats: { users: data.users?.length || 0, menu_items: data.menu_items?.length || 0, orders: data.orders?.length || 0, inventory: data.inventory?.length || 0 }, auto_backup_saved: path.basename(backupFile) });
+    res.json({ message: "Import thành công!", stats: { users: data.users?.length || 0, menu_items: data.menu_items?.length || 0, orders: data.orders?.length || 0, inventory: data.inventory?.length || 0 }, auto_backup_saved: path.basename(backupFile) });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -1979,7 +2042,7 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     const { period = "day" } = req.query;
     const now = new Date();
 
-    const completedOrders = (db.orders || []).filter(o => o.status === "HoÃ n thÃ nh");
+    const completedOrders = (db.orders || []).filter(o => o.status === "Hoàn thành");
 
     let result = [];
     let totalRevenue = 0;
@@ -1994,6 +2057,7 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
           (o) => toLocalDateStr(o.created_at) === dateStr
         );
         const revenue = dayOrders.reduce((s, o) => s + (o.total || 0), 0);
+        // ✅ FIX TIMEZONE: dùng getDay theo VN (thay vì UTC)
         const dayLabel = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][d.getDay()];
         result.push({ label: dayLabel, date: dateStr, revenue, orders: dayOrders.length });
         totalRevenue += revenue;
@@ -2011,8 +2075,9 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
         });
         const revenue = weekOrders.reduce((s, o) => s + (o.total || 0), 0);
         result.push({
-          label: "Tuáº§n " + (4 - i),
-          date: weekStart.toISOString().slice(0, 10) + " - " + weekEnd.toISOString().slice(0, 10),
+          label: "Tuần " + (4 - i),
+          // ✅ FIX TIMEZONE: dùng getLocalDateStr thay vì toISOString
+          date: getLocalDateStr(weekStart) + " - " + getLocalDateStr(weekEnd),
           revenue,
           orders: weekOrders.length
         });
@@ -2054,7 +2119,7 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 
     const menuSold = {};
     (db.orders || []).forEach(o => {
-      if (o.status !== "HoÃ n thÃ nh") return;
+      if (o.status !== "Hoàn thành") return;
       (o.items || []).forEach(it => {
         if (!menuSold[it.menu_item_id]) {
           menuSold[it.menu_item_id] = { id: it.menu_item_id, name: it.name, sold: 0, revenue: 0 };
@@ -2148,10 +2213,10 @@ app.post("/api/shifts/register", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
     if (!db.shifts) db.shifts = [];
     const { dates, shifts, note } = req.body;
     if (!dates?.length || !shifts?.length) {
-      return res.status(400).json({ message: "Thiáº¿u thÃ´ng tin" });
+      return res.status(400).json({ message: "Thiếu thông tin" });
     }
     const emp = db.users.find(u => u.id === req.user.id);
-    if (!emp) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y nhÃ¢n viÃªn" });
+    if (!emp) return res.status(404).json({ message: "Không tìm thấy nhân viên" });
     let created = 0;
     let skipped = 0;
     let nextId = Math.max(0, ...db.shifts.map(s => s.id)) + 1;
@@ -2177,7 +2242,7 @@ app.post("/api/shifts/register", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
       });
     });
     saveDB(db);
-    res.status(201).json({ created, skipped, message: "ÄÃ£ Ä‘Äƒng kÃ½ " + created + " ca" });
+    res.status(201).json({ created, skipped, message: "Đã đăng ký " + created + " ca" });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -2185,7 +2250,7 @@ app.patch("/api/shifts/:id/approve", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const s = (db.shifts || []).find(x => x.id == req.params.id);
-    if (!s) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y" });
+    if (!s) return res.status(404).json({ message: "Không tìm thấy" });
     s.status = "approved";
     s.approved_by = req.user.name;
     s.approved_at = new Date().toISOString();
@@ -2208,10 +2273,10 @@ app.post("/api/shifts/bulk", auth(["ADMIN"]), (req, res) => {
     if (!db.shifts) db.shifts = [];
     const { employee_id, dates, shifts, note } = req.body;
     if (!employee_id || !dates?.length || !shifts?.length) {
-      return res.status(400).json({ message: "Thiáº¿u thÃ´ng tin" });
+      return res.status(400).json({ message: "Thiếu thông tin" });
     }
     const emp = db.users.find(u => u.id == employee_id);
-    if (!emp) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y nhÃ¢n viÃªn" });
+    if (!emp) return res.status(404).json({ message: "Không tìm thấy nhân viên" });
     let created = 0;
     let skipped = 0;
     let nextId = Math.max(0, ...db.shifts.map(s => s.id)) + 1;
@@ -2237,7 +2302,7 @@ app.post("/api/shifts/bulk", auth(["ADMIN"]), (req, res) => {
       });
     });
     saveDB(db);
-    res.status(201).json({ created, skipped, message: "ÄÃ£ phÃ¢n " + created + " ca" });
+    res.status(201).json({ created, skipped, message: "Đã phân " + created + " ca" });
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -2247,15 +2312,15 @@ app.post("/api/shifts", auth(["ADMIN"]), (req, res) => {
     if (!db.shifts) db.shifts = [];
     const { employee_id, date, shift, note } = req.body;
     if (!employee_id || !date || !shift) {
-      return res.status(400).json({ message: "Thiáº¿u thÃ´ng tin" });
+      return res.status(400).json({ message: "Thiếu thông tin" });
     }
     const emp = db.users.find(u => u.id == employee_id);
-    if (!emp) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y nhÃ¢n viÃªn" });
+    if (!emp) return res.status(404).json({ message: "Không tìm thấy nhân viên" });
     const existing = db.shifts.find(s =>
       s.employee_id == employee_id && s.date === date && s.shift === shift
     );
     if (existing) {
-      return res.status(400).json({ message: "NhÃ¢n viÃªn Ä‘Ã£ Ä‘Æ°á»£c phÃ¢n ca nÃ y rá»“i" });
+      return res.status(400).json({ message: "Nhân viên đã được phân ca này rồi" });
     }
     const id = Math.max(0, ...db.shifts.map(s => s.id)) + 1;
     const record = {
@@ -2282,7 +2347,7 @@ app.put("/api/shifts/:id", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     const s = (db.shifts || []).find(x => x.id == req.params.id);
-    if (!s) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y" });
+    if (!s) return res.status(404).json({ message: "Không tìm thấy" });
     if (req.body.date) s.date = req.body.date;
     if (req.body.shift) s.shift = req.body.shift;
     if (req.body.note !== undefined) s.note = req.body.note;
@@ -2305,11 +2370,12 @@ app.get("/", (_, res) => res.json({
   ok: true,
   name: "Canteen VWA API (JSON)",
   version: BUILD_VERSION,
+  timezone: VN_TIMEZONE,
   menuEndpoint: "returns ALL items (no active filter)",
   timestamp: new Date().toISOString()
 }));
 
-// âœ… DEBUG endpoint â€” Ä‘áº¿m mÃ³n chÃ­nh xÃ¡c tá»« DB
+// ✅ DEBUG endpoint — đếm món chính xác từ DB
 app.get("/api/_debug/menu-count", (_, res) => {
   try {
     const db = loadDB();
@@ -2318,6 +2384,11 @@ app.get("/api/_debug/menu-count", (_, res) => {
     const inactive = all.length - active;
     res.json({
       buildVersion: BUILD_VERSION,
+      serverTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      vnTimezone: VN_TIMEZONE,
+      serverDate: new Date().toISOString(),
+      vnDate: getLocalDateStr(),
+      vnHour: getVNHour(),
       total: all.length,
       active,
       inactive,
@@ -2336,7 +2407,7 @@ app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
   try {
     const { confirm } = req.body;
     if (confirm !== "RESET") {
-      return res.status(400).json({ message: "Cáº§n xÃ¡c nháº­n 'RESET' Ä‘á»ƒ thá»±c hiá»‡n" });
+      return res.status(400).json({ message: "Cần xác nhận 'RESET' để thực hiện" });
     }
 
     const db = loadDB();
@@ -2344,9 +2415,9 @@ app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
     const backupFile = path.join(__dirname, "canteen-db-auto-backup-" + Date.now() + ".json");
     try {
       fs.writeFileSync(backupFile, JSON.stringify(db, null, 2), "utf-8");
-      console.log("ðŸ’¾ Auto backup: " + path.basename(backupFile));
+      console.log("💾 Auto backup: " + path.basename(backupFile));
     } catch {
-      // Bá» qua náº¿u filesystem khÃ´ng ghi Ä‘Æ°á»£c
+      // Bỏ qua nếu filesystem không ghi được
     }
 
     db.orders = [];
@@ -2371,7 +2442,7 @@ app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
 
     res.json({
       ok: true,
-      message: "Reset thÃ nh cÃ´ng",
+      message: "Reset thành công",
       auto_backup: path.basename(backupFile),
       stats: {
         users: db.users.length,
@@ -2388,6 +2459,6 @@ app.post("/api/backup/reset", auth(["ADMIN"]), (req, res) => {
 
 initMongo().then(() => {
   app.listen(PORT, () =>
-    console.log("ðŸš€ API (JSON): http://localhost:" + PORT)
+    console.log("🚀 API (JSON): http://localhost:" + PORT + " | TZ: " + VN_TIMEZONE)
   );
 });
