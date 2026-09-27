@@ -4764,3 +4764,6 @@ html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !
 /* ============================================================
    KẾT THÚC FILE
    ============================================================ */
+/* ✅ Ẩn tất cả page-heading toàn app */
+.page-heading { display: none !important; }
+
