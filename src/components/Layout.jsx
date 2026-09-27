@@ -19,10 +19,15 @@
 //   - ✅ ConfirmDialog logout dùng CHUNG cho cả topbar + sidebar
 //   - ✅ Nút Logout + Profile topbar CHỈ hiện cho Customer
 //     (Employee + Admin đã có trong sidebar)
+//   - ✅ MEDIUM FIX: page-heading hiện đồng nhất
+//     - Trước: chỉ CUSTOMER mới có page-heading
+//     - Sau: TẤT CẢ role đều có page-heading (nếu title/subtitle)
+//     - Auto-detect title/subtitle từ route nếu không truyền prop
+//   - ✅ Auto page-heading: dùng bảng PAGE_TITLES để lookup theo path
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ChevronDown, Menu, ShoppingCart, LogOut } from "lucide-react";
 
 import Sidebar from "./Sidebar";
@@ -50,6 +55,52 @@ const FALLBACK_AVATAR =
       <text x='50' y='58' font-size='40' fill='#fff' text-anchor='middle'>👤</text>
     </svg>`
   );
+
+/**
+ * ✅ Auto page-heading: bảng title/subtitle theo pathname.
+ * Nếu page tự render heading riêng (VD: CustomerHome) → không cần bảng này.
+ * Match theo prefix (pathname.startsWith(path)).
+ *
+ * Thứ tự quan trọng — path dài hơn phải đứng trước.
+ */
+const PAGE_HEADINGS = [
+  // ===== CUSTOMER =====
+  { path: "/customer/menu",        title: "Thực đơn",        subtitle: "Chọn món yêu thích" },
+  { path: "/customer/cart",        title: "Giỏ hàng",         subtitle: "Món bạn đã chọn" },
+  { path: "/customer/checkout",    title: "Thanh toán",       subtitle: "Hoàn tất đơn hàng" },
+  { path: "/customer/orders",      title: "Đơn hàng",         subtitle: "Lịch sử đơn hàng" },
+  { path: "/customer/profile",     title: "Hồ sơ cá nhân",    subtitle: "Thông tin tài khoản" },
+  { path: "/customer/promotions",  title: "Khuyến mãi",       subtitle: "Ưu đãi dành cho bạn" },
+  { path: "/customer/wallet",      title: "Ví Canteen",       subtitle: "Nạp tiền & thanh toán nhanh" },
+  { path: "/customer/chat",        title: "Chat hỗ trợ",      subtitle: "Nhắn tin với Canteen" },
+  { path: "/customer/signature",   title: "Món Signature",    subtitle: "Đặc sản Canteen VWA" },
+  { path: "/customer/success",     title: "Đặt hàng thành công", subtitle: "Cảm ơn bạn!" },
+
+  // ===== EMPLOYEE =====
+  { path: "/employee/attendance",  title: "Chấm công",        subtitle: "Check-in / Check-out" },
+  { path: "/employee/orders",      title: "Đơn hàng",         subtitle: "Xử lý đơn khách" },
+  { path: "/employee/menu",        title: "Thực đơn",         subtitle: "Xem tình trạng món" },
+  { path: "/employee/profile",     title: "Hồ sơ cá nhân",    subtitle: "Thông tin tài khoản" },
+  { path: "/employee/chat",        title: "Chat khách hàng",  subtitle: "Hỗ trợ khách hàng" },
+
+  // ===== OWNER (ADMIN) =====
+  { path: "/owner/employees",      title: "Quản lý nhân viên",   subtitle: "Danh sách nhân viên" },
+  { path: "/owner/shifts",         title: "Quản lý ca",           subtitle: "Phân ca + theo dõi chấm công" },
+  { path: "/owner/attendance",     title: "Chấm công",            subtitle: "Lịch sử chấm công nhân viên" },
+  { path: "/owner/customers",      title: "Quản lý khách hàng",   subtitle: "Danh sách khách hàng" },
+  { path: "/owner/menu",           title: "Quản lý thực đơn",     subtitle: "Món ăn" },
+  { path: "/owner/price-history",  title: "Lịch sử giá",          subtitle: "Theo dõi thay đổi giá món ăn" },
+  { path: "/owner/inventory",      title: "Kho hàng",             subtitle: "Nguyên liệu" },
+  { path: "/owner/reports",        title: "Báo cáo",              subtitle: "Doanh thu & thống kê" },
+  { path: "/owner/permissions",    title: "Phân quyền",           subtitle: "Phân quyền chi tiết cho từng user" },
+  { path: "/owner/orders",         title: "Quản lý đơn hàng",     subtitle: "Xử lý đơn khách như nhân viên" },
+  { path: "/owner/vouchers",       title: "Quản lý Voucher",      subtitle: "Tạo / sửa / xóa voucher cho khách" },
+  { path: "/owner/finance",        title: "Quản lý tài chính",    subtitle: "Tài khoản nhận tiền, doanh thu, chi phí" },
+  { path: "/owner/wallet",         title: "Quản lý Ví Canteen",   subtitle: "Duyệt nạp / rút / thanh toán của khách" },
+  { path: "/owner/settings",       title: "Cài đặt",              subtitle: "Tài khoản nhận tiền + thông tin liên hệ" },
+  { path: "/owner/profile",        title: "Hồ sơ cá nhân",        subtitle: "Thông tin tài khoản" },
+  { path: "/owner/backup",         title: "Backup dữ liệu",       subtitle: "Xuất / nhập / reset database" },
+];
 
 // ============================================================
 // HELPERS
@@ -87,6 +138,27 @@ function readCartCount() {
   } catch {
     return 0;
   }
+}
+
+/**
+ * ✅ Auto lookup heading theo pathname.
+ * Trả về { title, subtitle } hoặc null.
+ */
+function lookupHeading(pathname) {
+  if (!pathname) return null;
+
+  // Sort by length DESC để match path cụ thể trước
+  const sorted = [...PAGE_HEADINGS].sort(
+    (a, b) => b.path.length - a.path.length
+  );
+
+  for (const h of sorted) {
+    if (pathname === h.path || pathname.startsWith(h.path + "/")) {
+      return { title: h.title, subtitle: h.subtitle };
+    }
+  }
+
+  return null;
 }
 
 // ============================================================
@@ -208,6 +280,7 @@ export default function Layout({
   showFooter = false,
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t, lang } = useTranslation();
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -229,6 +302,18 @@ export default function Layout({
     return t("role.customer");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, t, lang]);
+
+  // ---------- ✅ Auto page-heading ----------
+  // Logic:
+  //   1. Nếu truyền prop `title` → dùng prop (highest priority)
+  //   2. Nếu không → lookup từ PAGE_HEADINGS theo pathname
+  //   3. Nếu không có → null (không render heading)
+  const heading = useMemo(() => {
+    if (title || subtitle) {
+      return { title, subtitle };
+    }
+    return lookupHeading(location.pathname);
+  }, [title, subtitle, location.pathname]);
 
   // ---------- Handlers ----------
 
@@ -333,11 +418,12 @@ export default function Layout({
 
         {/* ============ PAGE CONTENT ============ */}
         <section className="page-content">
-          {/* Heading — CHỈ hiện cho CUSTOMER (Employee + Admin đã có sidebar) */}
-          {role === "CUSTOMER" && !hideHeading && (title || subtitle) && (
+          {/* ✅ Page heading — hiện cho TẤT CẢ role
+             (nếu có title/subtitle, không bị ẩn bởi hideHeading) */}
+          {!hideHeading && heading && (heading.title || heading.subtitle) && (
             <div className="page-heading">
-              {title && <h1>{title}</h1>}
-              {subtitle && <p>{subtitle}</p>}
+              {heading.title && <h1>{heading.title}</h1>}
+              {heading.subtitle && <p>{heading.subtitle}</p>}
             </div>
           )}
 
@@ -348,7 +434,7 @@ export default function Layout({
       </main>
 
       {/* ============ BOTTOM NAV (customer only) ============ */}
-	{role === "CUSTOMER" && <BottomNav onLogout={onLogout} />}
+      {role === "CUSTOMER" && <BottomNav onLogout={onLogout} />}
 
       {/* ============ ✅ CONFIRM LOGOUT MODAL (dùng chung) ============ */}
       <ConfirmDialog

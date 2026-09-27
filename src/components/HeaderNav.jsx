@@ -10,9 +10,14 @@
 //   - aria-label cho nav
 //   - ✅ FIX: thêm import api (trước đó thiếu → readOrders throw
 //     ReferenceError ngầm, badge đơn hàng không bao giờ hiện)
+//   - ✅ FIX MEDIUM: Phân nhóm tab theo màn hình
+//     - Desktop lớn (>= 1200px): hiện đủ 7 tab
+//     - Desktop nhỏ / Tablet (768-1199px): chỉ hiện 5 tab chính
+//       (Home, Menu, Cart, Orders, Profile)
+//     - Wallet + Promotions có thể vào từ trang Profile
 // ============================================================
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Home, UtensilsCrossed, ShoppingCart, Package, Wallet, Gift, User,
@@ -33,14 +38,15 @@ const ACTIVE_ORDER_STATUSES = [
   "Sẵn sàng nhận",
 ];
 
+// priority: 1 = luôn hiện, 2 = ẩn trên tablet/desktop nhỏ
 const TABS = [
-  { key: "home",       label: "Trang chủ",  icon: Home,            path: "/customer" },
-  { key: "menu",       label: "Thực đơn",   icon: UtensilsCrossed, path: "/customer/menu" },
-  { key: "cart",       label: "Giỏ hàng",   icon: ShoppingCart,    path: "/customer/cart", badge: "cart" },
-  { key: "orders",     label: "Đơn hàng",   icon: Package,         path: "/customer/orders", badge: "orders" },
-  { key: "wallet",     label: "Ví Canteen", icon: Wallet,          path: "/customer/wallet" },
-  { key: "promotions", label: "Khuyến mãi", icon: Gift,            path: "/customer/promotions" },
-  { key: "profile",    label: "Hồ sơ",      icon: User,            path: "/customer/profile" },
+  { key: "home",       label: "Trang chủ",  icon: Home,            path: "/customer",            priority: 1 },
+  { key: "menu",       label: "Thực đơn",   icon: UtensilsCrossed, path: "/customer/menu",       priority: 1 },
+  { key: "cart",       label: "Giỏ hàng",   icon: ShoppingCart,    path: "/customer/cart",       badge: "cart",   priority: 1 },
+  { key: "orders",     label: "Đơn hàng",   icon: Package,         path: "/customer/orders",     badge: "orders", priority: 1 },
+  { key: "profile",    label: "Hồ sơ",      icon: User,            path: "/customer/profile",    priority: 1 },
+  { key: "wallet",     label: "Ví Canteen", icon: Wallet,          path: "/customer/wallet",     priority: 2 },
+  { key: "promotions", label: "Khuyến mãi", icon: Gift,            path: "/customer/promotions", priority: 2 },
 ];
 
 const BADGE_MAX = 99;
@@ -63,6 +69,35 @@ function readCartCount() {
   }
 }
 
+/**
+ * ✅ Check màn hình có đủ rộng để hiện 7 tab không.
+ * Dùng window.matchMedia để reactive.
+ */
+function useHasWideScreen() {
+  const [wide, setWide] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 1200px)").matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (typeof window.matchMedia !== "function") return;
+
+    const mq = window.matchMedia("(min-width: 1200px)");
+    const handler = (e) => setWide(e.matches);
+
+    if (mq.addEventListener) {
+      mq.addEventListener("change", handler);
+      return () => mq.removeEventListener("change", handler);
+    }
+    // Safari cũ
+    mq.addListener?.(handler);
+    return () => mq.removeListener?.(handler);
+  }, []);
+
+  return wide;
+}
+
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
@@ -70,6 +105,7 @@ function readCartCount() {
 export default function HeaderNav() {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
+  const isWide = useHasWideScreen();
 
   // ---------- Read cart ----------
 
@@ -127,6 +163,13 @@ export default function HeaderNav() {
     };
   }, [readCart, readOrders]);
 
+  // ---------- Filter tabs theo màn hình ----------
+
+  const visibleTabs = useMemo(() => {
+    if (isWide) return TABS;
+    return TABS.filter((t) => t.priority === 1);
+  }, [isWide]);
+
   // ---------- Badge render ----------
 
   const renderBadge = (count) => {
@@ -166,7 +209,7 @@ export default function HeaderNav() {
   return (
     <nav className="header-nav" aria-label="Menu chính">
       <div className="header-nav-inner">
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const badge =
             tab.badge === "cart"

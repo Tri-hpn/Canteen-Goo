@@ -20,6 +20,8 @@
 //   - Flash track: unique key
 //   - Memo các computed values
 //   - Xoá dòng thừa
+//   - ✅ MEDIUM FIX: Skeleton loading cho section "Bán chạy nhất"
+//     (thay vì text "Đang tải món...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -30,6 +32,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
+import { SkeletonCard } from "../../components/Skeleton";
 import FoodDetailModal from "../../components/FoodDetailModal";
 import ChatBotWidget from "../../components/ChatBotWidget";
 import { useTranslation } from "../../i18n";
@@ -44,6 +47,9 @@ const BEST_SELLERS_LIMIT = 5;
 const NEW_ITEMS_LIMIT = 4;
 const FLASH_PROMOS_LIMIT = 4;
 const FLASH_VOUCHERS_LIMIT = 2;
+
+// Số skeleton card hiển thị khi loading
+const SKELETON_COUNT = 5;
 
 // Fallback flash items khi không có voucher/promo
 const DEFAULT_FLASH_ITEMS = [
@@ -942,18 +948,16 @@ export default function CustomerHome({ user, cart, setCart }) {
       </h3>
 
       <div className="home-food-grid-5" style={{ marginBottom: 26 }}>
-        {loading && (
-          <div
-            style={{
-              gridColumn: "1 / -1",
-              textAlign: "center",
-              padding: 40,
-              color: "#8993a3",
-            }}
-          >
-            Đang tải món...
-          </div>
+        {/* ✅ Loading: Skeleton cards thay vì text */}
+        {loading && items.length === 0 && (
+          <>
+            {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+              <SkeletonCard key={`skeleton-${i}`} />
+            ))}
+          </>
         )}
+
+        {/* Empty state (chỉ hiện khi đã load xong) */}
         {!loading && items.length === 0 && (
           <div
             style={{
@@ -961,11 +965,40 @@ export default function CustomerHome({ user, cart, setCart }) {
               textAlign: "center",
               padding: 40,
               color: "#8993a3",
+              background: "var(--card-bg, #fff)",
+              borderRadius: 14,
+              border: "1px solid var(--border-color, #e7ebf0)",
             }}
           >
-            Chưa có món bán chạy nào
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+              Chưa có món bán chạy nào
+            </div>
+            <div style={{ fontSize: 12 }}>
+              Khám phá thực đơn để chọn món yêu thích.
+            </div>
+            <Link
+              to="/customer/menu"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 14,
+                padding: "10px 20px",
+                background: "#2634d5",
+                color: "#fff",
+                borderRadius: 10,
+                textDecoration: "none",
+                fontWeight: 700,
+                fontSize: 13,
+              }}
+            >
+              <Utensils size={15} /> Xem thực đơn
+            </Link>
           </div>
         )}
+
+        {/* Data */}
         {items.map(renderFoodCard)}
       </div>
 

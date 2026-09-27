@@ -1633,22 +1633,16 @@ html.dark-mode .inv-badge--out {
   border-color: #2634d5;
 }
 
+/* Ảnh cơ bản cho mọi food card — sẽ bị override bởi PHẦN 35 */
 .food-card-clickable > img,
 .food-card-clickable > div:first-child > img {
-  width: 100px !important;
-  height: 100px !important;
-  border-radius: 50% !important;
-  margin: 10px auto 6px !important;
-  border: 3px solid #fff !important;
-  box-shadow: 0 6px 20px rgba(38, 52, 213, 0.15) !important;
-  object-fit: cover !important;
   display: block !important;
+  object-fit: cover !important;
   transition: transform 0.3s ease !important;
 }
 .food-card-clickable:hover > img,
 .food-card-clickable:hover > div:first-child > img {
   transform: scale(1.05) !important;
-  box-shadow: 0 8px 24px rgba(38, 52, 213, 0.25) !important;
 }
 
 .food-card-clickable > div {
@@ -1858,14 +1852,17 @@ html.dark-mode .inv-badge--out {
 
 /* ============================================================
    PHẦN 18: CHATBOT WIDGET
+   ------------------------------------------------------------
+   ✅ FIX: FAB không đè BottomNav trên mobile
    ============================================================ */
 
 .chatbot-fab {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 90;
+  z-index: 45;   /* Dưới BottomNav (50) */
 }
+
 .chatbot-panel {
   position: fixed;
   bottom: 24px;
@@ -1873,6 +1870,7 @@ html.dark-mode .inv-badge--out {
   z-index: 100;
 }
 
+/* Desktop: FAB nhỏ gọn góc dưới phải */
 @media (min-width: 769px) {
   .chatbot-fab {
     width: 52px !important;
@@ -1884,17 +1882,43 @@ html.dark-mode .inv-badge--out {
   .chatbot-fab svg { width: 22px !important; height: 22px !important; }
 }
 
+/* Mobile có bottom nav: FAB nhảy lên trên bottom nav */
 @media (max-width: 768px) {
   body.has-bottom-nav .chatbot-fab {
-    bottom: calc(120px + env(safe-area-inset-bottom, 0px)) !important;
-    right: 10px !important;
-    width: 44px !important;
-    height: 44px !important;
-    z-index: 40 !important;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+    right: 12px !important;
+    width: 48px !important;
+    height: 48px !important;
+    z-index: 49 !important;   /* Dưới bottom nav (50) */
   }
   body.has-bottom-nav .chatbot-fab svg {
-    width: 18px !important;
-    height: 18px !important;
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  /* Panel mở: full screen mobile */
+  .chatbot-panel {
+    bottom: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+    z-index: 100 !important;
+  }
+}
+
+/* Landscape phone: panel thấp hơn */
+@media (max-width: 900px) and (orientation: landscape) {
+  .chatbot-panel {
+    height: calc(100vh - 20px) !important;
+    bottom: 10px !important;
+    right: 10px !important;
+    left: 10px !important;
+    width: auto !important;
+    border-radius: 16px !important;
   }
 }
 
@@ -2188,14 +2212,35 @@ html.dark-mode .inv-badge--out {
 
 @media (max-width: 768px) {
   .toast-container {
-    top: 70px !important;
+    top: 64px !important;      /* ✅ FIX: 56px topbar + 8px gap */
     right: 12px !important;
     left: 12px !important;
     align-items: stretch !important;
+    gap: 8px !important;
   }
   .toast {
     min-width: 0 !important;
     width: 100% !important;
+    padding: 12px 14px !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .toast-container {
+    top: 60px !important;      /* ✅ FIX: 54px topbar + 6px gap */
+    right: 8px !important;
+    left: 8px !important;
+  }
+  .toast {
+    min-width: 0 !important;
+    width: 100% !important;
+    padding: 10px 12px !important;
+    font-size: 12.5px !important;
+  }
+  .toast__close {
+    width: 24px !important;
+    height: 24px !important;
   }
 }
 
@@ -2684,11 +2729,21 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .footer-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
   .app-footer { padding: 16px !important; border-radius: 12px !important; }
 
-  .food-card-clickable > img,
-  .food-card-clickable > div:first-child > img {
-    width: 90px !important; height: 90px !important;
+  /* Mobile: home grid ảnh tròn 90px */
+  .home-food-grid-5 .food-card-clickable > img,
+  .home-food-grid-5 .food-card-clickable > div:first-child > img,
+  .home-food-grid-4 .food-card-clickable > img,
+  .home-food-grid-4 .food-card-clickable > div:first-child > img {
+    width: 90px !important;
+    height: 90px !important;
     margin-top: 10px !important;
   }
+  /* Menu grid ảnh chữ nhật 140px */
+  .menu-food-grid .food-card-clickable > img,
+  .menu-food-grid .food-card-clickable > div:first-child > img {
+    height: 140px !important;
+  }
+
   .food-card-clickable h4 {
     font-size: 12px !important;
     min-height: 30px !important;
@@ -2916,10 +2971,20 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   }
   .home-cat-grid { grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important; }
 
-  .food-card-clickable > img,
-  .food-card-clickable > div:first-child > img {
-    width: 80px !important; height: 80px !important;
+  /* Mobile nhỏ: home ảnh tròn 80px */
+  .home-food-grid-5 .food-card-clickable > img,
+  .home-food-grid-5 .food-card-clickable > div:first-child > img,
+  .home-food-grid-4 .food-card-clickable > img,
+  .home-food-grid-4 .food-card-clickable > div:first-child > img {
+    width: 80px !important;
+    height: 80px !important;
   }
+  /* Menu ảnh chữ nhật 120px */
+  .menu-food-grid .food-card-clickable > img,
+  .menu-food-grid .food-card-clickable > div:first-child > img {
+    height: 120px !important;
+  }
+
   .food-card-clickable h4 { font-size: 12px !important; min-height: 28px !important; }
   .food-card-clickable > div > b { font-size: 13px !important; }
 
@@ -2995,7 +3060,6 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   * { overflow-wrap: break-word; }
   pre, code { white-space: pre-wrap; word-break: break-word; }
 }
-
 /* ============================================================
    PHẦN 26: UX POLISH & ANIMATIONS
    ============================================================ */
@@ -3886,16 +3950,47 @@ html.dark-mode .payment-card .pm-body > span { color: #94a3b8; }
 }
 
 /* ============================================================
-   PHẦN 35: FOOD CARD FIX — Ảnh tròn không bị crop
+   PHẦN 35: FOOD CARD FIX — Ảnh tròn CHỈ trên grid trang chủ
+   ------------------------------------------------------------
+   ✅ FIX: Chỉ ép ảnh tròn trong .home-food-grid-5 / .home-food-grid-4
+      (trang chủ + signature), để .menu-food-grid (trang menu) giữ
+      ảnh chữ nhật 160px.
+
+   Trước đây: ép tất cả food-card-clickable > img thành 110px tròn
+   → trang menu cũng bị ép, conflict với JSX.
    ============================================================ */
 
-.food-card-clickable > img,
-.food-card-clickable > div:first-child > img {
+.home-food-grid-5 .food-card-clickable > img,
+.home-food-grid-5 .food-card-clickable > div:first-child > img,
+.home-food-grid-4 .food-card-clickable > img,
+.home-food-grid-4 .food-card-clickable > div:first-child > img {
   width: 110px !important;
   height: 110px !important;
   border-radius: 50% !important;
   object-fit: cover !important;
   object-position: center !important;
+  margin: 10px auto 6px !important;
+  border: 3px solid #fff !important;
+  box-shadow: 0 6px 20px rgba(38, 52, 213, 0.15) !important;
+  display: block !important;
+}
+
+.home-food-grid-5 .food-card-clickable:hover > img,
+.home-food-grid-5 .food-card-clickable:hover > div:first-child > img,
+.home-food-grid-4 .food-card-clickable:hover > img,
+.home-food-grid-4 .food-card-clickable:hover > div:first-child > img {
+  box-shadow: 0 8px 24px rgba(38, 52, 213, 0.25) !important;
+}
+
+/* Menu grid giữ ảnh chữ nhật — không ép tròn */
+.menu-food-grid .food-card-clickable > img,
+.menu-food-grid .food-card-clickable > div:first-child > img {
+  width: 100% !important;
+  height: 160px !important;
+  border-radius: 12px 12px 0 0 !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
 }
 
 /* ============================================================
@@ -4449,6 +4544,21 @@ html.dark-mode .v8-demo { background: #1e293b; border-color: #334155; }
 html.dark-mode .v8-demo-item { background: #0f172a; border-color: #334155; }
 html.dark-mode .v8-label { color: #cbd5e1; }
 
+/* Tablet ngang (768-1024px): chia 40/60 thay vì 50/50 */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .v8-login-page {
+    grid-template-columns: 0.8fr 1.2fr !important;
+  }
+  .v8-illustration-inner {
+    max-width: 380px !important;
+  }
+  .v8-form-inner {
+    max-width: 400px !important;
+  }
+  .v8-form-title { font-size: 26px !important; }
+}
+
+/* Mobile: 1 cột */
 @media (max-width: 900px) {
   .v8-login-page {
     grid-template-columns: 1fr !important;

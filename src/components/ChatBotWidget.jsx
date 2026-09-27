@@ -21,6 +21,7 @@
 //     hiện sai khi đã max stock)
 //   - ✅ FIX: cleanup fetch menu+settings bằng cancelled flag
 //     tránh warning "setState on unmounted component"
+//   - ✅ FIX UX: FAB z-index 45 (không đè BottomNav z-index 50)
 // ============================================================
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -456,7 +457,8 @@ export default function ChatBotWidget({ cart, setCart, user }) {
             boxShadow: "0 8px 24px rgba(139, 92, 246, 0.45)",
             display: "grid",
             placeItems: "center",
-            zIndex: 90,
+            // ✅ FIX UX: z-index 45 — không đè BottomNav (z=50)
+            zIndex: 45,
             transition: "transform 0.2s",
           }}
           onMouseEnter={(e) =>

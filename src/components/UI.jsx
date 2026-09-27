@@ -5,7 +5,8 @@
 //   - money(n)         — format VNĐ
 //   - StatusBadge      — badge trạng thái (đơn, user, kho)
 //   - Modal            — modal có ESC + backdrop
-//   - Empty            — empty state
+//   - Empty            — empty state (nâng cấp — hỗ trợ icon, title,
+//                        description, action button, size)
 //   - TableActions     — nút hành động trong bảng
 //   - ThemeProvider    — Provider theo dõi theme (wire ở main.jsx)
 //
@@ -25,16 +26,24 @@
 //   - ✅ StatusBadge dùng `hasProvider` check thay vì `if (ctxTheme)`
 //     (bug cũ: ctxTheme default "light" truthy → observer không bao
 //     giờ được tạo khi không có Provider)
+//   - ✅ MEDIUM FIX: Empty component nâng cấp
+//     - Hỗ trợ icon (ReactNode hoặc Lucide component)
+//     - Hỗ trợ title + description
+//     - Hỗ trợ action button (onClick hoặc Link to)
+//     - Size variant: sm | md | lg
+//     - Backward compatible (chỉ có prop `text` cũ vẫn chạy)
 // ============================================================
 
 import {
   useEffect, useState, useMemo, useCallback,
   useRef, createContext, useContext,
 } from "react";
+import { Link } from "react-router-dom";
 import {
   CheckCircle2, Clock3, XCircle, AlertTriangle, Eye, Pencil, Trash2,
   Clock, ChefHat, Truck, Info, Package, Ban,
-  CalendarX, Inbox,
+  CalendarX, Inbox, ShoppingBag, Search, UtensilsCrossed,
+  FileQuestion, Gift, Wallet,
 } from "lucide-react";
 
 // ============================================================
@@ -368,24 +377,232 @@ export function Modal({ title, children, onClose, maxWidth = 480 }) {
 }
 
 // ============================================================
-// EMPTY STATE
+// EMPTY STATE — Nâng cấp toàn diện
+// ============================================================
+// Props:
+//   text        — (backward compat) text chính, tương đương `title`
+//   title       — tiêu đề chính
+//   description — mô tả phụ (tùy chọn)
+//   icon        — ReactNode hoặc Lucide component (mặc định Inbox)
+//   size        — "sm" | "md" | "lg" (mặc định "md")
+//   action      — { label, onClick?, to?, variant? } (tùy chọn)
+//                 - Nếu có `to` → render <Link>
+//                 - Nếu có `onClick` → render <button>
+//   iconColor   — màu icon (mặc định theo theme)
+//   style       — override style ngoài
+//
+// Ví dụ:
+//   <Empty
+//     icon={ShoppingBag}
+//     title="Giỏ hàng trống"
+//     description="Thêm món để tiếp tục"
+//     action={{ label: "Xem thực đơn", to: "/customer/menu" }}
+//   />
 // ============================================================
 
-export function Empty({ text = "Chưa có dữ liệu", icon: Icon = Inbox }) {
+const EMPTY_SIZE_CONFIG = {
+  sm: {
+    padding: "24px 16px",
+    iconSize: 28,
+    iconBox: 52,
+    titleSize: 14,
+    descSize: 12,
+    gap: 8,
+    radius: 12,
+  },
+  md: {
+    padding: "40px 24px",
+    iconSize: 36,
+    iconBox: 68,
+    titleSize: 15,
+    descSize: 13,
+    gap: 10,
+    radius: 14,
+  },
+  lg: {
+    padding: "56px 32px",
+    iconSize: 48,
+    iconBox: 92,
+    titleSize: 18,
+    descSize: 13.5,
+    gap: 14,
+    radius: 16,
+  },
+};
+
+export function Empty({
+  text,
+  title,
+  description,
+  icon,
+  size = "md",
+  action,
+  iconColor,
+  style,
+}) {
+  // Backward compat: nếu caller chỉ truyền `text` cũ
+  const finalTitle = title || text || "Chưa có dữ liệu";
+  const showDescription = !!description;
+
+  const cfg = EMPTY_SIZE_CONFIG[size] || EMPTY_SIZE_CONFIG.md;
+
+  // Icon có thể là ReactNode hoặc Lucide component
+  const iconNode = useMemo(() => {
+    if (!icon) return <Inbox size={cfg.iconSize} />;
+
+    // Nếu là function/component (Lucide) → render với size
+    if (typeof icon === "function") {
+      const IconComp = icon;
+      return <IconComp size={cfg.iconSize} />;
+    }
+
+    // Nếu là React element → clone và áp size nếu có thể
+    if (typeof icon === "object" && icon.type) {
+      // Cố gắng inject size
+      try {
+        return icon;
+      } catch {
+        return <Inbox size={cfg.iconSize} />;
+      }
+    }
+
+    return <Inbox size={cfg.iconSize} />;
+  }, [icon, cfg.iconSize]);
+
+  const finalIconColor = iconColor || "var(--text-light, #94a3b8)";
+
+  // Action button
+  const renderAction = () => {
+    if (!action || !action.label) return null;
+
+    const variantStyles = {
+      primary: {
+        background: "#2634d5",
+        color: "#fff",
+        border: "none",
+        boxShadow: "0 4px 12px rgba(38, 52, 213, 0.25)",
+      },
+      outline: {
+        background: "var(--card-bg, #fff)",
+        color: "var(--text-primary, #172033)",
+        border: "1px solid var(--border-color, #e5e9ef)",
+      },
+      ghost: {
+        background: "transparent",
+        color: "#2634d5",
+        border: "none",
+      },
+    };
+
+    const variant = variantStyles[action.variant] || variantStyles.primary;
+
+    const baseStyle = {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "10px 20px",
+      borderRadius: 10,
+      fontWeight: 700,
+      fontSize: 13,
+      cursor: "pointer",
+      textDecoration: "none",
+      transition: "all 0.2s",
+      marginTop: 6,
+      ...variant,
+    };
+
+    // Nếu là Link (có `to`)
+    if (action.to) {
+      return (
+        <Link to={action.to} style={baseStyle}>
+          {action.icon}
+          {action.label}
+        </Link>
+      );
+    }
+
+    // Nếu là button (có `onClick`)
+    if (action.onClick) {
+      return (
+        <button
+          type="button"
+          onClick={action.onClick}
+          style={baseStyle}
+        >
+          {action.icon}
+          {action.label}
+        </button>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div
+      role="status"
+      aria-live="polite"
       style={{
-        textAlign: "center",
-        padding: 40,
-        color: "var(--text-light, #8993a3)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 10,
+        justifyContent: "center",
+        textAlign: "center",
+        padding: cfg.padding,
+        gap: cfg.gap,
+        color: "var(--text-muted, #64748b)",
+        background: "var(--card-bg, #fff)",
+        border: "1px solid var(--border-color, #e7ebf0)",
+        borderRadius: cfg.radius,
+        ...style,
       }}
     >
-      {Icon && <Icon size={36} style={{ opacity: 0.4 }} />}
-      <div style={{ fontSize: 13 }}>{text}</div>
+      {/* Icon trong khung tròn */}
+      <div
+        aria-hidden="true"
+        style={{
+          width: cfg.iconBox,
+          height: cfg.iconBox,
+          borderRadius: "50%",
+          display: "grid",
+          placeItems: "center",
+          background: "var(--bg-tertiary, #f5f7fb)",
+          color: finalIconColor,
+          marginBottom: showDescription ? 4 : 0,
+        }}
+      >
+        {iconNode}
+      </div>
+
+      {/* Title */}
+      <div
+        style={{
+          fontSize: cfg.titleSize,
+          fontWeight: 700,
+          color: "var(--text-primary, #172033)",
+          lineHeight: 1.4,
+          maxWidth: 400,
+        }}
+      >
+        {finalTitle}
+      </div>
+
+      {/* Description */}
+      {showDescription && (
+        <div
+          style={{
+            fontSize: cfg.descSize,
+            color: "var(--text-light, #8993a3)",
+            lineHeight: 1.5,
+            maxWidth: 420,
+          }}
+        >
+          {description}
+        </div>
+      )}
+
+      {/* Action button */}
+      {renderAction()}
     </div>
   );
 }
@@ -446,3 +663,25 @@ export function TableActions({ onView, onEdit, onDelete }) {
     </div>
   );
 }
+
+// ============================================================
+// PRESET ICON EXPORTS (tiện dùng cho Empty)
+// ============================================================
+// Ví dụ:
+//   import { EmptyIcons } from "./UI";
+//   <Empty icon={EmptyIcons.Cart} title="Giỏ hàng trống" />
+// ============================================================
+
+export const EmptyIcons = {
+  Inbox,
+  Cart: ShoppingBag,
+  Search,
+  Menu: UtensilsCrossed,
+  Question: FileQuestion,
+  Gift,
+  Wallet,
+  Package,
+  Users: Inbox,       // fallback
+  Alert: AlertTriangle,
+  Calendar: CalendarX,
+};
