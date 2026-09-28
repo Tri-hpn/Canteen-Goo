@@ -3687,7 +3687,7 @@ main.v8-login-right {
 
 .v8-socials {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-bottom: 20px;
 }
@@ -4313,6 +4313,13 @@ html.dark-mode .voucher-card__code {
 .grab-food-card__badge--right {
   left: auto !important;
   right: 8px !important;
+}
+/* ============================================================
+   PHẦN 43: SOCIAL GRID 2 CỘT (đã bỏ GitHub)
+   ============================================================ */
+
+.v8-socials {
+  grid-template-columns: repeat(2, 1fr) !important;
 }
 /* ============================================================
    KẾT THÚC FILE

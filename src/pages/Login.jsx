@@ -1,6 +1,10 @@
 // ============================================================
 // LOGIN.JSX — Trang đăng nhập (style Login Animation V8)
 // ============================================================
+// OAuth: Google + Facebook redirect thật (cần ENV VITE_GOOGLE_CLIENT_ID
+//        và VITE_FACEBOOK_APP_ID). Nếu chưa cấu hình → hiện toast.
+//        Đã XOÁ nút GitHub (chưa hoạt động).
+// ============================================================
 
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
@@ -8,7 +12,12 @@ import {
   Eye, EyeOff, LockKeyhole, Mail, ArrowRight, Loader2,
 } from "lucide-react";
 import { useTranslation } from "../i18n";
+import { toast } from "../components/Effects";
 import CuteCharacters from "../components/LoginIllustration";
+
+// ============================================================
+// CONSTANTS
+// ============================================================
 
 const DEMO_ACCOUNTS = [
   { role: "Admin",      email: "admin@vwa.vn",    password: "123456" },
@@ -17,6 +26,72 @@ const DEMO_ACCOUNTS = [
 ];
 
 const REMEMBER_KEY = "canteen_remember_email";
+
+// ============================================================
+// OAUTH HELPERS
+// ============================================================
+
+/**
+ * Bắt đầu luồng OAuth Google.
+ * Redirect user sang Google consent screen.
+ */
+function startGoogleOAuth() {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    toast(
+      "Chưa cấu hình Google OAuth. Vui lòng liên hệ admin.",
+      "error"
+    );
+    return;
+  }
+
+  const redirectUri = encodeURIComponent(
+    window.location.origin + "/auth/google/callback"
+  );
+  const scope = encodeURIComponent("openid email profile");
+
+  const url =
+    `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${clientId}` +
+    `&redirect_uri=${redirectUri}` +
+    `&response_type=code` +
+    `&scope=${scope}` +
+    `&prompt=select_account`;
+
+  window.location.href = url;
+}
+
+/**
+ * Bắt đầu luồng OAuth Facebook.
+ * Redirect user sang Facebook login dialog.
+ */
+function startFacebookOAuth() {
+  const appId = import.meta.env.VITE_FACEBOOK_APP_ID;
+  if (!appId) {
+    toast(
+      "Chưa cấu hình Facebook OAuth. Vui lòng liên hệ admin.",
+      "error"
+    );
+    return;
+  }
+
+  const redirectUri = encodeURIComponent(
+    window.location.origin + "/auth/facebook/callback"
+  );
+
+  const url =
+    `https://www.facebook.com/v18.0/dialog/oauth?` +
+    `client_id=${appId}` +
+    `&redirect_uri=${redirectUri}` +
+    `&scope=email,public_profile` +
+    `&response_type=code`;
+
+  window.location.href = url;
+}
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
 
 export default function Login({ onLogin }) {
   const { t } = useTranslation();
@@ -89,7 +164,7 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="v8-login-page">
-      {/* LEFT */}
+      {/* ============ LEFT ============ */}
       <section className="v8-login-left">
         <div className="v8-login-brand">
           <div className="v8-brand-mark">C</div>
@@ -99,17 +174,17 @@ export default function Login({ onLogin }) {
           </div>
         </div>
 
-      	 <div className="v8-illustration-wrap">
- 	 <div className="v8-illustration-inner">
- 	   <div className="v8-speech-bubble">
-  	    {peeking
-  	      ? "🙈 Đang nhập mật khẩu — không nhìn đâu!"
-  	      : "🤫 Squad privacy mode: Shhh, no peeking!"}
-  	  </div>
+        <div className="v8-illustration-wrap">
+          <div className="v8-illustration-inner">
+            <div className="v8-speech-bubble">
+              {peeking
+                ? "🙈 Đang nhập mật khẩu — không nhìn đâu!"
+                : "🤫 Squad privacy mode: Shhh, no peeking!"}
+            </div>
 
-  	  <CuteCharacters peeking={peeking} />
- 	 </div>
-	</div>
+            <CuteCharacters peeking={peeking} />
+          </div>
+        </div>
 
         <div className="v8-left-caption">
           <b>Chào mừng đến Canteen VWA</b>
@@ -117,21 +192,21 @@ export default function Login({ onLogin }) {
         </div>
       </section>
 
-      {/* RIGHT */}
+      {/* ============ RIGHT ============ */}
       <main className="v8-login-right">
         <div className="v8-form-inner">
- 	<div className="v8-form-top">
-   	<div className="v8-form-logo">
-   	   <div className="v8-form-logo-mark">C</div>
-   	 </div>
+          <div className="v8-form-top">
+            <div className="v8-form-logo">
+              <div className="v8-form-logo-mark">C</div>
+            </div>
 
-   	 <nav className="v8-tabs" aria-label="Chuyển trang">
-   	   <span className="v8-tab active">Đăng nhập</span>
-   	   <Link to="/register" className="v8-tab">
-   	     Đăng ký
-   	   </Link>
-   	 </nav>
- 	 </div>
+            <nav className="v8-tabs" aria-label="Chuyển trang">
+              <span className="v8-tab active">Đăng nhập</span>
+              <Link to="/register" className="v8-tab">
+                Đăng ký
+              </Link>
+            </nav>
+          </div>
 
           <h1 className="v8-form-title">Chào mừng trở lại</h1>
           <p className="v8-form-subtitle">
@@ -220,11 +295,13 @@ export default function Login({ onLogin }) {
             <span>hoặc tiếp tục với</span>
           </div>
 
+          {/* ============ SOCIAL — chỉ còn 2 nút ============ */}
           <div className="v8-socials">
+            {/* GOOGLE */}
             <button
               type="button"
               className="v8-social"
-              onClick={() => fillDemo(DEMO_ACCOUNTS[2])}
+              onClick={startGoogleOAuth}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -234,20 +311,12 @@ export default function Login({ onLogin }) {
               </svg>
               Google
             </button>
+
+            {/* FACEBOOK */}
             <button
               type="button"
               className="v8-social"
-              onClick={() => fillDemo(DEMO_ACCOUNTS[1])}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="#1F2937" aria-hidden="true">
-                <path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.2 11.38.6.1.82-.26.82-.58v-2.02c-3.34.72-4.04-1.6-4.04-1.6-.55-1.4-1.34-1.77-1.34-1.77-1.1-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.08 1.84 2.82 1.3 3.5.99.1-.78.42-1.3.76-1.6-2.66-.3-5.46-1.33-5.46-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1-.32 3.3 1.23.96-.27 2-.4 3.02-.4 1.02 0 2.06.13 3.02.4 2.3-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.24 1.91 1.24 3.22 0 4.6-2.8 5.62-5.47 5.92.43.37.81 1.1.81 2.22v3.3c0 .32.22.69.83.58C20.56 22.3 24 17.8 24 12.5 24 5.87 18.63.5 12 .5z" />
-              </svg>
-              GitHub
-            </button>
-            <button
-              type="button"
-              className="v8-social"
-              onClick={() => fillDemo(DEMO_ACCOUNTS[0])}
+              onClick={startFacebookOAuth}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2" aria-hidden="true">
                 <path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z" />

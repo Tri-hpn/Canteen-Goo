@@ -7,7 +7,7 @@
 //   3. Effects: auto-login, refresh-user, cart persistence, role redirect
 //   4. Handlers: login, logout
 //   5. Render:
-//        - Nếu chưa login → chỉ hiện Login/Register/Forgot
+//        - Nếu chưa login → chỉ hiện Login/Register/Forgot + OAuth callback
 //        - Nếu đã login → routes theo role + Layout
 // ============================================================
 
@@ -26,6 +26,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import PaymentResult from "./pages/PaymentResult";
 import StaffProfile from "./pages/StaffProfile";
+import OAuthCallback from "./pages/OAuthCallback";
 
 // ---------- Customer pages ----------
 import CustomerHome from "./pages/customer/CustomerHome";
@@ -218,7 +219,7 @@ export default function App() {
   }
 
   // ============================================================
-  // CHƯA ĐĂNG NHẬP — Chỉ hiện Login/Register/Forgot
+  // CHƯA ĐĂNG NHẬP — Chỉ hiện Login/Register/Forgot + OAuth callback
   // ============================================================
   if (!user) {
     return (
@@ -229,6 +230,27 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/payment-result" element={<PaymentResult />} />
+
+          {/* ✅ OAuth callback — Google + Facebook */}
+          <Route
+            path="/auth/google/callback"
+            element={
+              <OAuthCallback
+                provider="google"
+                onLoginSuccess={(u) => setUser(u)}
+              />
+            }
+          />
+          <Route
+            path="/auth/facebook/callback"
+            element={
+              <OAuthCallback
+                provider="facebook"
+                onLoginSuccess={(u) => setUser(u)}
+              />
+            }
+          />
+
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </>

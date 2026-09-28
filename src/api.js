@@ -150,6 +150,20 @@ export const api = {
     }),
 
   // ----------------------------------------------------------
+  // OAUTH — Đăng nhập mạng xã hội (Google / Facebook)
+  // ----------------------------------------------------------
+  // FE redirect user → provider consent screen
+  // Provider redirect về /auth/{provider}/callback?code=xxx
+  // FE gọi method dưới để exchange code → JWT
+  oauth: {
+    callback: (provider, code, redirectUri) =>
+      req(`/auth/${provider}/callback`, {
+        method: "POST",
+        body: JSON.stringify({ code, redirectUri }),
+      }),
+  },
+
+  // ----------------------------------------------------------
   // STATS — Dashboard tổng quan
   // ----------------------------------------------------------
   stats: () => req("/stats"),
@@ -250,7 +264,7 @@ export const api = {
   // SHIFTS — Quản lý ca làm việc
   // ----------------------------------------------------------
   shifts: {
-    approvedToday: () => req("/shifts/approved-today"),      // ✅ MỚI
+    approvedToday: () => req("/shifts/approved-today"),
     mine:          ()             => req("/shifts/me"),
     pending:       ()             => req("/shifts/pending"),
     all:           (params = {}) => {

@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_FILE = path.join(__dirname, "canteen-db.json");
 
 // ✅ BUILD VERSION — dùng để verify Render đã deploy code mới chưa
-const BUILD_VERSION = "v4-shift-approval-" + new Date().toISOString().slice(0, 19);
+const BUILD_VERSION = "v5-oauth-" + new Date().toISOString().slice(0, 19);
 
 
 // ============================================================
@@ -430,6 +430,244 @@ app.put("/api/auth/profile", auth(), (req, res) => {
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
+});
+
+// ============================================================
+// OAUTH — Google + Facebook
+// ============================================================
+// Flow:
+//   1. FE redirect user sang accounts.google.com hoặc facebook.com
+//   2. User đồng ý → provider redirect về /auth/{provider}/callback?code=xxx
+//   3. FE gửi code + redirectUri lên backend (2 endpoint dưới)
+//   4. Backend exchange code → access_token → lấy user profile
+//   5. Backend tạo/tìm user trong DB → sign JWT → trả FE
+// ============================================================
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || "";
+const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || "";
+
+// Bật/tắt OAuth (chỉ bật khi có đủ ENV)
+const GOOGLE_OAUTH_ENABLED = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+const FACEBOOK_OAUTH_ENABLED = !!(FACEBOOK_APP_ID && FACEBOOK_APP_SECRET);
+
+// ---------- GOOGLE ----------
+app.post("/api/auth/google/callback", async (req, res) => {
+  try {
+    if (!GOOGLE_OAUTH_ENABLED) {
+      return res.status(503).json({
+        message: "Google OAuth chưa được cấu hình trên server",
+      });
+    }
+
+    const { code, redirectUri } = req.body || {};
+    if (!code) return res.status(400).json({ message: "Thiếu code" });
+    if (!redirectUri) return res.status(400).json({ message: "Thiếu redirectUri" });
+
+    // 1. Exchange code → access_token
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      }),
+    });
+
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) {
+      console.error("Google token error:", tokenData);
+      return res.status(400).json({
+        message:
+          tokenData.error_description ||
+          tokenData.error ||
+          "Không lấy được access token từ Google",
+      });
+    }
+
+    // 2. Lấy user profile
+    const userRes = await fetch(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      { headers: { Authorization: "Bearer " + tokenData.access_token } }
+    );
+    const profile = await userRes.json();
+    if (!profile.email) {
+      return res.status(400).json({ message: "Google không trả về email" });
+    }
+
+    // 3. Tạo/tìm user
+    const db = loadDB();
+    const emailNorm = profile.email.toLowerCase();
+    let user = db.users.find((u) => u.email === emailNorm);
+
+    if (!user) {
+      const id = Math.max(0, ...db.users.map((u) => u.id)) + 1;
+      user = {
+        id,
+        email: emailNorm,
+        password: "", // OAuth user không cần password
+        name: profile.name || emailNorm.split("@")[0],
+        phone: "",
+        role: "CUSTOMER",
+        status: "Hoạt động",
+        points: 0,
+        provider: "google",
+        avatar: profile.picture || "",
+        created_at: new Date().toISOString(),
+      };
+      db.users.push(user);
+      saveDB(db);
+      console.log("✅ Google OAuth: tạo user mới", user.email);
+    } else {
+      // Update avatar nếu user có Google avatar
+      if (profile.picture && !user.avatar) {
+        user.avatar = profile.picture;
+        saveDB(db);
+      }
+      console.log("✅ Google OAuth: user đã tồn tại", user.email);
+    }
+
+    // 4. Sign JWT
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, name: user.name },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        avatar: user.avatar || "",
+      },
+    });
+  } catch (e) {
+    console.error("GOOGLE OAUTH ERROR:", e);
+    res.status(500).json({ message: "Lỗi xác thực Google: " + e.message });
+  }
+});
+
+// ---------- FACEBOOK ----------
+app.post("/api/auth/facebook/callback", async (req, res) => {
+  try {
+    if (!FACEBOOK_OAUTH_ENABLED) {
+      return res.status(503).json({
+        message: "Facebook OAuth chưa được cấu hình trên server",
+      });
+    }
+
+    const { code, redirectUri } = req.body || {};
+    if (!code) return res.status(400).json({ message: "Thiếu code" });
+    if (!redirectUri) return res.status(400).json({ message: "Thiếu redirectUri" });
+
+    // 1. Exchange code → access_token
+    const tokenUrl =
+      `https://graph.facebook.com/v18.0/oauth/access_token?` +
+      `client_id=${FACEBOOK_APP_ID}` +
+      `&client_secret=${FACEBOOK_APP_SECRET}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&code=${code}`;
+
+    const tokenRes = await fetch(tokenUrl);
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) {
+      console.error("Facebook token error:", tokenData);
+      return res.status(400).json({
+        message:
+          tokenData.error?.message ||
+          "Không lấy được access token từ Facebook",
+      });
+    }
+
+    // 2. Lấy user profile
+    const userRes = await fetch(
+      `https://graph.facebook.com/me?` +
+        `fields=id,name,email,picture.width(200)&` +
+        `access_token=${tokenData.access_token}`
+    );
+    const profile = await userRes.json();
+    if (!profile.email) {
+      return res.status(400).json({
+        message:
+          "Facebook không trả về email. Vui lòng cấp quyền email khi đăng nhập.",
+      });
+    }
+
+    // 3. Tạo/tìm user
+    const db = loadDB();
+    const emailNorm = profile.email.toLowerCase();
+    let user = db.users.find((u) => u.email === emailNorm);
+
+    if (!user) {
+      const id = Math.max(0, ...db.users.map((u) => u.id)) + 1;
+      user = {
+        id,
+        email: emailNorm,
+        password: "",
+        name: profile.name || "FB User",
+        phone: "",
+        role: "CUSTOMER",
+        status: "Hoạt động",
+        points: 0,
+        provider: "facebook",
+        avatar: profile.picture?.data?.url || "",
+        created_at: new Date().toISOString(),
+      };
+      db.users.push(user);
+      saveDB(db);
+      console.log("✅ Facebook OAuth: tạo user mới", user.email);
+    } else {
+      if (profile.picture?.data?.url && !user.avatar) {
+        user.avatar = profile.picture.data.url;
+        saveDB(db);
+      }
+      console.log("✅ Facebook OAuth: user đã tồn tại", user.email);
+    }
+
+    // 4. Sign JWT
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, name: user.name },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        avatar: user.avatar || "",
+      },
+    });
+  } catch (e) {
+    console.error("FACEBOOK OAUTH ERROR:", e);
+    res.status(500).json({ message: "Lỗi xác thực Facebook: " + e.message });
+  }
+});
+
+// ---------- Debug: kiểm tra OAuth đã cấu hình chưa ----------
+app.get("/api/_debug/oauth-status", (_, res) => {
+  res.json({
+    google: {
+      enabled: GOOGLE_OAUTH_ENABLED,
+      client_id_set: !!GOOGLE_CLIENT_ID,
+      client_secret_set: !!GOOGLE_CLIENT_SECRET,
+    },
+    facebook: {
+      enabled: FACEBOOK_OAUTH_ENABLED,
+      app_id_set: !!FACEBOOK_APP_ID,
+      app_secret_set: !!FACEBOOK_APP_SECRET,
+    },
+  });
 });
 
 // ============================================================
@@ -2509,6 +2747,10 @@ app.get("/", (_, res) => res.json({
   version: BUILD_VERSION,
   timezone: VN_TIMEZONE,
   menuEndpoint: "returns ALL items (no active filter)",
+  oauth: {
+    google: GOOGLE_OAUTH_ENABLED,
+    facebook: FACEBOOK_OAUTH_ENABLED,
+  },
   timestamp: new Date().toISOString()
 }));
 
