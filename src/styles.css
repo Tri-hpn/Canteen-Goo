@@ -4207,5 +4207,113 @@ html.dark-mode .grab-food-card__add-btn { border-color: #1e293b !important; }
   }
 }
 /* ============================================================
+   PHẦN 41: VOUCHER CARD — hình vuông (trang chủ Flash Sale)
+   ============================================================ */
+
+.voucher-card {
+  text-decoration: none !important;
+  cursor: pointer !important;
+}
+
+/* Khối icon căn giữa, tạo khoảng vuông */
+.voucher-card__icon {
+  padding: 16px 16px 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.voucher-card__icon-inner {
+  width: 100% !important;
+  aspect-ratio: 1 / 1 !important;              /* VUÔNG */
+  max-width: 160px !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  color: #fff !important;
+  border: 3px solid #fff !important;
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.35) !important;
+  transition: transform 0.25s ease !important;
+}
+
+.voucher-card:hover .voucher-card__icon-inner {
+  transform: scale(1.05) rotate(-2deg) !important;
+}
+
+.voucher-card__emoji {
+  font-size: 36px !important;
+  line-height: 1 !important;
+}
+
+.voucher-card__value {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.3px !important;
+}
+
+.voucher-card__label {
+  display: block !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  color: #8b5cf6 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  text-align: center !important;
+}
+
+.voucher-card__code {
+  font-size: 11px !important;
+  color: #94a3b8 !important;
+  font-family: "Courier New", monospace !important;
+  text-align: center !important;
+  padding: 3px 8px !important;
+  background: var(--bg-tertiary, #f5f7fb) !important;
+  border-radius: 6px !important;
+  align-self: center !important;
+  border: 1px dashed #cbd5e1 !important;
+}
+
+.voucher-card__cta {
+  margin-top: auto !important;
+  background: linear-gradient(135deg, #8b5cf6, #a855f7) !important;
+  color: #fff !important;
+  padding: 9px 6px !important;
+  border-radius: 8px !important;
+  text-align: center !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  transition: all 0.18s !important;
+}
+
+.voucher-card:hover .voucher-card__cta {
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6) !important;
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.45) !important;
+}
+
+html.dark-mode .voucher-card__code {
+  background: #0f172a !important;
+  border-color: #475569 !important;
+  color: #94a3b8 !important;
+}
+
+@media (max-width: 480px) {
+  .voucher-card__icon-inner { max-width: 120px !important; }
+  .voucher-card__emoji { font-size: 28px !important; }
+  .voucher-card__value { font-size: 15px !important; }
+  .voucher-card__cta { font-size: 11.5px !important; padding: 8px 4px !important; }
+}
+/* ============================================================
+   PHẦN 42: BADGE PHẢI — cho thẻ giảm giá
+   ============================================================ */
+
+.grab-food-card__badge--right {
+  left: auto !important;
+  right: 8px !important;
+}
+/* ============================================================
    KẾT THÚC FILE
    ============================================================ */

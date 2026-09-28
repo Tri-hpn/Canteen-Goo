@@ -4,15 +4,16 @@
 // Gồm:
 //   - Banner carousel (data từ ../../bannerSlides)
 //   - Flash marquee (chạy chữ khuyến mãi)
-//   - Flash sale (voucher + món giảm giá)
+//   - Flash sale (voucher vuông + món giảm giá)
 //   - Bán chạy nhất (top 5 sold)
 //   - Món mới lên kệ (4 món mới nhất)
 //   - Testimonials
 //   - QR truy cập menu (auto-detect origin)
 //
-// FIX v6:
-//   - renderFoodCard dùng class .grab-food-card (thống nhất với CustomerMenu)
-//   - Bỏ inline style rườm rà
+// FIX v7:
+//   - Voucher card chuyển sang HÌNH VUÔNG (class .voucher-card)
+//   - Badge -% đẩy sang PHẢI (class .grab-food-card__badge--right)
+//   - renderFoodCard dùng .grab-food-card (thống nhất với CustomerMenu)
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -578,117 +579,39 @@ export default function CustomerHome({ user, cart, setCart }) {
 
           <div style={{ marginBottom: 26 }}>
             <div className="home-food-grid-5">
+              {/* ===== VOUCHER — HÌNH VUÔNG ===== */}
               {publicVouchers.slice(0, FLASH_VOUCHERS_LIMIT).map((v) => (
                 <Link
                   key={`voucher-${v.id}`}
                   to="/customer/promotions"
-                  className="food-card-clickable"
-                  style={{
-                    textDecoration: "none",
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    display: "flex",
-                    flexDirection: "column",
-                    position: "relative",
-                    background: "var(--card-bg, #fff)",
-                    border: "1px solid var(--border-color, #e5e9ef)",
-                  }}
+                  className="grab-food-card voucher-card"
+                  style={{ textDecoration: "none" }}
                 >
-                  <div
-                    style={{
-                      width: 130,
-                      height: 130,
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg, #8b5cf6, #ec4899)",
-                      display: "grid",
-                      placeItems: "center",
-                      color: "#fff",
-                      margin: "12px auto 8px",
-                      border: "3px solid #fff",
-                      boxShadow: "0 6px 20px rgba(139, 92, 246, 0.3)",
-                    }}
-                  >
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 32 }}>🎟️</div>
-                      <div
-                        style={{
-                          fontSize: 16,
-                          fontWeight: 800,
-                          marginTop: 2,
-                        }}
-                      >
+                  {/* Khối vuông giữa card */}
+                  <div className="voucher-card__icon">
+                    <div className="voucher-card__icon-inner">
+                      <span className="voucher-card__emoji">🎟️</span>
+                      <span className="voucher-card__value">
                         {fmtNumber(v.value || 0)}đ
-                      </div>
+                      </span>
                     </div>
                   </div>
-                  <div
-                    style={{
-                      padding: "0 10px 10px",
-                      textAlign: "center",
-                      flex: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 10,
-                        color: "#8b5cf6",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        letterSpacing: 0.4,
-                      }}
-                    >
-                      VOUCHER
-                    </span>
+
+                  <div className="grab-food-card__info">
+                    <span className="voucher-card__label">VOUCHER</span>
                     <h4
-                      style={{
-                        margin: "4px 0",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "var(--text-primary, #172033)",
-                        textAlign: "center",
-                        minHeight: 34,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
+                      className="grab-food-card__name"
+                      style={{ textAlign: "center" }}
                     >
                       Giảm {fmtNumber(v.value || 0)}đ
                     </h4>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: "var(--text-light, #8993a3)",
-                        fontFamily: "monospace",
-                        marginBottom: 8,
-                      }}
-                    >
-                      {v.code}
-                    </div>
-                    <div
-                      style={{
-                        marginTop: "auto",
-                        background:
-                          "linear-gradient(135deg, #8b5cf6, #a855f7)",
-                        color: "#fff",
-                        padding: "8px 6px",
-                        borderRadius: 8,
-                        textAlign: "center",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        height: 34,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      Nhận ngay
-                    </div>
+                    <div className="voucher-card__code">{v.code}</div>
+                    <div className="voucher-card__cta">Nhận ngay</div>
                   </div>
                 </Link>
               ))}
 
+              {/* ===== PROMO — MÓN GIẢM GIÁ ===== */}
               {promotions.slice(0, FLASH_PROMOS_LIMIT).map((m) => (
                 <div
                   key={`promo-${m.id}`}
@@ -700,12 +623,12 @@ export default function CustomerHome({ user, cart, setCart }) {
                 >
                   <div className="grab-food-card__image-wrap">
                     <img src={m.image} alt={m.name} loading="lazy" />
-                    <span
-                      className="grab-food-card__badge grab-food-card__badge--hot"
-                      style={{ left: "auto", right: 8 }}
-                    >
+
+                    {/* Badge -% đẩy sang PHẢI */}
+                    <span className="grab-food-card__badge grab-food-card__badge--hot grab-food-card__badge--right">
                       -{m.discount_percent}%
                     </span>
+
                     <button
                       type="button"
                       className="grab-food-card__add-btn"
@@ -719,6 +642,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                       <Zap size={18} strokeWidth={3} />
                     </button>
                   </div>
+
                   <div className="grab-food-card__info">
                     <h4 className="grab-food-card__name">{m.name}</h4>
                     <div className="grab-food-card__price-row">
