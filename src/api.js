@@ -460,11 +460,30 @@ export const api = {
     revenue: (period = "day") => req(`/reports/revenue?period=${period}`),
   },
 
-  // ----------------------------------------------------------
+    // ----------------------------------------------------------
   // SETTINGS — Cài đặt hệ thống (bank, hotline, ...)
   // ----------------------------------------------------------
   settings: {
     get:    ()      => req("/settings"),
     update: (data)  => req("/settings", { method: "PUT", body: JSON.stringify(data) }),
+  },
+
+  // ----------------------------------------------------------
+  // TIME SLOTS — Khung giờ nhận món
+  // ----------------------------------------------------------
+  timeSlots: {
+    // GET /api/time-slots — public, trả danh sách + trạng thái
+    list: () => req("/time-slots"),
+
+    // PATCH /api/time-slots/:id — bật/tắt 1 khung
+    // id có dấu ":" → phải URL-encode
+    update: (id, data) =>
+      req(`/time-slots/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+
+    // POST /api/time-slots/reset — reset về mặc định
+    reset: () => req("/time-slots/reset", { method: "POST" }),
   },
 };

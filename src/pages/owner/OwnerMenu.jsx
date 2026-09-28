@@ -1,25 +1,8 @@
 // ============================================================
 // OWNERMENU.JSX — Quản lý thực đơn + danh mục (Admin)
 // ============================================================
-//
-// 🚨🚨🚨 CẢNH BÁO CỰC KỲ QUAN TRỌNG 🚨🚨🚨
-//
-//   TUYỆT ĐỐI KHÔNG được filter `active` ở FE (Admin/Employee).
-//
-//   Backend GET /api/menu trả VỀ TẤT CẢ món (kể cả active=0).
-//   FE chỉ filter theo `q` + `filterCat`.
-//
-//   Nếu bạn thêm `.filter(m => m.active)` vào biến `filtered`
-//   → món tắt sẽ BIẾN MẤT sau khi F5 → bug "tắt món rồi mất món".
-//
-//   Customer mới được filter active — dùng api.menu.listActive().
-//
-// 🚨🚨🚨 CẢNH BÁO CỰC KỲ QUAN TRỌNG 🚨🚨🚨
-//
-// Hai hành động KHÁC NHAU — KHÔNG được nhầm lẫn:
-//   - toggleActive(m)  → PUT /api/menu/:id {active: 0|1}  ← chỉ đổi trạng thái
-//   - removeItem(m)    → DELETE /api/menu/:id              ← XÓA VĨNH VIỄN
-//
+// Nhóm khung giờ nhận món (Time Slots) ở đầu trang.
+// Bảng món ăn ở dưới.
 // ============================================================
 
 import { SkeletonTable } from "../../components/Skeleton";
@@ -28,6 +11,7 @@ import {
   Plus, Search, Edit, Trash2, FolderPlus, Folder,
   X, Save, Loader2, AlertCircle,
   UtensilsCrossed, EyeOff, Eye,
+  Clock, Sunrise, Sun, Sunset, RotateCcw,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
@@ -43,14 +27,22 @@ const MODAL_Z = 2147483600;
 const DEFAULT_CATEGORY_ICON = "🍽️";
 const MAX_DISCOUNT = 90;
 
-// ============================================================
-// HELPER: DEBUG LOG
-// ============================================================
-// Bật/tắt log để debug việc toggle active
-// Đặt DEBUG = false nếu không cần log
+// Time slot sessions
+const SESSIONS = [
+  { id: "morning",   label: "Buổi sáng",  icon: Sunrise, color: "#f59e0b", from: "07:00", to: "11:00" },
+  { id: "noon",      label: "Buổi trưa",  icon: Sun,     color: "#2634d5", from: "11:00", to: "14:00" },
+  { id: "afternoon", label: "Buổi chiều", icon: Sunset,  color: "#8b5cf6", from: "14:00", to: "18:30" },
+];
+
+function getSessionId(startTime) {
+  const [h] = String(startTime || "").split(":").map(Number);
+  if (h >= 7 && h < 11) return "morning";
+  if (h >= 11 && h < 14) return "noon";
+  if (h >= 14 && h < 19) return "afternoon";
+  return "other";
+}
 
 const DEBUG = true;
-
 function dbg(...args) {
   if (DEBUG) console.log("[OwnerMenu]", ...args);
 }
@@ -60,12 +52,20 @@ function dbg(...args) {
 // ============================================================
 
 export default function OwnerMenu() {
-  // ---------- List state ----------
+  // ---------- Menu list state ----------
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [filterCat, setFilterCat] = useState("");
+
+  // ---------- Time slots state ----------
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(true);
+  const [slotsError, setSlotsError] = useState("");
+  const [togglingSlotId, setTogglingSlotId] = useState(null);
+  const [confirmSlotReset, setConfirmSlotReset] = useState(false);
+  const [resettingSlots, setResettingSlots] = useState(false);
 
   // ---------- Categories ----------
   const [categories, setCategories] = useState([]);
@@ -94,16 +94,78 @@ export default function OwnerMenu() {
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
-  // ---------- Per-action loading (chống double-click) ----------
+  // ---------- Per-action loading ----------
   const [togglingId, setTogglingId] = useState(null);
 
-  // ---------- Load ----------
+  // ============================================================
+  // LOAD TIME SLOTS
+  // ============================================================
+
+  const loadSlots = useCallback(async () => {
+    setSlotsLoading(true);
+    setSlotsError("");
+    try {
+      const data = await api.timeSlots.list();
+      setSlots(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setSlotsError(e.message || "Không tải được khung giờ");
+      setSlots([]);
+    } finally {
+      setSlotsLoading(false);
+    }
+  }, []);
+
+  const toggleSlot = async (slot) => {
+    if (togglingSlotId !== null) return;
+
+    const oldEnabled = !!slot.enabled;
+    const newEnabled = !oldEnabled;
+
+    setTogglingSlotId(slot.id);
+
+    setSlots((prev) =>
+      prev.map((s) => (s.id === slot.id ? { ...s, enabled: newEnabled } : s))
+    );
+
+    try {
+      await api.timeSlots.update(slot.id, { enabled: newEnabled });
+      toast(
+        newEnabled ? `Đã BẬT khung ${slot.id}` : `Đã TẮT khung ${slot.id}`,
+        "success"
+      );
+    } catch (e) {
+      setSlots((prev) =>
+        prev.map((s) => (s.id === slot.id ? { ...s, enabled: oldEnabled } : s))
+      );
+      toast(e.message || "Không đổi được trạng thái", "error");
+    } finally {
+      setTogglingSlotId(null);
+    }
+  };
+
+  const resetSlots = async () => {
+    if (resettingSlots) return;
+    setResettingSlots(true);
+    try {
+      const res = await api.timeSlots.reset();
+      setSlots(Array.isArray(res.slots) ? res.slots : []);
+      toast("Đã reset toàn bộ khung giờ về mặc định", "success");
+      setConfirmSlotReset(false);
+    } catch (e) {
+      toast(e.message || "Không reset được", "error");
+    } finally {
+      setResettingSlots(false);
+    }
+  };
+
+  // ============================================================
+  // LOAD MENU LIST
+  // ============================================================
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      // ✅ `all=true` để chắc chắn backend trả TẤT CẢ món (kể cả active=0)
       const [items, cats] = await Promise.all([
         api.menu.list("", "Tất cả", "popular", true),
         api.categories.list(),
@@ -113,11 +175,8 @@ export default function OwnerMenu() {
       setList(itemsArr);
       setCategories(Array.isArray(cats) ? cats : []);
 
-      // 🔍 DEBUG: đếm số món tắt để verify backend OK
       const inactiveCount = itemsArr.filter((m) => !m.active).length;
-      dbg(
-        `📦 Load xong: ${itemsArr.length} món (${inactiveCount} đã tắt)`
-      );
+      dbg(`📦 Load xong: ${itemsArr.length} món (${inactiveCount} đã tắt)`);
     } catch (e) {
       setError(e.message || "Không tải được thực đơn");
       setList([]);
@@ -128,7 +187,8 @@ export default function OwnerMenu() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadSlots();
+  }, [load, loadSlots]);
 
   // ESC đóng modals
   useEffect(() => {
@@ -151,11 +211,10 @@ export default function OwnerMenu() {
     });
   }, [modal]);
 
-  // ---------- Filter (CHỈ q + filterCat — KHÔNG filter active) ----------
-  //
-  // 🚨 NẾU THÊM `.filter(m => m.active)` VÀO ĐÂY → BUG "F5 MẤT MÓN TẮT".
-  //    Đừng làm vậy. Admin/Employee PHẢI thấy món tắt để có thể bật lại.
-  //
+  // ============================================================
+  // FILTER MENU
+  // ============================================================
+
   const filtered = useMemo(() => {
     let result = list;
 
@@ -166,9 +225,6 @@ export default function OwnerMenu() {
     if (filterCat) {
       result = result.filter((m) => m.category === filterCat);
     }
-
-    // ❌❌❌ TUYỆT ĐỐI KHÔNG THÊM DÒNG NÀY ❌❌❌
-    // result = result.filter((m) => m.active);
 
     return result;
   }, [list, q, filterCat]);
@@ -201,8 +257,7 @@ export default function OwnerMenu() {
         return { ...prev, originalPrice: v, discountPercent: 0 };
       }
       const d = Number(prev.discountPercent) || 0;
-      const newPrice =
-        d > 0 ? Math.round(original * (1 - d / 100)) : original;
+      const newPrice = d > 0 ? Math.round(original * (1 - d / 100)) : original;
       return { ...prev, originalPrice: v, price: newPrice };
     });
   };
@@ -214,8 +269,7 @@ export default function OwnerMenu() {
       if (original <= 0) {
         return { ...prev, discountPercent: 0 };
       }
-      const newPrice =
-        d > 0 ? Math.round(original * (1 - d / 100)) : original;
+      const newPrice = d > 0 ? Math.round(original * (1 - d / 100)) : original;
       return { ...prev, discountPercent: d, price: newPrice };
     });
   };
@@ -315,37 +369,21 @@ export default function OwnerMenu() {
     }
   };
 
-  // ============================================================
-  // ✅ TOGGLE ACTIVE — CHỈ đổi trạng thái, KHÔNG xóa
-  // ============================================================
-  //
-  // 🚨 Hàm này CHỈ được gọi từ nút toggle switch (cột "Hiển thị").
-  //    KHÔNG được gọi từ nút Xóa (cột "Thao tác").
-  //
-  //    1. Optimistic update state → UI phản hồi ngay
-  //    2. Gọi PUT /api/menu/:id {active: 0|1}
-  //    3. KHÔNG gọi load() để tránh remount làm mất animation
-  //    4. Rollback nếu API fail
-  //
-  // ============================================================
+  // ---------- Toggle active ----------
+
   const toggleActive = async (item) => {
     const id = item._id || item.id;
     const oldActive = Number(item.active) || 0;
     const newActive = oldActive ? 0 : 1;
 
-    // Chống double-click
     if (togglingId !== null) {
       dbg(`⏸️ Đang xử lý món khác, bỏ qua toggle id=${id}`);
       return;
     }
 
     dbg(`🔄 TOGGLE món "${item.name}" (id=${id}): ${oldActive} → ${newActive}`);
-    dbg(`   → Sẽ gọi PUT /api/menu/${id} {active: ${newActive}}`);
-    dbg(`   → KHÔNG gọi DELETE (không xóa)`);
-
     setTogglingId(id);
 
-    // Optimistic update — đổi state ngay, UI mượt
     setList((prev) =>
       prev.map((m) =>
         (m._id || m.id) === id ? { ...m, active: newActive } : m
@@ -353,12 +391,8 @@ export default function OwnerMenu() {
     );
 
     try {
-      // ✅ CHỈ gọi UPDATE — không bao giờ gọi REMOVE
       await api.menu.update(id, { active: newActive });
 
-      dbg(`✅ Toggle thành công món "${item.name}"`);
-
-      // Toast phân biệt rõ ràng với xóa
       if (newActive) {
         toast(`Đã BẬT bán món "${item.name}"`, "success");
       } else {
@@ -367,12 +401,7 @@ export default function OwnerMenu() {
           "success"
         );
       }
-
-      // ❌ KHÔNG gọi load() — giữ nguyên list để không mất món tắt
     } catch (e) {
-      dbg(`❌ Toggle THẤT BẠI món "${item.name}":`, e.message);
-
-      // Rollback state nếu API fail
       setList((prev) =>
         prev.map((m) =>
           (m._id || m.id) === id ? { ...m, active: oldActive } : m
@@ -384,19 +413,10 @@ export default function OwnerMenu() {
     }
   };
 
-  // ============================================================
-  // ✅ REMOVE — XÓA VĨNH VIỄN, có confirm dialog 2 lần
-  // ============================================================
-  //
-  // 🚨 Hàm này CHỈ được gọi từ nút Xóa (icon thùng rác cột "Thao tác").
-  //    KHÔNG được gọi từ nút toggle switch.
-  //
-  // ============================================================
+  // ---------- Remove item ----------
+
   const removeItem = (item) => {
     const id = item._id || item.id;
-
-    dbg(`🗑️ MỞ CONFIRM XÓA món "${item.name}" (id=${id})`);
-    dbg(`   → Sẽ gọi DELETE /api/menu/${id} nếu user xác nhận`);
 
     setConfirm({
       title: `Xóa vĩnh viễn món "${item.name}"?`,
@@ -409,7 +429,6 @@ export default function OwnerMenu() {
       cancelText: "Hủy — Giữ lại",
       danger: true,
       onConfirm: async () => {
-        dbg(`🗑️ THỰC THI XÓA món "${item.name}" (id=${id})`);
         await api.menu.remove(id);
         toast(`Đã XÓA vĩnh viễn món "${item.name}"`, "success");
         setConfirm(null);
@@ -489,10 +508,9 @@ export default function OwnerMenu() {
   };
 
   // ============================================================
-  // RENDER
+  // COMPUTED
   // ============================================================
 
-  // Debug stats
   const stats = useMemo(() => {
     const total = list.length;
     const active = list.filter((m) => Number(m.active) === 1).length;
@@ -500,9 +518,382 @@ export default function OwnerMenu() {
     return { total, active, inactive };
   }, [list]);
 
+  const slotStats = useMemo(() => {
+    const enabled = slots.filter((s) => s.enabled).length;
+    const disabled = slots.length - enabled;
+    return { total: slots.length, enabled, disabled };
+  }, [slots]);
+
+  const groupedSlots = useMemo(() => {
+    const map = {};
+    for (const s of slots) {
+      const sid = getSessionId(s.start);
+      if (!map[sid]) map[sid] = [];
+      map[sid].push(s);
+    }
+    return SESSIONS.map((session) => ({
+      ...session,
+      slots: map[session.id] || [],
+    })).filter((g) => g.slots.length > 0);
+  }, [slots]);
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+
   return (
     <>
       <div>
+        {/* ============================================================
+            🕐 KHUNG GIỜ NHẬN MÓN
+            ============================================================ */}
+        <div
+          style={{
+            background: "var(--card-bg, #fff)",
+            border: "1px solid var(--border-color, #e7ebf0)",
+            borderRadius: 12,
+            padding: 20,
+            marginBottom: 20,
+          }}
+        >
+          {/* Header */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 14,
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                minWidth: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 11,
+                  background: "rgba(38, 52, 213, 0.12)",
+                  color: "#2634d5",
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Clock size={20} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: 16,
+                    color: "var(--text-primary, #172033)",
+                  }}
+                >
+                  Khung giờ nhận món
+                </h3>
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-light, #8993a3)",
+                  }}
+                >
+                  Tổng {slotStats.total} khung ·{" "}
+                  <b style={{ color: "#18a967" }}>
+                    {slotStats.enabled} đang mở
+                  </b>
+                  {slotStats.disabled > 0 && (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <b style={{ color: "#ef4444" }}>
+                        {slotStats.disabled} đã tắt
+                      </b>
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={loadSlots}
+                disabled={slotsLoading}
+                title="Làm mới"
+                aria-label="Làm mới khung giờ"
+                style={{
+                  padding: "8px 12px",
+                  background: "var(--card-bg, #fff)",
+                  border: "1px solid var(--border-color, #e5e9ef)",
+                  borderRadius: 8,
+                  cursor: slotsLoading ? "not-allowed" : "pointer",
+                  fontSize: 12,
+                  color: "var(--text-primary, #172033)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  opacity: slotsLoading ? 0.6 : 1,
+                }}
+              >
+                {slotsLoading ? (
+                  <Loader2
+                    size={13}
+                    style={{ animation: "spin 1s linear infinite" }}
+                  />
+                ) : (
+                  <RotateCcw size={13} />
+                )}
+                Làm mới
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setConfirmSlotReset(true)}
+                disabled={slotsLoading || resettingSlots}
+                style={{
+                  padding: "8px 12px",
+                  background: "var(--card-bg, #fff)",
+                  border: "1px solid #f59e0b",
+                  color: "#f59e0b",
+                  borderRadius: 8,
+                  cursor:
+                    slotsLoading || resettingSlots ? "not-allowed" : "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <RotateCcw size={13} /> Reset
+              </button>
+            </div>
+          </div>
+
+          {/* Error */}
+          {slotsError && !slotsLoading && (
+            <div
+              style={{
+                background: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.2)",
+                borderRadius: 8,
+                padding: "10px 14px",
+                marginBottom: 14,
+                color: "#ef4444",
+                fontSize: 12,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1 }}>{slotsError}</span>
+              <button
+                onClick={loadSlots}
+                style={{
+                  padding: "4px 10px",
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: 0,
+                  borderRadius: 5,
+                  cursor: "pointer",
+                  fontSize: 11,
+                  fontWeight: 600,
+                }}
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
+
+          {/* Loading */}
+          {slotsLoading && slots.length === 0 && (
+            <div
+              style={{
+                textAlign: "center",
+                padding: 30,
+                color: "var(--text-light, #8993a3)",
+                fontSize: 13,
+              }}
+            >
+              <Loader2
+                size={22}
+                style={{
+                  animation: "spin 1s linear infinite",
+                  marginBottom: 8,
+                }}
+              />
+              <div>Đang tải khung giờ...</div>
+            </div>
+          )}
+
+          {/* Groups */}
+          {!slotsLoading &&
+            groupedSlots.map((group) => {
+              const Icon = group.icon;
+              const enabledCount = group.slots.filter((s) => s.enabled).length;
+
+              return (
+                <div
+                  key={group.id}
+                  style={{
+                    background: "var(--bg-tertiary, #f8fafc)",
+                    border: "1px solid var(--border-color, #eef2f7)",
+                    borderRadius: 10,
+                    padding: 14,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 8,
+                        background: group.color + "18",
+                        color: group.color,
+                        display: "grid",
+                        placeItems: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Icon size={16} />
+                    </div>
+                    <b
+                      style={{
+                        fontSize: 13,
+                        color: "var(--text-primary, #172033)",
+                      }}
+                    >
+                      {group.label}
+                    </b>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text-light, #8993a3)",
+                      }}
+                    >
+                      ({group.from} - {group.to}) ·{" "}
+                      <b style={{ color: "#18a967" }}>
+                        {enabledCount}/{group.slots.length}
+                      </b>{" "}
+                      khung mở
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(150px, 1fr))",
+                      gap: 8,
+                    }}
+                  >
+                    {group.slots.map((slot) => {
+                      const active = !!slot.enabled;
+                      const isToggling = togglingSlotId === slot.id;
+
+                      return (
+                        <div
+                          key={slot.id}
+                          style={{
+                            background: active
+                              ? "var(--card-bg, #fff)"
+                              : "rgba(239, 68, 68, 0.06)",
+                            border: active
+                              ? "1px solid var(--border-color, #e5e9ef)"
+                              : "1px solid rgba(239, 68, 68, 0.3)",
+                            borderRadius: 9,
+                            padding: "10px 12px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            transition: "all 0.2s",
+                            opacity: isToggling ? 0.6 : 1,
+                          }}
+                        >
+                          <b
+                            style={{
+                              fontSize: 13,
+                              fontFamily: "monospace",
+                              color: active
+                                ? "var(--text-primary, #172033)"
+                                : "var(--text-muted, #64748b)",
+                              textDecoration: active ? "none" : "line-through",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {slot.id}
+                          </b>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleSlot(slot)}
+                            disabled={isToggling}
+                            aria-pressed={active}
+                            role="switch"
+                            title={
+                              active
+                                ? "Tắt khung giờ này"
+                                : "Bật khung giờ này"
+                            }
+                            style={{
+                              background: active ? "#18a967" : "#cbd5e1",
+                              border: 0,
+                              cursor: isToggling ? "wait" : "pointer",
+                              width: 40,
+                              height: 22,
+                              borderRadius: 999,
+                              padding: 0,
+                              position: "relative",
+                              display: "inline-block",
+                              flexShrink: 0,
+                              transition: "background-color 0.25s ease",
+                              boxShadow: active
+                                ? "0 2px 8px rgba(24, 169, 103, 0.35)"
+                                : "inset 0 1px 3px rgba(0, 0, 0, 0.08)",
+                            }}
+                          >
+                            <span
+                              style={{
+                                position: "absolute",
+                                top: 3,
+                                left: active ? 21 : 3,
+                                width: 16,
+                                height: 16,
+                                borderRadius: "50%",
+                                background: "#ffffff",
+                                boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+                                transition:
+                                  "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                              }}
+                            />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+
         {/* ============ DEBUG BANNER ============ */}
         {DEBUG && (
           <div
@@ -777,15 +1168,13 @@ export default function OwnerMenu() {
                           style={{
                             ...tdStyle,
                             textAlign: "right",
-                            color:
-                              m.stock === 0 ? "#ef4444" : "inherit",
+                            color: m.stock === 0 ? "#ef4444" : "inherit",
                             fontWeight: m.stock === 0 ? 700 : 400,
                           }}
                         >
                           {m.stock}
                         </td>
 
-                        {/* ========== CỘT HIỂN THỊ — TOGGLE (KHÔNG XÓA) ========== */}
                         <td style={{ ...tdStyle, textAlign: "center" }}>
                           <div
                             style={{
@@ -859,7 +1248,6 @@ export default function OwnerMenu() {
                           </div>
                         </td>
 
-                        {/* ========== CỘT THAO TÁC — SỬA + XÓA ========== */}
                         <td style={{ ...tdStyle, textAlign: "right" }}>
                           <div
                             style={{
@@ -1027,9 +1415,7 @@ export default function OwnerMenu() {
                   style={{
                     padding: "10px 16px",
                     background:
-                      !catForm.name.trim() || catLoading
-                        ? "#94a3b8"
-                        : "#0EA5E9",
+                      !catForm.name.trim() || catLoading ? "#94a3b8" : "#0EA5E9",
                     color: "#fff",
                     border: 0,
                     borderRadius: 8,
@@ -1436,6 +1822,18 @@ export default function OwnerMenu() {
           onClose={closeConfirm}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmSlotReset}
+        title="Reset toàn bộ khung giờ?"
+        message="Tất cả khung giờ sẽ được BẬT lại như mặc định. Trạng thái tắt hiện tại sẽ bị xoá."
+        confirmText="Reset"
+        cancelText="Hủy"
+        danger
+        loading={resettingSlots}
+        onConfirm={resetSlots}
+        onClose={() => !resettingSlots && setConfirmSlotReset(false)}
+      />
     </>
   );
 }

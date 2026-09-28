@@ -135,6 +135,52 @@ if (MONGO_URI) {
 }
 
 // ============================================================
+// ✅ DEFAULT TIME SLOTS — Khung giờ nhận món mặc định
+// ============================================================
+// Admin có thể bật/tắt từng khung qua API PATCH /api/time-slots/:id
+// Khi chưa có db.settings.timeSlots → dùng DEFAULT này
+// ============================================================
+
+const DEFAULT_TIME_SLOTS = [
+  { id: "07:00-07:30", start: "07:00", end: "07:30", enabled: true, note: "" },
+  { id: "07:30-08:00", start: "07:30", end: "08:00", enabled: true, note: "" },
+  { id: "08:00-08:30", start: "08:00", end: "08:30", enabled: true, note: "" },
+  { id: "08:30-09:00", start: "08:30", end: "09:00", enabled: true, note: "" },
+  { id: "09:00-09:30", start: "09:00", end: "09:30", enabled: true, note: "" },
+  { id: "09:30-10:00", start: "09:30", end: "10:00", enabled: true, note: "" },
+  { id: "10:00-10:30", start: "10:00", end: "10:30", enabled: true, note: "" },
+  { id: "10:30-11:00", start: "10:30", end: "11:00", enabled: true, note: "" },
+  { id: "11:00-11:30", start: "11:00", end: "11:30", enabled: true, note: "" },
+  { id: "11:30-12:00", start: "11:30", end: "12:00", enabled: true, note: "" },
+  { id: "12:00-12:30", start: "12:00", end: "12:30", enabled: true, note: "" },
+  { id: "12:30-13:00", start: "12:30", end: "13:00", enabled: true, note: "" },
+  { id: "13:00-13:30", start: "13:00", end: "13:30", enabled: true, note: "" },
+  { id: "13:30-14:00", start: "13:30", end: "14:00", enabled: true, note: "" },
+  { id: "14:00-14:30", start: "14:00", end: "14:30", enabled: true, note: "" },
+  { id: "14:30-15:00", start: "14:30", end: "15:00", enabled: true, note: "" },
+  { id: "15:00-15:30", start: "15:00", end: "15:30", enabled: true, note: "" },
+  { id: "15:30-16:00", start: "15:30", end: "16:00", enabled: true, note: "" },
+  { id: "16:00-16:30", start: "16:00", end: "16:30", enabled: true, note: "" },
+  { id: "16:30-17:00", start: "16:30", end: "17:00", enabled: true, note: "" },
+  { id: "17:00-17:30", start: "17:00", end: "17:30", enabled: true, note: "" },
+  { id: "17:30-18:00", start: "17:30", end: "18:00", enabled: true, note: "" },
+  { id: "18:00-18:30", start: "18:00", end: "18:30", enabled: true, note: "" },
+];
+
+/**
+ * Lấy danh sách time slots từ DB.
+ * Nếu chưa có → trả DEFAULT_TIME_SLOTS.
+ */
+function getTimeSlots(db) {
+  if (!db.settings) db.settings = {};
+  if (!Array.isArray(db.settings.timeSlots) || db.settings.timeSlots.length === 0) {
+    db.settings.timeSlots = [...DEFAULT_TIME_SLOTS];
+    return db.settings.timeSlots;
+  }
+  return db.settings.timeSlots;
+}
+
+// ============================================================
 // SEED DATA
 // ============================================================
 function buildSeedData() {
@@ -681,7 +727,21 @@ app.post("/api/orders", auth(), (req, res) => {
       detailed.push({ menu_item_id: m.id, name: m.name, price: m.price, qty: q });
       touchedItems.push({ m, q });
     }
-
+           // ---------- BƯỚC 1.5: Validate khung giờ nhận hàng ----------
+    // Nếu note có chứa "Nhận lúc HH:MM - HH:MM" → check khung đó enabled
+    if (note) {
+      const match = String(note).match(/Nhận lúc\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
+      if (match) {
+        const slotId = match[1].replace(/\s/g, ""); // "07:00-07:30"
+        const slots = getTimeSlots(db);
+        const slot = slots.find((s) => s.id === slotId);
+        if (slot && !slot.enabled) {
+          return res.status(400).json({
+            message: `Khung giờ ${slotId} đã kín hoặc tạm ngưng. Vui lòng chọn khung giờ khác.`,
+          });
+        }
+      }
+    }
     total = Math.max(0, subtotal - Number(discount) || 0);
 
     // ---------- BƯỚC 2: Validate ví ----------
@@ -2145,6 +2205,93 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     res.status(500).json({ message: e.message });
   }
 });
+// ============================================================
+// TIME SLOTS — Khung giờ nhận món
+// ============================================================
+
+/**
+ * GET /api/time-slots
+ * Public — trả danh sách khung giờ + trạng thái.
+ * FE dùng để render dropdown chọn giờ nhận hàng.
+ */
+app.get("/api/time-slots", (req, res) => {
+  try {
+    const db = loadDB();
+    const slots = getTimeSlots(db);
+    // Sort theo start time
+    const sorted = [...slots].sort((a, b) =>
+      String(a.start || "").localeCompare(String(b.start || ""))
+    );
+    res.json(sorted);
+  } catch (e) {
+    console.error("GET /api/time-slots error:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+/**
+ * PATCH /api/time-slots/:id
+ * Admin — bật/tắt 1 khung giờ, hoặc cập nhật note.
+ * Body: { enabled?: boolean, note?: string }
+ *
+ * id phải URL-encode (dấu ":" trong id → phải encode).
+ * FE gọi: PATCH /api/time-slots/07%3A00-07%3A30
+ */
+app.patch("/api/time-slots/:id", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const slots = getTimeSlots(db);
+    const slotId = req.params.id;
+
+    const idx = slots.findIndex((s) => s.id === slotId);
+    if (idx < 0) {
+      return res.status(404).json({ message: "Khung giờ không tồn tại" });
+    }
+
+    const { enabled, note } = req.body || {};
+
+    if (enabled !== undefined) {
+      slots[idx].enabled = !!enabled;
+    }
+    if (note !== undefined) {
+      slots[idx].note = String(note).slice(0, 100).trim();
+    }
+
+    db.settings.timeSlots = slots;
+    saveDB(db);
+
+    res.json({
+      ok: true,
+      slot: slots[idx],
+      message: slots[idx].enabled
+        ? `Đã BẬT khung ${slotId}`
+        : `Đã TẮT khung ${slotId}`,
+    });
+  } catch (e) {
+    console.error("PATCH /api/time-slots error:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+/**
+ * POST /api/time-slots/reset
+ * Admin — reset toàn bộ time slots về mặc định (tất cả bật).
+ */
+app.post("/api/time-slots/reset", auth(["ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.settings) db.settings = {};
+    db.settings.timeSlots = [...DEFAULT_TIME_SLOTS];
+    saveDB(db);
+    res.json({
+      ok: true,
+      slots: db.settings.timeSlots,
+      message: "Đã reset toàn bộ khung giờ về mặc định",
+    });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
 
 // ============ SETTINGS ============
 app.get("/api/settings", auth(), (req, res) => {
@@ -2165,7 +2312,7 @@ app.put("/api/settings", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
     if (!db.settings) db.settings = {};
-    const allowed = ["bank", "account", "accountName", "hotline", "email", "address", "qrCustomImage"];
+    const allowed = ["bank", "account", "accountName", "hotline", "email", "address", "qrCustomImage", "timeSlots"];
     allowed.forEach(k => {
       if (req.body[k] !== undefined) db.settings[k] = req.body[k];
     });
