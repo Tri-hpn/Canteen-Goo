@@ -13,23 +13,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_FILE = path.join(__dirname, "canteen-db.json");
 
 // ✅ BUILD VERSION — dùng để verify Render đã deploy code mới chưa
-const BUILD_VERSION = "v3-timezone-fixed-" + new Date().toISOString().slice(0, 19);
+const BUILD_VERSION = "v4-shift-approval-" + new Date().toISOString().slice(0, 19);
 
 
 // ============================================================
 // ✅ FIX TIMEZONE: Date helpers — LUÔN theo giờ Việt Nam (UTC+7)
 // ============================================================
-// Lý do: Render/Heroku/Vercel chạy server ở UTC. Dùng
-// getFullYear/getMonth/getDate sẽ trả về ngày UTC, gây LỆCH NGÀY
-// cho tất cả logic "hôm nay", báo cáo, chấm công từ 00:00-06:59 VN.
-//
-// Giải pháp: dùng Intl.DateTimeFormat với timeZone Asia/Ho_Chi_Minh
-// → luôn trả về ngày đúng ở VN, bất kể server ở múi giờ nào.
-// ============================================================
 
 const VN_TIMEZONE = "Asia/Ho_Chi_Minh";
 
-// Cache formatter — tạo 1 lần, tái sử dụng (nhanh hơn nhiều)
 const VN_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: VN_TIMEZONE,
   year: "numeric",
@@ -50,10 +42,6 @@ const VN_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   hour12: false,
 });
 
-/**
- * Lấy "YYYY-MM-DD" theo GIỜ VIỆT NAM từ một Date (hoặc mặc định now).
- * en-CA format trả về sẵn "YYYY-MM-DD" → khỏi phải pad.
- */
 function getLocalDateStr(d = new Date()) {
   if (!(d instanceof Date) || isNaN(d.getTime())) {
     d = new Date();
@@ -61,9 +49,6 @@ function getLocalDateStr(d = new Date()) {
   return VN_DATE_FORMATTER.format(d);
 }
 
-/**
- * Chuyển ISO string → "YYYY-MM-DD" theo giờ VN.
- */
 function toLocalDateStr(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -71,9 +56,6 @@ function toLocalDateStr(iso) {
   return getLocalDateStr(d);
 }
 
-/**
- * Lấy GIỜ VIỆT NAM (0-23) từ Date.
- */
 function getVNHour(d = new Date()) {
   if (!(d instanceof Date) || isNaN(d.getTime())) {
     d = new Date();
@@ -81,9 +63,6 @@ function getVNHour(d = new Date()) {
   return parseInt(VN_HOUR_FORMATTER.format(d), 10);
 }
 
-/**
- * Lấy giờ + phút VN từ Date → { hour: 6, minute: 30 }.
- */
 function getVNTime(d = new Date()) {
   if (!(d instanceof Date) || isNaN(d.getTime())) {
     d = new Date();
@@ -95,7 +74,7 @@ function getVNTime(d = new Date()) {
 }
 
 // ============================================================
-// ✅ FIX M5 + M5b: helper sinh mã đơn unique (an toàn hơn)
+// ✅ Helper sinh mã đơn unique
 // ============================================================
 function generateOrderCode(db) {
   let code;
@@ -106,7 +85,6 @@ function generateOrderCode(db) {
     attempts++;
   } while ((db.orders || []).some((o) => o.code === code) && attempts < 10);
 
-  // ✅ FIX M5b: throw nếu không tạo được code unique
   if (attempts >= 10) {
     throw new Error("Không tạo được mã đơn unique — vui lòng thử lại");
   }
@@ -114,13 +92,11 @@ function generateOrderCode(db) {
 }
 
 // ============================================================
-// MONGODB — Lưu DB dưới dạng 1 document JSON
+// MONGODB
 // ============================================================
 const MONGO_URI = process.env.MONGO_URI;
 let MongoModel = null;
 let dbCache = null;
-
-// ✅ FIX M1/L10: flag xác nhận Mongo đã connect thành công
 let mongoReady = false;
 
 if (MONGO_URI) {
@@ -135,12 +111,8 @@ if (MONGO_URI) {
 }
 
 // ============================================================
-// ✅ DEFAULT TIME SLOTS — Khung giờ nhận món mặc định
+// ✅ DEFAULT TIME SLOTS
 // ============================================================
-// Admin có thể bật/tắt từng khung qua API PATCH /api/time-slots/:id
-// Khi chưa có db.settings.timeSlots → dùng DEFAULT này
-// ============================================================
-
 const DEFAULT_TIME_SLOTS = [
   { id: "07:00-07:30", start: "07:00", end: "07:30", enabled: true, note: "" },
   { id: "07:30-08:00", start: "07:30", end: "08:00", enabled: true, note: "" },
@@ -167,10 +139,6 @@ const DEFAULT_TIME_SLOTS = [
   { id: "18:00-18:30", start: "18:00", end: "18:30", enabled: true, note: "" },
 ];
 
-/**
- * Lấy danh sách time slots từ DB.
- * Nếu chưa có → trả DEFAULT_TIME_SLOTS.
- */
 function getTimeSlots(db) {
   if (!db.settings) db.settings = {};
   if (!Array.isArray(db.settings.timeSlots) || db.settings.timeSlots.length === 0) {
@@ -271,7 +239,6 @@ function loadDB() {
 
 function saveDB(data) {
   dbCache = data;
-  // ✅ FIX M1/L10: chỉ ghi Mongo khi đã connect thành công
   if (mongoReady && MongoModel) {
     MongoModel.updateOne(
       { _id: "main" },
@@ -315,13 +282,9 @@ function notifyOrderStatus(db, order, newStatus) {
   });
 }
 
-// ============================================================
-// ✅ FIX H1: Hoàn kho + hoàn điểm khi hủy đơn
-// ============================================================
 function rollbackCancelledOrder(db, order) {
   if (!order || order._stock_rolled_back) return;
 
-  // 1. Hoàn kho + sold
   (order.items || []).forEach((it) => {
     const m = (db.menu_items || []).find((x) => x.id == it.menu_item_id);
     if (!m) return;
@@ -329,7 +292,6 @@ function rollbackCancelledOrder(db, order) {
     m.sold = Math.max(0, (m.sold || 0) - (it.qty || 0));
   });
 
-  // 2. Trừ lại điểm đã cộng khi tạo đơn
   const earned = Number(order.points_earned) || 0;
   if (earned > 0) {
     const customer = (db.users || []).find((u) => u.id === order.customer_id);
@@ -416,7 +378,6 @@ app.post("/api/auth/register", (req, res) => {
   }
 });
 
-// ============ CHANGE PASSWORD ============
 app.put("/api/auth/password", auth(), (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -473,12 +434,6 @@ app.put("/api/auth/profile", auth(), (req, res) => {
 
 // ============================================================
 // MENU
-// ============================================================
-// ✅ FIX CRITICAL: LUÔN trả về TẤT CẢ món (kể cả active=0).
-// KHÔNG filter active ở backend.
-//   - Admin/Employee → thấy HẾT (kể cả món tắt)
-//   - Customer → FE tự filter m.active ở client
-// Đảm bảo món KHÔNG BAO GIỜ bị "biến mất" khi tắt.
 // ============================================================
 app.get("/api/menu", (req, res) => {
   try {
@@ -568,7 +523,6 @@ app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
       }
     }
 
-    // ✅ FIX L2: ghi price_history khi giá THAY ĐỔI
     if (newData.price !== undefined && Number(newData.price) !== Number(oldItem.price)) {
       if (!db.price_history) db.price_history = [];
       const historyId = Math.max(0, ...db.price_history.map(h => h.id)) + 1;
@@ -680,7 +634,6 @@ app.delete("/api/users/:id", auth(["ADMIN"]), (req, res) => {
 app.post("/api/orders", auth(), (req, res) => {
   const db = loadDB();
 
-  // Biến tracking để rollback
   let touchedItems = [];
   let wallet = null;
   let total = 0;
@@ -695,14 +648,12 @@ app.post("/api/orders", auth(), (req, res) => {
       return res.status(400).json({ message: "Giỏ hàng trống" });
     }
 
-    // ---------- BƯỚC 1: Validate toàn bộ ----------
     let subtotal = 0;
     const detailed = [];
 
     for (const it of items) {
       const q = Number(it.qty);
 
-      // ✅ FIX H4
       if (!Number.isFinite(q) || q <= 0 || !Number.isInteger(q)) {
         return res.status(400).json({ message: "Số lượng món không hợp lệ" });
       }
@@ -712,7 +663,6 @@ app.post("/api/orders", auth(), (req, res) => {
         return res.status(400).json({ message: "Món không tồn tại (id=" + it.menuItem + ")" });
       }
 
-      // ✅ FIX H3
       if (!m.active) {
         return res.status(400).json({ message: `${m.name} đã tạm ngừng bán` });
       }
@@ -727,12 +677,11 @@ app.post("/api/orders", auth(), (req, res) => {
       detailed.push({ menu_item_id: m.id, name: m.name, price: m.price, qty: q });
       touchedItems.push({ m, q });
     }
-           // ---------- BƯỚC 1.5: Validate khung giờ nhận hàng ----------
-    // Nếu note có chứa "Nhận lúc HH:MM - HH:MM" → check khung đó enabled
+
     if (note) {
       const match = String(note).match(/Nhận lúc\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
       if (match) {
-        const slotId = match[1].replace(/\s/g, ""); // "07:00-07:30"
+        const slotId = match[1].replace(/\s/g, "");
         const slots = getTimeSlots(db);
         const slot = slots.find((s) => s.id === slotId);
         if (slot && !slot.enabled) {
@@ -744,7 +693,6 @@ app.post("/api/orders", auth(), (req, res) => {
     }
     total = Math.max(0, subtotal - Number(discount) || 0);
 
-    // ---------- BƯỚC 2: Validate ví ----------
     isWalletPay = payment === "Ví Canteen" || payment === "WALLET";
 
     if (isWalletPay) {
@@ -758,24 +706,20 @@ app.post("/api/orders", auth(), (req, res) => {
       }
     }
 
-    // ---------- BƯỚC 3: Mutate stock ----------
     touchedItems.forEach(({ m, q }) => {
       m.stock = (m.stock || 0) - q;
       m.sold = (m.sold || 0) + q;
     });
 
-    // ---------- BƯỚC 4: Trừ ví ----------
     if (isWalletPay) {
       wallet.balance -= total;
       wallet.updated_at = new Date().toISOString();
     }
 
-    // ---------- BƯỚC 5: Cộng điểm ----------
     pointsEarned = Math.floor(total * 0.01);
     customer = db.users.find(u => u.id === req.user.id);
     if (customer) customer.points = (customer.points || 0) + pointsEarned;
 
-    // ---------- BƯỚC 6: Tạo đơn ----------
     const id = Math.max(0, ...db.orders.map(o => o.id)) + 1;
     const code = generateOrderCode(db);
 
@@ -817,7 +761,6 @@ app.post("/api/orders", auth(), (req, res) => {
     };
     db.orders.push(order);
 
-    // ---------- BƯỚC 7: Áp voucher ----------
     if (voucherCode) {
       const vc = (db.vouchers || []).find(v =>
         v.code.toUpperCase() === voucherCode.toUpperCase() &&
@@ -835,7 +778,6 @@ app.post("/api/orders", auth(), (req, res) => {
     saveDB(db);
     res.status(201).json({ ...order, _id: order.id });
   } catch (e) {
-    // ✅ FIX H2/M5b: ROLLBACK
     console.error("ORDER CREATE ERROR:", e);
 
     touchedItems.forEach(({ m, q }) => {
@@ -896,7 +838,6 @@ app.patch("/api/orders/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
       return res.status(400).json({ message: "Trạng thái không hợp lệ: " + newStatus });
     }
 
-    // ✅ FIX H1: rollback khi chuyển sang "Đã hủy"
     if (newStatus === "Đã hủy" && o.status !== "Đã hủy") {
       rollbackCancelledOrder(db, o);
     }
@@ -1855,16 +1796,36 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
     const today = todayStr();
     const now = new Date();
 
-    // ✅ FIX TIMEZONE: dùng giờ VN thay vì giờ server
     const { hour, minute } = getVNTime(now);
+    const nowMinutes = hour * 60 + minute;
 
     const { shift: bodyShift } = req.body || {};
     let shift = bodyShift || "";
+
+    // Auto-detect nếu không truyền shift
     if (!shift) {
-      const hhmm = hour * 60 + minute;
-      if (hhmm >= 6 * 60 + 30 && hhmm < 12 * 60 + 30) shift = "Ca sáng";
-      else if (hhmm >= 12 * 60 + 30 && hhmm < 18 * 60 + 30) shift = "Ca chiều";
-      else shift = "Ngoài giờ";
+      if (nowMinutes >= 6 * 60 + 30 && nowMinutes < 12 * 60 + 30) shift = "Ca sáng";
+      else if (nowMinutes >= 12 * 60 + 30 && nowMinutes < 18 * 60 + 30) shift = "Ca chiều";
+      else {
+        return res.status(400).json({
+          message: "Hiện không trong khung giờ làm việc (06:30-18:30). Vui lòng chọn ca thủ công.",
+        });
+      }
+    }
+
+    // ✅ FIX: Chặn nếu NV không có ca APPROVED hôm nay
+    const approvedShift = (db.shifts || []).find((s) =>
+      s.employee_id === req.user.id &&
+      s.date === today &&
+      s.shift === shift &&
+      s.status === "approved"
+    );
+
+    if (!approvedShift) {
+      return res.status(403).json({
+        message: `Bạn chưa được duyệt ${shift} hôm nay. Vui lòng liên hệ admin để được phân ca.`,
+        code: "NO_APPROVED_SHIFT",
+      });
     }
 
     const existing = db.attendances.find(a =>
@@ -1877,13 +1838,14 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
       return res.status(400).json({ message: "Bạn đã check-in " + shift + " hôm nay rồi" });
     }
 
+    // ✅ FIX: Đi muộn nếu check-in > start + 15 phút
     const startHour = SHIFT_START_HOUR[shift] ?? 6;
     const startMin = SHIFT_START_MIN[shift] ?? 30;
     const shiftStartMinutes = startHour * 60 + startMin;
-    const nowMinutes = hour * 60 + minute;
     const late = nowMinutes > shiftStartMinutes + 15;
 
     const status = late ? "Đi muộn" : "Đúng giờ";
+
     const id = Math.max(0, ...db.attendances.map(a => a.id)) + 1;
     const attendance = {
       id,
@@ -1912,12 +1874,15 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
     const today = todayStr();
     const now = new Date();
 
+    const { hour, minute } = getVNTime(now);
+    const nowMinutes = hour * 60 + minute;
+
     const { shift: bodyShift } = req.body || {};
     let shift = bodyShift || "";
+
     if (!shift) {
-      const hour = getVNHour(now);
-      if (hour >= 6 && hour < 12) shift = "Ca sáng";
-      else if (hour >= 12 && hour < 18) shift = "Ca chiều";
+      if (nowMinutes >= 6 * 60 && nowMinutes < 12 * 60 + 30) shift = "Ca sáng";
+      else if (nowMinutes >= 12 * 60 && nowMinutes < 18 * 60 + 30) shift = "Ca chiều";
       else shift = "Ngoài giờ";
     }
 
@@ -1933,10 +1898,22 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
     att.checkOut = now.toISOString();
     att.hours = Math.round(((now - new Date(att.checkIn)) / 3600000) * 100) / 100;
 
+    // ✅ FIX: Về sớm nếu check-out < end − 15 phút
+    // Và hiển thị cả 2 nếu vừa muộn vừa sớm
     const endHour = SHIFT_END_HOUR[shift];
-    if (endHour !== undefined && getVNHour(now) < endHour && att.status === "Đúng giờ") {
+    const endMin = SHIFT_END_MIN[shift] ?? 0;
+    const shiftEndMinutes = endHour * 60 + endMin;
+    const early = nowMinutes < shiftEndMinutes - 15;
+
+    const wasLate = att.status === "Đi muộn";
+
+    if (early && wasLate) {
+      att.status = "Đi muộn · Về sớm";
+    } else if (early && !wasLate) {
       att.status = "Về sớm";
     }
+    // Nếu không early → giữ nguyên status (Đúng giờ hoặc Đi muộn)
+
     saveDB(db);
     res.json({ message: "Check-out " + shift + " thành công", attendance: att });
   } catch (e) {
@@ -2120,7 +2097,6 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
           (o) => toLocalDateStr(o.created_at) === dateStr
         );
         const revenue = dayOrders.reduce((s, o) => s + (o.total || 0), 0);
-        // ✅ FIX TIMEZONE: dùng getDay theo VN (thay vì UTC)
         const dayLabel = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][d.getDay()];
         result.push({ label: dayLabel, date: dateStr, revenue, orders: dayOrders.length });
         totalRevenue += revenue;
@@ -2139,7 +2115,6 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
         const revenue = weekOrders.reduce((s, o) => s + (o.total || 0), 0);
         result.push({
           label: "Tuần " + (4 - i),
-          // ✅ FIX TIMEZONE: dùng getLocalDateStr thay vì toISOString
           date: getLocalDateStr(weekStart) + " - " + getLocalDateStr(weekEnd),
           revenue,
           orders: weekOrders.length
@@ -2208,20 +2183,15 @@ app.get("/api/reports/revenue", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
     res.status(500).json({ message: e.message });
   }
 });
+
 // ============================================================
 // TIME SLOTS — Khung giờ nhận món
 // ============================================================
 
-/**
- * GET /api/time-slots
- * Public — trả danh sách khung giờ + trạng thái.
- * FE dùng để render dropdown chọn giờ nhận hàng.
- */
 app.get("/api/time-slots", (req, res) => {
   try {
     const db = loadDB();
     const slots = getTimeSlots(db);
-    // Sort theo start time
     const sorted = [...slots].sort((a, b) =>
       String(a.start || "").localeCompare(String(b.start || ""))
     );
@@ -2232,14 +2202,6 @@ app.get("/api/time-slots", (req, res) => {
   }
 });
 
-/**
- * PATCH /api/time-slots/:id
- * Admin — bật/tắt 1 khung giờ, hoặc cập nhật note.
- * Body: { enabled?: boolean, note?: string }
- *
- * id phải URL-encode (dấu ":" trong id → phải encode).
- * FE gọi: PATCH /api/time-slots/07%3A00-07%3A30
- */
 app.patch("/api/time-slots/:id", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
@@ -2276,10 +2238,6 @@ app.patch("/api/time-slots/:id", auth(["ADMIN"]), (req, res) => {
   }
 });
 
-/**
- * POST /api/time-slots/reset
- * Admin — reset toàn bộ time slots về mặc định (tất cả bật).
- */
 app.post("/api/time-slots/reset", auth(["ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
@@ -2327,13 +2285,42 @@ app.put("/api/settings", auth(["ADMIN"]), (req, res) => {
 });
 
 // ============ SHIFTS ============
+
+// ✅ SỬA: CHỈ trả ca APPROVED — ẩn pending
 app.get("/api/shifts/me", auth(), (req, res) => {
   const db = loadDB();
   const today = getLocalDateStr();
   const list = (db.shifts || [])
-    .filter(s => s.employee_id === req.user.id && s.date >= today)
+    .filter(
+      (s) =>
+        s.employee_id === req.user.id &&
+        s.date >= today &&
+        s.status === "approved"
+    )
     .sort((a, b) => a.date.localeCompare(b.date));
   res.json(list);
+});
+
+// ✅ MỚI: Trả ca APPROVED của NV cho HÔM NAY
+app.get("/api/shifts/approved-today", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
+  try {
+    const db = loadDB();
+    const today = getLocalDateStr();
+    const list = (db.shifts || [])
+      .filter(
+        (s) =>
+          s.employee_id === req.user.id &&
+          s.date === today &&
+          s.status === "approved"
+      )
+      .sort((a, b) => {
+        const order = { "Ca sáng": 1, "Ca chiều": 2 };
+        return (order[a.shift] || 99) - (order[b.shift] || 99);
+      });
+    res.json(list);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
 app.get("/api/shifts/pending", auth(["ADMIN"]), (req, res) => {
@@ -2525,7 +2512,6 @@ app.get("/", (_, res) => res.json({
   timestamp: new Date().toISOString()
 }));
 
-// ✅ DEBUG endpoint — đếm món chính xác từ DB
 app.get("/api/_debug/menu-count", (_, res) => {
   try {
     const db = loadDB();

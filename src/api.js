@@ -5,25 +5,6 @@
 // - Token: lưu trong sessionStorage (mất khi đóng tab)
 // - req(): wrapper fetch với error handling + timeout
 // - api.*: các endpoint chia theo nhóm chức năng
-//
-// Cách dùng:
-//   import { api } from "./api";
-//   const user = await api.me();
-//   const orders = await api.orders.myOrders();
-//
-// Fixes (so với bản cũ):
-//   ✅ Timeout 15s với AbortController — không treo vô hạn
-//   ✅ Parse body theo content-type — không che lỗi khi proxy
-//      trả HTML (502/504)
-//   ✅ Content-Type chỉ set khi có body (tránh 1 số WAF chặn
-//      GET có Content-Type)
-//   ✅ Strip trailing slash của BASE — tránh URL //menu
-//   ✅ credentials: "same-origin" — gửi cookie nếu backend
-//      dùng session (không chỉ JWT)
-//   ✅ Error object có .status + .body — dễ debug/retry
-//   ✅ Error message rõ hơn (network error vs timeout vs HTTP)
-//   ✅ MỚI: Thêm `menu.listActive()` — chỉ lấy món đang bán
-//      (active=1), dùng cho Customer để không thấy món tắt
 // ============================================================
 
 // ✅ Strip trailing slash — tránh BASE + "/menu" = "//menu"
@@ -49,30 +30,13 @@ export function setToken(t) {
 // FETCH WRAPPER
 // ============================================================
 
-/**
- * Wrapper fetch với:
- *   - Timeout 15s (AbortController)
- *   - Auth header tự động
- *   - Parse body theo content-type (JSON / text / HTML)
- *   - 401 interceptor → clear token + fire "auth-expired"
- *
- * @param {string} path  — path tương đối, VD "/auth/login"
- * @param {object} [options]
- * @param {number} [options.timeoutMs] — override timeout
- * @returns {Promise<any>} parsed data
- * @throws {Error} với .status + .body nếu HTTP lỗi
- */
 async function req(path, options = {}) {
-  // ---------- Timeout setup ----------
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  // ---------- Headers ----------
   const headers = { ...(options.headers || {}) };
 
-  // Chỉ set Content-Type khi thực sự có body
-  // (tránh 1 số WAF/proxy chặn GET có Content-Type)
   if (options.body && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
@@ -80,20 +44,18 @@ async function req(path, options = {}) {
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  // ---------- Fetch ----------
   let res;
   try {
     res = await fetch(BASE + path, {
       ...options,
       headers,
       cache: "no-store",
-      credentials: "same-origin", // gửi cookie nếu backend dùng session
+      credentials: "same-origin",
       signal: controller.signal,
     });
   } catch (e) {
     clearTimeout(timeoutId);
 
-    // AbortError → timeout
     if (e.name === "AbortError") {
       const err = new Error(
         "Yêu cầu quá thời gian. Vui lòng kiểm tra kết nối và thử lại."
@@ -103,7 +65,6 @@ async function req(path, options = {}) {
       throw err;
     }
 
-    // Network error (mất mạng, DNS fail, CORS...)
     const err = new Error(
       "Không kết nối được máy chủ: " + (e.message || "unknown error")
     );
@@ -114,10 +75,6 @@ async function req(path, options = {}) {
     clearTimeout(timeoutId);
   }
 
-  // ---------- 401 interceptor ----------
-  //   - Clear token
-  //   - Fire "auth-expired" để App cleanup user + cart
-  //   KHÔNG navigate ở đây vì api.js là module thuần
   if (res.status === 401 && token) {
     setToken(null);
     try {
@@ -125,9 +82,6 @@ async function req(path, options = {}) {
     } catch {}
   }
 
-  // ---------- Parse body an toàn ----------
-  //   - JSON → res.json()
-  //   - text/HTML → res.text() (giữ message gốc khi proxy lỗi)
   const contentType = res.headers.get("content-type") || "";
   let data;
 
@@ -139,11 +93,9 @@ async function req(path, options = {}) {
       data = text ? { message: text.slice(0, 300) } : {};
     }
   } catch {
-    // Body rỗng / không parse được
     data = {};
   }
 
-  // ---------- Error handling ----------
   if (!res.ok) {
     const message =
       data.message ||
@@ -205,24 +157,17 @@ export const api = {
   // ----------------------------------------------------------
   // MENU — Thực đơn
   // ----------------------------------------------------------
-  // ✅ Backend đã đổi: /menu mặc định trả HẾT (kể cả active=0)
-  //    - Admin/Employee: dùng list() → thấy hết món
-  //    - Customer:       dùng listActive() → chỉ món đang bán
   menu: {
-    // Dùng cho Admin/Employee — lấy TẤT CẢ món (kể cả món tắt)
     list: (q = "", category = "Tất cả", sort = "popular", all = false) => {
       const params = new URLSearchParams();
       if (q) params.set("q", q);
       if (category && category !== "Tất cả") params.set("category", category);
       if (sort) params.set("sort", sort);
-      // `all` giữ lại cho backward-compat — backend giờ mặc định trả hết
       if (all) params.set("all", "1");
       const qs = params.toString();
       return req("/menu" + (qs ? "?" + qs : ""));
     },
 
-    // ✅ MỚI: Dùng cho Customer — chỉ lấy món đang bán (active=1)
-    // Backend dùng query `active_only=1` để filter
     listActive: (q = "", category = "Tất cả", sort = "popular") => {
       const params = new URLSearchParams();
       params.set("active_only", "1");
@@ -253,8 +198,6 @@ export const api = {
     create:    (data)        => req("/orders",              { method: "POST",  body: JSON.stringify(data) }),
     myOrders:  ()            => req("/orders/me"),
     all: (status = "Tất cả") => {
-      // Chỉ gửi status khi khác "Tất cả" — backend hiểu
-      // không có param = lấy hết
       const qs =
         status && status !== "Tất cả"
           ? `?status=${encodeURIComponent(status)}`
@@ -307,19 +250,20 @@ export const api = {
   // SHIFTS — Quản lý ca làm việc
   // ----------------------------------------------------------
   shifts: {
-    mine:     ()             => req("/shifts/me"),
-    pending:  ()             => req("/shifts/pending"),
-    all:      (params = {}) => {
+    approvedToday: () => req("/shifts/approved-today"),      // ✅ MỚI
+    mine:          ()             => req("/shifts/me"),
+    pending:       ()             => req("/shifts/pending"),
+    all:           (params = {}) => {
       const q = new URLSearchParams(params).toString();
       return req("/shifts" + (q ? `?${q}` : ""));
     },
-    register: (data)         => req("/shifts/register", { method: "POST", body: JSON.stringify(data) }),
-    bulk:     (data)         => req("/shifts/bulk",     { method: "POST", body: JSON.stringify(data) }),
-    create:   (data)         => req("/shifts",          { method: "POST", body: JSON.stringify(data) }),
-    update:   (id, data)     => req(`/shifts/${id}`,    { method: "PUT",  body: JSON.stringify(data) }),
-    remove:   (id)           => req(`/shifts/${id}`,    { method: "DELETE" }),
-    approve:  (id)           => req(`/shifts/${id}/approve`, { method: "PATCH"  }),
-    reject:   (id)           => req(`/shifts/${id}/reject`,  { method: "DELETE" }),
+    register:      (data)         => req("/shifts/register", { method: "POST", body: JSON.stringify(data) }),
+    bulk:          (data)         => req("/shifts/bulk",     { method: "POST", body: JSON.stringify(data) }),
+    create:        (data)         => req("/shifts",          { method: "POST", body: JSON.stringify(data) }),
+    update:        (id, data)     => req(`/shifts/${id}`,    { method: "PUT",  body: JSON.stringify(data) }),
+    remove:        (id)           => req(`/shifts/${id}`,    { method: "DELETE" }),
+    approve:       (id)           => req(`/shifts/${id}/approve`, { method: "PATCH"  }),
+    reject:        (id)           => req(`/shifts/${id}/reject`,  { method: "DELETE" }),
   },
 
   // ----------------------------------------------------------
@@ -333,7 +277,6 @@ export const api = {
     linkBank:     (data)        => req("/wallet/link-bank", { method: "POST", body: JSON.stringify(data) }),
     pay:          (data)        => req("/wallet/pay",       { method: "POST", body: JSON.stringify(data) }),
 
-    // Admin only
     requests:     (status)      => req("/wallet/requests" + (status ? "?status=" + status : "")),
     all:          ()            => req("/wallet/all"),
     stats:        ()            => req("/wallet/stats"),
@@ -374,13 +317,11 @@ export const api = {
     validate: (code)  => req("/vouchers/validate", { method: "POST", body: JSON.stringify({ code }) }),
     claim:    (id)    => req(`/vouchers/claim/${id}`, { method: "POST" }),
 
-    // Admin only
     all:      ()          => req("/vouchers"),
     create:   (data)      => req("/vouchers",       { method: "POST",   body: JSON.stringify(data) }),
     update:   (id, data)  => req(`/vouchers/${id}`, { method: "PUT",    body: JSON.stringify(data) }),
     remove:   (id)        => req(`/vouchers/${id}`, { method: "DELETE" }),
 
-    // Admin voucher extras
     stats:    ()          => req("/vouchers/stats"),
     claims:   (templateId) => req(`/vouchers/claims/${templateId}`),
     ofUser:   (userId)    => req(`/vouchers/user/${userId}`),
@@ -460,7 +401,7 @@ export const api = {
     revenue: (period = "day") => req(`/reports/revenue?period=${period}`),
   },
 
-    // ----------------------------------------------------------
+  // ----------------------------------------------------------
   // SETTINGS — Cài đặt hệ thống (bank, hotline, ...)
   // ----------------------------------------------------------
   settings: {
@@ -472,18 +413,14 @@ export const api = {
   // TIME SLOTS — Khung giờ nhận món
   // ----------------------------------------------------------
   timeSlots: {
-    // GET /api/time-slots — public, trả danh sách + trạng thái
     list: () => req("/time-slots"),
 
-    // PATCH /api/time-slots/:id — bật/tắt 1 khung
-    // id có dấu ":" → phải URL-encode
     update: (id, data) =>
       req(`/time-slots/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
 
-    // POST /api/time-slots/reset — reset về mặc định
     reset: () => req("/time-slots/reset", { method: "POST" }),
   },
 };

@@ -4,27 +4,17 @@
 // Tính năng:
 //   - Đồng hồ realtime + auto-detect ca theo giờ
 //   - Check-in / Check-out (validate ca, loading riêng)
+//   - ✅ CHỈ cho check-in khi có ca APPROVED hôm nay
 //   - Xem ca sắp tới + đăng ký ca tuần sau (modal)
 //   - Lịch sử chấm công theo tháng + search
 //   - Thông báo nhắc trước ca 30 phút
-//
-// Fixes (so với bản gốc):
-//   - getToday()/getTomorrow() dùng LOCAL time (không toISOString)
-//   - fmtDate() parse date-only string đúng local
-//   - Modal: ESC đóng, role/aria, thay alert() → toast
-//   - Modal submit: await onSave (không setTimeout hack)
-//   - stats/filtered: useMemo + guard NaN cho hours
-//   - list: sort mới nhất trước
-//   - notifiedRef: clear khi qua ngày mới
-//   - loading tách: checkingIn / checkingOut
-//   - validate selectedShift trước khi check-in
 // ============================================================
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import {
   Calendar, Clock, TrendingUp, AlertTriangle, Search,
   LogIn, LogOut, Sunrise, Sun, BellRing, CheckCircle2,
-  PlusCircle, ClipboardList, X, Save, CalendarDays,
+  PlusCircle, ClipboardList, X, Save, CalendarDays, AlertCircle, Loader2,
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
@@ -45,10 +35,6 @@ const REFRESH_MS = 30000;
 // HELPERS (timezone-safe)
 // ============================================================
 
-/**
- * Ngày hôm nay theo LOCAL time.
- * KHÔNG dùng toISOString() vì sẽ lệch ngày sau 17h VN (UTC+7).
- */
 function getToday() {
   const d = new Date();
   const y = d.getFullYear();
@@ -57,7 +43,6 @@ function getToday() {
   return `${y}-${m}-${dt}`;
 }
 
-/** Ngày mai theo LOCAL time. */
 function getTomorrow() {
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -67,7 +52,6 @@ function getTomorrow() {
   return `${y}-${m}-${dt}`;
 }
 
-/** Giờ:phút từ ISO timestamp. */
 function fmt(iso) {
   if (!iso) return "—";
   try {
@@ -80,10 +64,6 @@ function fmt(iso) {
   }
 }
 
-/**
- * Format date-only string "YYYY-MM-DD" theo local.
- * Thêm "T00:00:00" để tránh parse thành UTC midnight (lệch 1 ngày).
- */
 function fmtDate(dateStr) {
   if (!dateStr) return "—";
   return new Date(dateStr + "T00:00:00").toLocaleDateString("vi-VN", {
@@ -93,7 +73,6 @@ function fmtDate(dateStr) {
   });
 }
 
-/** 7 ngày của tuần sau (Mon → Sun), local time. */
 function getNextWeekDays() {
   const d = new Date();
   const day = d.getDay();
@@ -132,6 +111,9 @@ export default function EmployeeCheckInOut() {
   const [today, setToday] = useState(null);
   const [list, setList] = useState([]);
   const [myShifts, setMyShifts] = useState([]);
+  const [approvedShifts, setApprovedShifts] = useState([]); // ✅ MỚI
+  const [approvedLoading, setApprovedLoading] = useState(true); // ✅ MỚI
+  const [approvedError, setApprovedError] = useState(""); // ✅ MỚI
 
   // ---------- Filters ----------
   const [month, setMonth] = useState(() => getToday().slice(0, 7));
@@ -164,7 +146,6 @@ export default function EmployeeCheckInOut() {
   const loadList = useCallback(async () => {
     try {
       const data = await api.attendance.me();
-      // Sort mới nhất trước — server có thể trả về bất kỳ thứ tự
       const sorted = [...(data || [])].sort((a, b) =>
         String(b.date || "").localeCompare(String(a.date || ""))
       );
@@ -183,18 +164,35 @@ export default function EmployeeCheckInOut() {
     }
   }, []);
 
+  // ✅ MỚI: Load ca APPROVED của hôm nay
+  const loadApprovedShifts = useCallback(async () => {
+    setApprovedLoading(true);
+    setApprovedError("");
+    try {
+      const data = await api.shifts.approvedToday();
+      setApprovedShifts(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setApprovedError(e.message || "Không tải được ca");
+      setApprovedShifts([]);
+    } finally {
+      setApprovedLoading(false);
+    }
+  }, []);
+
   // Initial load + auto-refresh
   useEffect(() => {
     loadToday();
     loadList();
     loadShifts();
+    loadApprovedShifts();
 
     const interval = setInterval(() => {
       loadToday();
       loadShifts();
+      loadApprovedShifts();
     }, REFRESH_MS);
     return () => clearInterval(interval);
-  }, [loadToday, loadList, loadShifts]);
+  }, [loadToday, loadList, loadShifts, loadApprovedShifts]);
 
   // Real-time clock (1s)
   useEffect(() => {
@@ -202,28 +200,41 @@ export default function EmployeeCheckInOut() {
     return () => clearInterval(t);
   }, []);
 
+  // ✅ Auto-select ca approved đầu tiên khi load xong
+  useEffect(() => {
+    if (!approvedShifts.length) return;
+
+    // Nếu ca đang chọn không nằm trong approved → đổi sang ca đầu tiên
+    const isCurrentApproved = approvedShifts.some(
+      (s) => s.shift === selectedShift
+    );
+    if (!isCurrentApproved) {
+      setSelectedShift(approvedShifts[0].shift);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approvedShifts]);
+
   // ---------- Nhắc ca trước 30 phút ----------
   useEffect(() => {
-    if (!myShifts.length) return;
+    if (!approvedShifts.length) return;
 
     const check = () => {
       const todayStr = getToday();
 
-      // Reset notifications khi qua ngày mới
       if (lastDayRef.current !== todayStr) {
         notifiedRef.current = {};
         lastDayRef.current = todayStr;
       }
 
       const nowMs = Date.now();
-      myShifts
-        .filter((s) => s.date === todayStr && s.status !== "pending")
+      approvedShifts
+        .filter((s) => s.date === todayStr && s.status === "approved")
         .forEach((s) => {
           const shift = SHIFTS.find((x) => x.id === s.shift);
           if (!shift) return;
 
           const startTime = new Date(todayStr + "T00:00:00");
-          startTime.setHours(shift.startHour, 0, 0, 0);
+          startTime.setHours(shift.startHour, shift.startMin ?? 0, 0, 0);
           const diffMin = Math.round((startTime.getTime() - nowMs) / 60000);
           const key = `${s.id}-30min`;
 
@@ -240,15 +251,28 @@ export default function EmployeeCheckInOut() {
     check();
     const t = setInterval(check, 60000);
     return () => clearInterval(t);
-  }, [myShifts]);
+  }, [approvedShifts]);
 
   // ---------- Handlers ----------
 
   const handleCheckIn = async () => {
     if (checkingIn || checkingOut) return;
 
+    // ✅ Chặn nếu không có ca approved
+    if (!approvedShifts.length) {
+      toast("Bạn chưa có ca được duyệt hôm nay", "error");
+      return;
+    }
+
     if (!selectedShift || selectedShift === "Ngoài giờ") {
       toast("Vui lòng chọn ca làm hợp lệ", "error");
+      return;
+    }
+
+    // Verify ca chọn có trong approved không
+    const isApproved = approvedShifts.some((s) => s.shift === selectedShift);
+    if (!isApproved) {
+      toast(`Bạn chưa được duyệt ${selectedShift} hôm nay`, "error");
       return;
     }
 
@@ -300,7 +324,7 @@ export default function EmployeeCheckInOut() {
     for (const a of filtered) {
       total++;
       if (a.status === "Đúng giờ") onTime++;
-      if (a.status === "Đi muộn") late++;
+      if (a.status === "Đi muộn" || a.status === "Đi muộn · Về sớm") late++;
       totalHours += Number(a.hours) || 0;
     }
     return { total, onTime, late, totalHours };
@@ -311,13 +335,13 @@ export default function EmployeeCheckInOut() {
     const nowMs = Date.now();
 
     const upcoming = myShifts
-      .filter((s) => s.status !== "pending")
+      .filter((s) => s.status === "approved")
       .map((s) => {
         const shift = SHIFTS.find((x) => x.id === s.shift);
         if (!shift) return null;
 
         const startTime = new Date(s.date + "T00:00:00");
-        startTime.setHours(shift.startHour, 0, 0, 0);
+        startTime.setHours(shift.startHour, shift.startMin ?? 0, 0, 0);
         return {
           ...s,
           _startTime: startTime,
@@ -377,11 +401,6 @@ export default function EmployeeCheckInOut() {
       });
   }, [myShifts]);
 
-  const pendingCount = useMemo(
-    () => myShifts.filter((s) => s.status === "pending").length,
-    [myShifts]
-  );
-
   const timeStr = now.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
@@ -400,14 +419,15 @@ export default function EmployeeCheckInOut() {
     if (s === "Đúng giờ") return { bg: "#d1fae5", color: "#065f46" };
     if (s === "Đi muộn") return { bg: "#fef3c7", color: "#92400e" };
     if (s === "Về sớm") return { bg: "#dbeafe", color: "#1e40af" };
+    if (s === "Đi muộn · Về sớm") return { bg: "#fee2e2", color: "#991b1b" };
     return { bg: "#fee2e2", color: "#991b1b" };
   };
 
   const shiftColor = (s) => {
-  if (s === "Ca sáng") return { bg: "#fef3c7", color: "#92400e" };
-  if (s === "Ca chiều") return { bg: "#dbeafe", color: "#1e40af" };
-  return { bg: "#f1f5f9", color: "#475569" };
-};
+    if (s === "Ca sáng") return { bg: "#fef3c7", color: "#92400e" };
+    if (s === "Ca chiều") return { bg: "#dbeafe", color: "#1e40af" };
+    return { bg: "#f1f5f9", color: "#475569" };
+  };
 
   // ============================================================
   // RENDER
@@ -459,16 +479,16 @@ export default function EmployeeCheckInOut() {
         )}
 
       {/* ============ KHUNG CHÍNH: ĐỒNG HỒ + CHECK-IN/OUT ============ */}
-     <div
-  className="checkin-grid"
-  style={{
-    background: "var(--card-bg, #fff)",
-    border: "1px solid var(--border-color, #e7ebf0)",
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 20,
-  }}
->
+      <div
+        className="checkin-grid"
+        style={{
+          background: "var(--card-bg, #fff)",
+          border: "1px solid var(--border-color, #e7ebf0)",
+          borderRadius: 16,
+          padding: 24,
+          marginBottom: 20,
+        }}
+      >
         {/* ----- Cột trái: đồng hồ ----- */}
         <div>
           <div
@@ -493,9 +513,7 @@ export default function EmployeeCheckInOut() {
             </span>
           </div>
 
-          <div className="checkin-clock">
-  {timeStr}
-</div>
+          <div className="checkin-clock">{timeStr}</div>
           <div
             style={{
               fontSize: 13,
@@ -612,6 +630,7 @@ export default function EmployeeCheckInOut() {
             )}
           </div>
 
+          {/* ✅ KHU VỰC CHỌN CA — CHỈ HIỆN CA APPROVED */}
           {!today?.checkIn && (
             <div style={{ marginBottom: 12 }}>
               <label
@@ -623,98 +642,191 @@ export default function EmployeeCheckInOut() {
                   marginBottom: 6,
                 }}
               >
-                Chọn ca làm
+                Chọn ca làm (đã được duyệt hôm nay)
               </label>
-              <div className="checkin-shift-picker">
-                {SHIFTS.map((s) => {
-                  const Icon = s.icon;
-                  const active = selectedShift === s.id;
-                  const assigned = myShifts.some(
-                    (x) =>
-                      x.date === getToday() &&
-                      x.shift === s.id &&
-                      x.status !== "pending"
-                  );
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setSelectedShift(s.id)}
-                      disabled={checkingIn || checkingOut}
-                      style={{
-                        padding: "10px 8px",
-                        background: active
-                          ? s.color + "20"
-                          : "var(--card-bg, #fff)",
-                        border: active
-                          ? "2px solid " + s.color
-                          : "2px solid var(--border-color, #e5e9ef)",
-                        borderRadius: 10,
-                        cursor: checkingIn || checkingOut ? "not-allowed" : "pointer",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: 4,
-                        position: "relative",
-                      }}
-                    >
-                      {assigned && (
-                        <span
-                          title="Đã được phân"
+
+              {/* Loading */}
+              {approvedLoading && (
+                <div
+                  style={{
+                    padding: 20,
+                    textAlign: "center",
+                    color: "var(--text-light, #8993a3)",
+                    fontSize: 13,
+                    background: "var(--bg-tertiary, #f5f7fb)",
+                    borderRadius: 10,
+                  }}
+                >
+                  <Loader2
+                    size={20}
+                    style={{
+                      animation: "spin 1s linear infinite",
+                      marginBottom: 6,
+                    }}
+                  />
+                  <div>Đang tải ca...</div>
+                </div>
+              )}
+
+              {/* Error */}
+              {!approvedLoading && approvedError && (
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    background: "rgba(239, 68, 68, 0.08)",
+                    border: "1px solid rgba(239, 68, 68, 0.2)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    color: "#ef4444",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{approvedError}</span>
+                  <button
+                    onClick={loadApprovedShifts}
+                    style={{
+                      padding: "4px 10px",
+                      background: "#ef4444",
+                      color: "#fff",
+                      border: 0,
+                      borderRadius: 5,
+                      cursor: "pointer",
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              )}
+
+              {/* Không có ca approved */}
+              {!approvedLoading &&
+                !approvedError &&
+                approvedShifts.length === 0 && (
+                  <div
+                    style={{
+                      padding: "16px 14px",
+                      background: "rgba(245, 158, 11, 0.08)",
+                      border: "1px dashed rgba(245, 158, 11, 0.5)",
+                      borderRadius: 10,
+                      fontSize: 13,
+                      color: "#92400e",
+                      textAlign: "center",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <AlertTriangle
+                      size={20}
+                      style={{ marginBottom: 6, opacity: 0.8 }}
+                    />
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                      Chưa có ca được duyệt hôm nay
+                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.85 }}>
+                      Vui lòng liên hệ admin để được phân ca trước khi check-in.
+                    </div>
+                  </div>
+                )}
+
+              {/* Danh sách ca approved */}
+              {!approvedLoading &&
+                !approvedError &&
+                approvedShifts.length > 0 && (
+                  <div className="checkin-shift-picker">
+                    {approvedShifts.map((s) => {
+                      const shift = SHIFTS.find((x) => x.id === s.shift);
+                      if (!shift) return null;
+                      const Icon = shift.icon;
+                      const active = selectedShift === s.shift;
+
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setSelectedShift(s.shift)}
+                          disabled={checkingIn || checkingOut}
                           style={{
-                            position: "absolute",
-                            top: 4,
-                            right: 4,
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            background: "#18a967",
+                            padding: "10px 8px",
+                            background: active
+                              ? shift.color + "20"
+                              : "var(--card-bg, #fff)",
+                            border: active
+                              ? "2px solid " + shift.color
+                              : "2px solid var(--border-color, #e5e9ef)",
+                            borderRadius: 10,
+                            cursor:
+                              checkingIn || checkingOut
+                                ? "not-allowed"
+                                : "pointer",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 4,
                           }}
-                        />
-                      )}
-                      <Icon
-                        size={18}
-                        style={{
-                          color: active ? s.color : "var(--text-light, #94a3b8)",
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: active ? s.color : "var(--text-muted, #475569)",
-                        }}
-                      >
-                        {s.label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          color: "var(--text-light, #94a3b8)",
-                        }}
-                      >
-                        {s.time}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                        >
+                          <Icon
+                            size={18}
+                            style={{
+                              color: active
+                                ? shift.color
+                                : "var(--text-light, #94a3b8)",
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: active
+                                ? shift.color
+                                : "var(--text-muted, #475569)",
+                            }}
+                          >
+                            {shift.label}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              color: "var(--text-light, #94a3b8)",
+                            }}
+                          >
+                            {shift.time}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
             </div>
           )}
 
           <div className="checkin-action-grid">
             <button
-              disabled={!!today?.checkIn || checkingIn || checkingOut}
+              disabled={
+                !!today?.checkIn ||
+                checkingIn ||
+                checkingOut ||
+                approvedShifts.length === 0
+              }
               onClick={handleCheckIn}
               style={{
                 padding: 12,
-                background: today?.checkIn ? "#94a3b8" : "#18a967",
+                background:
+                  today?.checkIn || approvedShifts.length === 0
+                    ? "#94a3b8"
+                    : "#18a967",
                 color: "#fff",
                 border: 0,
                 borderRadius: 10,
                 fontWeight: 700,
                 cursor:
-                  today?.checkIn || checkingIn || checkingOut
+                  today?.checkIn ||
+                  checkingIn ||
+                  checkingOut ||
+                  approvedShifts.length === 0
                     ? "not-allowed"
                     : "pointer",
                 display: "inline-flex",
@@ -730,6 +842,8 @@ export default function EmployeeCheckInOut() {
                 ? "Đã check-in"
                 : checkingIn
                 ? "Đang xử lý..."
+                : approvedShifts.length === 0
+                ? "Chưa có ca"
                 : "Check-in"}
             </button>
             <button
@@ -775,7 +889,8 @@ export default function EmployeeCheckInOut() {
               textAlign: "center",
             }}
           >
-            Ca sáng: 06:30 - 12:30 · Ca chiều: 12:30 - 18:30 · Đi muộn sau 15 phút.
+            Ca sáng: 06:30 - 12:30 · Ca chiều: 12:30 - 18:30 · Đi muộn sau 15
+            phút.
           </p>
         </div>
       </div>
@@ -812,20 +927,6 @@ export default function EmployeeCheckInOut() {
             >
               <Calendar size={18} /> Ca làm sắp tới của tôi
             </h3>
-            {pendingCount > 0 && (
-              <span
-                style={{
-                  background: "#fef3c7",
-                  color: "#92400e",
-                  padding: "3px 10px",
-                  borderRadius: 12,
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                {pendingCount} chờ duyệt
-              </span>
-            )}
           </div>
           <button
             onClick={() => setShowRegister(true)}
@@ -859,7 +960,7 @@ export default function EmployeeCheckInOut() {
           >
             <CalendarDays size={40} style={{ opacity: 0.3, marginBottom: 8 }} />
             <div style={{ fontSize: 13, marginBottom: 4 }}>
-              Chưa có ca làm nào
+              Chưa có ca làm nào được duyệt
             </div>
             <div style={{ fontSize: 12 }}>
               Bấm "Đăng ký ca" để đăng ký ca cho tuần sau
@@ -939,7 +1040,10 @@ export default function EmployeeCheckInOut() {
                       {group.dayNum}/{group.monthNum}/{group.date.slice(0, 4)}
                     </b>
                     <span
-                      style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text-light, #8993a3)",
+                      }}
                     >
                       {group.shifts.length} ca
                     </span>
@@ -961,13 +1065,10 @@ export default function EmployeeCheckInOut() {
                   )}
                 </div>
 
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
-                >
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {group.shifts.map((s) => {
                     const shift = SHIFTS.find((x) => x.id === s.shift);
                     const Icon = shift?.icon || Clock;
-                    const isPending = s.status === "pending";
                     const color = shift?.color || "#64748b";
 
                     return (
@@ -978,12 +1079,8 @@ export default function EmployeeCheckInOut() {
                           alignItems: "center",
                           gap: 10,
                           padding: "8px 10px",
-                          background: isPending
-                            ? "#fffbeb"
-                            : "var(--bg-tertiary, #f8fafc)",
-                          border: isPending
-                            ? "1px dashed #f59e0b"
-                            : "1px solid transparent",
+                          background: "var(--bg-tertiary, #f8fafc)",
+                          border: "1px solid transparent",
                           borderRadius: 8,
                         }}
                       >
@@ -1020,19 +1117,6 @@ export default function EmployeeCheckInOut() {
                             {shift?.time || "—"}
                           </span>
                         </div>
-                        <span
-                          style={{
-                            padding: "3px 8px",
-                            borderRadius: 10,
-                            fontSize: 9.5,
-                            fontWeight: 700,
-                            background: isPending ? "#fef3c7" : "#d1fae5",
-                            color: isPending ? "#92400e" : "#065f46",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {isPending ? "Chờ duyệt" : "Đã duyệt"}
-                        </span>
                       </div>
                     );
                   })}
@@ -1044,7 +1128,7 @@ export default function EmployeeCheckInOut() {
       </div>
 
       {/* ============ STATS ============ */}
-<div className="emp-cio-stats">
+      <div className="emp-cio-stats">
         <StatBox
           icon={<Calendar />}
           label="Tổng ngày công"
@@ -1223,6 +1307,7 @@ export default function EmployeeCheckInOut() {
                           fontWeight: 700,
                           background: c.bg,
                           color: c.color,
+                          whiteSpace: "nowrap",
                         }}
                       >
                         {a.status}
@@ -1274,6 +1359,10 @@ export default function EmployeeCheckInOut() {
         @keyframes pulse {
           0%, 100% { transform: scale(1); }
           50%      { transform: scale(1.1); }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
         }
       `}</style>
     </div>
@@ -1349,7 +1438,6 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Ca đã có trong tuần sau (để cảnh báo)
   const existingSet = useMemo(() => {
     const set = new Set();
     for (const s of existingShifts) {
@@ -1360,7 +1448,6 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
     return set;
   }, [existingShifts, displayWeekDays]);
 
-  // ESC đóng modal
   useEffect(() => {
     const handler = (e) => {
       if (e.key === "Escape" && !submitting) onClose();
@@ -1425,7 +1512,6 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
         dateShifts,
         note,
       });
-      // Success → parent đóng modal → component unmount
     } finally {
       setSubmitting(false);
     }
@@ -1592,8 +1678,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
             </div>
           </div>
 
-          {/* Grid 7 ngày */}
-         <div className="emp-register-days">
+          <div className="emp-register-days">
             {displayWeekDays.map((d) => {
               const isActive = activeDate === d;
               const isAssigned = dateShifts[d] && dateShifts[d].length > 0;
@@ -1684,7 +1769,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
               </span>
             )}
           </label>
-         <div className="emp-register-shifts">
+          <div className="emp-register-shifts">
             {SHIFTS.map((s) => {
               const Icon = s.icon;
               const sel = currentShifts.includes(s.id);
