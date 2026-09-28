@@ -1107,4 +1107,105 @@ html.dark-mode .app-stat-delta.down { color: #F87171 !important; }
 /* Modal body scroll cuối cùng không dính đáy */
 [role="dialog"] > div:last-child {
   margin-bottom: 0;
+}input:focus, textarea:focus, select:focus {
+  border-color: #2634d5 !important;
+  box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.12) !important;
+}
+/* ============================================================
+   ✅ FIX LỖI VIỀN KÉP (DOUBLE BORDER) TRÊN INPUT WRAPPER
+   ------------------------------------------------------------
+   Nguyên nhân: input bên trong wrapper (.v8-input-wrap,
+   .input-icon, .form-input-wrap...) có border riêng do CSS
+   global `input:focus { border: ... }` → tạo viền kép.
+
+   Fix: Reset hoàn toàn border/box-shadow của input con khi
+   nằm trong wrapper. Chỉ wrapper giữ viền ngoài.
+   ============================================================ */
+
+/* ---------- Reset mọi input con trong wrapper ---------- */
+.v8-input-wrap input,
+.v8-input-wrap input:hover,
+.v8-input-wrap input:focus,
+.v8-input-wrap input:active {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+.input-icon input,
+.input-icon input:hover,
+.input-icon input:focus,
+.input-icon input:active {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Fallback: bất kỳ input nào nằm trong div có class chứa "wrap" */
+[class*="input-wrap"] input,
+[class*="input-wrap"] input:focus,
+[class*="input-wrap"] input:hover {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* ---------- Wrapper giữ viền, focus ring nằm ở wrapper ---------- */
+.v8-input-wrap,
+.input-icon {
+  position: relative;
+}
+
+.v8-input-wrap:focus-within,
+.input-icon:focus-within {
+  border-color: #1f2937 !important;    /* Đổi màu viền khi focus */
+  box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.08) !important;
+}
+
+/* Đảm bảo form-input không có viền kép khi trong wrapper */
+.v8-input-wrap .form-input,
+.input-icon .form-input {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* ---------- Autofill fix (tránh nền vàng) ---------- */
+.v8-input-wrap input:-webkit-autofill,
+.v8-input-wrap input:-webkit-autofill:hover,
+.v8-input-wrap input:-webkit-autofill:focus,
+.input-icon input:-webkit-autofill,
+.input-icon input:-webkit-autofill:hover,
+.input-icon input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: inherit !important;
+  transition: background-color 9999s ease-in-out 0s !important;
+  border: 0 !important;
+}
+
+/* ---------- Fix cho ô input thường (không nằm trong wrapper) ---------- */
+input:not([type="checkbox"]):not([type="radio"]):not(.form-input):not([class*="search"]):focus,
+textarea:focus,
+select:focus {
+  outline: 0 !important;
+}
+
+/* ---------- Fix đặc biệt cho trang Login (v8) ---------- */
+.v8-login-page input,
+.v8-login-page input:focus,
+.v8-login-page input:hover {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+.v8-login-page .v8-input-wrap:focus-within {
+  border-color: #1f2937 !important;
+  box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.08) !important;
 }
