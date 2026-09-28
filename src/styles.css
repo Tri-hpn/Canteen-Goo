@@ -4182,7 +4182,30 @@ html.dark-mode .grab-food-card__add-btn { border-color: #1e293b !important; }
     top: 54px !important;    /* topbar nhỏ = 54px */
   }
 }
+/* ============================================================
+   PHẦN 40: ẨN PAGE-HEADING TOÀN CỤC
+   ============================================================ */
 
+.page-heading {
+  display: none !important;
+}
+
+/* Bù lại padding-top đã bị mất do heading biến mất */
+.page-content {
+  padding-top: 20px !important;
+}
+
+@media (max-width: 900px) {
+  .page-content {
+    padding-top: 14px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-content {
+    padding-top: 12px !important;
+  }
+}
 /* ============================================================
    KẾT THÚC FILE
    ============================================================ */
