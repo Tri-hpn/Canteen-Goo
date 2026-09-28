@@ -1,17 +1,16 @@
 ﻿// ============================================================
 // HEADERNAV.JSX — Menu ngang cho Customer (desktop)
 // ============================================================
-// Hiện trên desktop (>= 769px). Mobile dùng BottomNav.
+// Hiện trên desktop (>= 901px). Tablet/Mobile dùng BottomNav.
 //
 // 6 tab chính: Trang chủ, Thực đơn, Giỏ hàng, Đơn hàng,
 //              Ví Canteen, Khuyến mãi
 // (Đã bỏ tab "Hồ sơ" vì thừa — đã có nút profile ở topbar phải)
 //
-// FIX v2:
-//   - 🔴 Bỏ tab "Hồ sơ" (đã có topbar profile)
-//   - 🔴 Bỏ logic ẩn tab khi màn hình hẹp (không cần nữa)
-//   - 🔴 Luôn hiển thị đủ 6 tab, scroll ngang nếu tràn
-//   - 🔴 Bỏ hook useHasWideScreen + useMemo visibleTabs
+// FIX v3:
+//   - 🔴 Bỏ tab "Hồ sơ"
+//   - 🔴 Ẩn hoàn toàn khi màn hình <= 900px
+//   - 🔴 Không render DOM khi mobile (tối ưu performance)
 // ============================================================
 
 import { useEffect, useState, useCallback } from "react";
@@ -27,6 +26,7 @@ import { api } from "../api";
 
 const CART_KEY = "canteen_cart";
 const ORDERS_SEEN_KEY = "orders_last_seen";
+const HIDE_BELOW_PX = 900; // ✅ Ẩn HeaderNav khi <= 900px
 
 const ACTIVE_ORDER_STATUSES = [
   "Chờ xác nhận",
@@ -37,44 +37,12 @@ const ACTIVE_ORDER_STATUSES = [
 
 // 6 tab chính — bỏ "Hồ sơ" vì đã có ở topbar
 const TABS = [
-  {
-    key: "home",
-    label: "Trang chủ",
-    icon: Home,
-    path: "/customer",
-  },
-  {
-    key: "menu",
-    label: "Thực đơn",
-    icon: UtensilsCrossed,
-    path: "/customer/menu",
-  },
-  {
-    key: "cart",
-    label: "Giỏ hàng",
-    icon: ShoppingCart,
-    path: "/customer/cart",
-    badge: "cart",
-  },
-  {
-    key: "orders",
-    label: "Đơn hàng",
-    icon: Package,
-    path: "/customer/orders",
-    badge: "orders",
-  },
-  {
-    key: "wallet",
-    label: "Ví Canteen",
-    icon: Wallet,
-    path: "/customer/wallet",
-  },
-  {
-    key: "promotions",
-    label: "Khuyến mãi",
-    icon: Gift,
-    path: "/customer/promotions",
-  },
+  { key: "home",       label: "Trang chủ",  icon: Home,            path: "/customer" },
+  { key: "menu",       label: "Thực đơn",   icon: UtensilsCrossed, path: "/customer/menu" },
+  { key: "cart",       label: "Giỏ hàng",   icon: ShoppingCart,    path: "/customer/cart",       badge: "cart" },
+  { key: "orders",     label: "Đơn hàng",   icon: Package,         path: "/customer/orders",     badge: "orders" },
+  { key: "wallet",     label: "Ví Canteen", icon: Wallet,          path: "/customer/wallet" },
+  { key: "promotions", label: "Khuyến mãi", icon: Gift,            path: "/customer/promotions" },
 ];
 
 const BADGE_MAX = 99;
@@ -97,6 +65,32 @@ function readCartCount() {
   }
 }
 
+/** Hook: check màn hình có rộng không (>= HIDE_BELOW_PX) */
+function useIsWideScreen() {
+  const [wide, setWide] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia(`(min-width: ${HIDE_BELOW_PX + 1}px)`).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (typeof window.matchMedia !== "function") return;
+
+    const mq = window.matchMedia(`(min-width: ${HIDE_BELOW_PX + 1}px)`);
+    const handler = (e) => setWide(e.matches);
+
+    if (mq.addEventListener) {
+      mq.addEventListener("change", handler);
+      return () => mq.removeEventListener("change", handler);
+    }
+    // Safari cũ
+    mq.addListener?.(handler);
+    return () => mq.removeListener?.(handler);
+  }, []);
+
+  return wide;
+}
+
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
@@ -104,6 +98,9 @@ function readCartCount() {
 export default function HeaderNav() {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
+
+  // ✅ Check màn hình — không render DOM khi mobile
+  const isWide = useIsWideScreen();
 
   // ---------- Read cart ----------
 
@@ -142,6 +139,8 @@ export default function HeaderNav() {
   // ---------- Listeners ----------
 
   useEffect(() => {
+    if (!isWide) return; // ✅ Không fetch khi mobile
+
     readCart();
     readOrders();
 
@@ -159,7 +158,7 @@ export default function HeaderNav() {
       window.removeEventListener("orders-seen", onOrder);
       window.removeEventListener("order-updated", onOrder);
     };
-  }, [readCart, readOrders]);
+  }, [isWide, readCart, readOrders]);
 
   // ---------- Badge render ----------
 
@@ -196,6 +195,9 @@ export default function HeaderNav() {
   // ============================================================
   // RENDER
   // ============================================================
+
+  // ✅ Không render gì khi màn hình nhỏ
+  if (!isWide) return null;
 
   return (
     <nav className="header-nav" aria-label="Menu chính">

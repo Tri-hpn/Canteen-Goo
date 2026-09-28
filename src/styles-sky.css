@@ -1239,4 +1239,37 @@ select:not(.form-input) {
   border: 0 !important;
   outline: 0 !important;
   box-shadow: none !important;
+}/* ============================================================
+   RESPONSIVE — HeaderNav ẩn ở tablet/mobile
+   ------------------------------------------------------------
+   Desktop (>= 901px): hiện HeaderNav, ẩn BottomNav
+   Tablet/Mobile (<= 900px): ẩn HeaderNav, hiện BottomNav
+   ============================================================ */
+
+/* Mặc định (desktop): hiện HeaderNav, ẩn BottomNav */
+.header-nav {
+  display: block !important;
+}
+.bottom-nav {
+  display: none !important;
+}
+
+/* Tablet và mobile: ẩn HeaderNav, hiện BottomNav */
+@media (max-width: 900px) {
+  .header-nav {
+    display: none !important;
+  }
+  .bottom-nav {
+    display: flex !important;
+  }
+}
+
+/* Mobile nhỏ: đảm bảo chắc chắn */
+@media (max-width: 480px) {
+  .header-nav {
+    display: none !important;
+  }
+  .bottom-nav {
+    display: flex !important;
+  }
 }
