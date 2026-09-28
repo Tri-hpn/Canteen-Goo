@@ -10,24 +10,16 @@
 //   - Testimonials
 //   - QR truy cập menu (auto-detect origin)
 //
-// Fixes:
-//   - ✅ Banner data tách ra file ../../bannerSlides.js
-//   - QR dùng window.location.origin (không hardcode localhost)
-//   - Carousel pause khi tab ẩn (visibilitychange)
-//   - Banner button: bỏ <a href>, dùng <button> + navigate
-//   - Loading state: tách loading vs empty vs error
-//   - Error state + nút retry
-//   - Flash track: unique key
-//   - Memo các computed values
-//   - ✅ MEDIUM FIX: Skeleton loading cho section "Bán chạy nhất"
-//   - ✅ FIX CRITICAL: Backend trả HẾT món. FE filter active.
+// FIX v6:
+//   - renderFoodCard dùng class .grab-food-card (thống nhất với CustomerMenu)
+//   - Bỏ inline style rườm rà
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Star, Clock, Utensils, Gift,
-  Sparkles, Zap, ShoppingCart, Quote, AlertCircle, RefreshCw,
+  Sparkles, Zap, ShoppingCart, Quote, AlertCircle, RefreshCw, Plus, Flame,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
@@ -149,7 +141,6 @@ export default function CustomerHome({ user, cart, setCart }) {
       ]);
 
       const rawList = Array.isArray(menuRes) ? menuRes : [];
-      // ✅ FIX CRITICAL: Chỉ món đang bán (backend trả hết)
       const list = rawList.filter((m) => m.active);
 
       const bestSellers = [...list]
@@ -236,160 +227,57 @@ export default function CustomerHome({ user, cart, setCart }) {
   }, [flashItems]);
 
   // ============================================================
-  // RENDER HELPERS
+  // RENDER FOOD CARD — dùng chung class với CustomerMenu
   // ============================================================
 
   const renderFoodCard = useCallback((m) => {
     const id = m.id || m._id;
+    const isOutOfStock = m.stock === 0;
+    const isHot = (m.sold || 0) >= 50;
+
     return (
       <div
         key={id}
-        className="food-card-clickable"
-        style={{
-          background: "var(--card-bg, #fff)",
-          border: "1px solid var(--border-color, #e5e9ef)",
-          borderRadius: 12,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
+        className="grab-food-card"
+        onClick={() => {
+          if (isOutOfStock) return;
+          setMode("cart");
+          setSelected(m);
         }}
       >
-        <img
-          src={m.image}
-          alt={m.name}
-          loading="lazy"
-          style={{
-            width: "100%",
-            height: 120,
-            objectFit: "cover",
-            display: "block",
-          }}
-        />
-        <div
-          style={{
-            padding: 10,
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 10,
-              color: "var(--text-light, #8993a3)",
-              textTransform: "uppercase",
-              letterSpacing: 0.4,
-            }}
-          >
-            {m.category}
-          </span>
-          <h4
-            style={{
-              margin: "4px 0",
-              fontSize: 13,
-              color: "var(--text-primary, #172033)",
-              fontWeight: 700,
-              lineHeight: 1.3,
-            }}
-          >
-            {m.name}
-          </h4>
+        <div className="grab-food-card__image-wrap">
+          <img src={m.image} alt={m.name} loading="lazy" />
 
-          {/* Rating row — luôn render để đồng nhất chiều cao */}
-<div
-  className="food-rating-row"
-  style={{
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-    marginBottom: 6,
-    fontSize: 11,
-    minHeight: 20,
-  }}
->
-  {m.rating ? (
-    <>
-      <Star size={11} fill="#f59e0b" color="#f59e0b" />
-      <b style={{ color: "var(--text-primary, #172033)" }}>
-        {m.rating}
-      </b>
-      <span style={{ color: "var(--text-light, #8993a3)" }}>
-        ({m.review_count || 0})
-      </span>
-    </>
-  ) : (
-    // Placeholder để giữ chiều cao
-    <span style={{ color: "var(--text-light, #cbd5e1)", fontSize: 10 }}>
-      Chưa có đánh giá
-    </span>
-  )}
-</div>
+          {isOutOfStock ? (
+            <span className="grab-food-card__badge grab-food-card__badge--out">
+              Hết hàng
+            </span>
+          ) : isHot ? (
+            <span className="grab-food-card__badge grab-food-card__badge--hot">
+              <Flame size={10} /> Bán chạy
+            </span>
+          ) : null}
 
-          <b
-            style={{
-              color: "#18a967",
-              fontSize: 14,
-              marginTop: "auto",
-            }}
-          >
-            {money(m.price)}
-          </b>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 6,
-              marginTop: 8,
-            }}
-          >
+          {!isOutOfStock && (
             <button
-              onClick={() => {
+              type="button"
+              className="grab-food-card__add-btn"
+              onClick={(e) => {
+                e.stopPropagation();
                 setMode("cart");
                 setSelected(m);
               }}
-              style={{
-                background: "var(--bg-tertiary, #f5f7fb)",
-                color: "var(--text-primary, #172033)",
-                border: "1px solid var(--border-color, #e5e9ef)",
-                padding: "6px 4px",
-                borderRadius: 7,
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                whiteSpace: "nowrap",
-              }}
+              aria-label={`Thêm ${m.name}`}
             >
-              <ShoppingCart size={12} /> Thêm
+              <Plus size={20} strokeWidth={3} />
             </button>
-            <button
-              onClick={() => {
-                setMode("buy");
-                setSelected(m);
-              }}
-              style={{
-                background: "#2634d5",
-                color: "#fff",
-                border: 0,
-                padding: "6px 4px",
-                borderRadius: 7,
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 700,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                whiteSpace: "nowrap",
-              }}
-            >
-              <Zap size={12} /> Mua
-            </button>
+          )}
+        </div>
+
+        <div className="grab-food-card__info">
+          <h4 className="grab-food-card__name">{m.name}</h4>
+          <div className="grab-food-card__price-row">
+            <span className="grab-food-card__price">{money(m.price)}</span>
           </div>
         </div>
       </div>
@@ -804,122 +692,48 @@ export default function CustomerHome({ user, cart, setCart }) {
               {promotions.slice(0, FLASH_PROMOS_LIMIT).map((m) => (
                 <div
                   key={`promo-${m.id}`}
-                  className="food-card-clickable"
-                  style={{
-                    background: "var(--card-bg, #fff)",
-                    border: "1px solid var(--border-color, #e5e9ef)",
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    display: "flex",
-                    flexDirection: "column",
-                    position: "relative",
+                  className="grab-food-card"
+                  onClick={() => {
+                    setMode("buy");
+                    setSelected(m);
                   }}
                 >
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 10,
-                      right: 10,
-                      background:
-                        "linear-gradient(135deg, #ef4444, #f59e0b)",
-                      color: "#fff",
-                      padding: "4px 10px",
-                      borderRadius: 20,
-                      fontSize: 11,
-                      fontWeight: 800,
-                      zIndex: 2,
-                      boxShadow: "0 4px 10px rgba(239, 68, 68, 0.4)",
-                    }}
-                  >
-                    -{m.discount_percent}%
-                  </div>
-                  <img
-                    src={m.image}
-                    alt={m.name}
-                    loading="lazy"
-                    style={{
-                      width: "100%",
-                      height: 120,
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                  />
-                  <div
-                    style={{
-                      padding: 10,
-                      display: "flex",
-                      flexDirection: "column",
-                      flex: 1,
-                    }}
-                  >
+                  <div className="grab-food-card__image-wrap">
+                    <img src={m.image} alt={m.name} loading="lazy" />
                     <span
-                      style={{
-                        fontSize: 10,
-                        color: "var(--text-light, #8993a3)",
-                        textTransform: "uppercase",
-                        letterSpacing: 0.4,
-                      }}
+                      className="grab-food-card__badge grab-food-card__badge--hot"
+                      style={{ left: "auto", right: 8 }}
                     >
-                      {m.category}
+                      -{m.discount_percent}%
                     </span>
-                    <h4
-                      style={{
-                        margin: "4px 0",
-                        fontSize: 13,
-                        color: "var(--text-primary, #172033)",
-                        fontWeight: 700,
-                        lineHeight: 1.3,
+                    <button
+                      type="button"
+                      className="grab-food-card__add-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMode("buy");
+                        setSelected(m);
                       }}
+                      aria-label={`Đặt ${m.name}`}
                     >
-                      {m.name}
-                    </h4>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "baseline",
-                        gap: 8,
-                        marginBottom: 8,
-                      }}
-                    >
-                      <b style={{ color: "#ef4444", fontSize: 15 }}>
+                      <Zap size={18} strokeWidth={3} />
+                    </button>
+                  </div>
+                  <div className="grab-food-card__info">
+                    <h4 className="grab-food-card__name">{m.name}</h4>
+                    <div className="grab-food-card__price-row">
+                      <span
+                        className="grab-food-card__price"
+                        style={{ color: "#ef4444" }}
+                      >
                         {money(m.price)}
-                      </b>
+                      </span>
                       {m.original_price > m.price && (
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "var(--text-light, #94a3b8)",
-                            textDecoration: "line-through",
-                          }}
-                        >
+                        <span className="grab-food-card__price-old">
                           {money(m.original_price)}
                         </span>
                       )}
                     </div>
-                    <button
-                      onClick={() => {
-                        setMode("buy");
-                        setSelected(m);
-                      }}
-                      style={{
-                        marginTop: "auto",
-                        width: "100%",
-                        background: "#2634d5",
-                        color: "#fff",
-                        border: 0,
-                        padding: "8px 6px",
-                        borderRadius: 8,
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 5,
-                      }}
-                    >
-                      <Zap size={13} /> Đặt ngay
-                    </button>
                   </div>
                 </div>
               ))}

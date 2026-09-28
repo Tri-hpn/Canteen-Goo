@@ -1,13 +1,11 @@
 ﻿/* ============================================================
-   CANTEEN VWA — STYLES.CSS (CLEAN & ORGANIZED v2)
+   CANTEEN VWA — STYLES.CSS (CLEAN v4)
    ============================================================
-   File này đã được:
-   - Loại bỏ toàn bộ Node.js scripts bị lẫn vào
-   - Gộp các rule trùng lặp (giữ bản cuối cùng)
-   - Xóa toast rules trùng lặp (chỉ giữ toast căn giữa)
-   - Xóa rule input:focus global (đã có ở styles-sky FIX-B)
-   - Xóa .page-heading display:none (đã có ở styles-sky)
-   - Sắp xếp theo thứ tự logic
+   Đã làm sạch:
+   - Xóa toàn bộ rule trùng lặp
+   - Gom food card về 1 chỗ duy nhất: .grab-food-card
+   - Toast căn giữa (PHẦN 20)
+   - Không có input:focus global (đã ở styles-sky)
    ============================================================ */
 
 /* ============================================================
@@ -24,11 +22,9 @@
   --text-muted: #64748b;
   --text-light: #8993a3;
 
-  /* Font vars — chuẩn hóa toàn app */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
 
-  /* Brand colors */
   --brand: #2634d5;
   --brand-dark: #1c28b0;
   --brand-light: #3b4bef;
@@ -38,7 +34,6 @@
   --warning: #f59e0b;
   --purple: #8b5cf6;
 
-  /* Button semantic colors */
   --btn-primary: #2634d5;
   --btn-primary-hover: #1c28b0;
   --btn-success: #18a967;
@@ -52,7 +47,6 @@
   --btn-ghost-border: #e5e9ef;
 }
 
-/* Dark mode variables */
 html.dark-mode {
   --card-bg: #1e293b;
   --bg-secondary: #0f172a;
@@ -64,7 +58,6 @@ html.dark-mode {
   --text-light: #94a3b8;
 }
 
-/* Reset toàn bộ */
 *, *::before, *::after { box-sizing: border-box; }
 * { margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
@@ -249,7 +242,6 @@ main, .main {
 }
 .logout-btn:hover { background: #2b0f0f; color: #ef4444; }
 
-/* Nút X đã bị xóa khỏi Sidebar.jsx → ẩn vĩnh viễn nếu còn sót */
 .close-sidebar { display: none !important; }
 .mobile-overlay { display: none; }
 
@@ -288,15 +280,6 @@ header > div:last-child {
   flex-shrink: 0 !important;
 }
 .topbar-right > * { flex-shrink: 0 !important; }
-
-.topbar-right::before {
-  content: "";
-  width: 1px;
-  height: 28px;
-  background: var(--border-color, #e5e9ef);
-  margin-right: 4px;
-  margin-left: 4px;
-}
 
 .topbar-logo {
   display: inline-flex !important;
@@ -636,7 +619,7 @@ header > div:last-child {
 }
 
 /* ============================================================
-   TOPBAR PROFILE (nút hồ sơ trên topbar)
+   TOPBAR PROFILE
    ============================================================ */
 
 .topbar-profile-btn {
@@ -685,24 +668,15 @@ header > div:last-child {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
-/* Responsive: ẩn text profile trên tablet/mobile nhỏ */
 @media (max-width: 1024px) {
-  .topbar-profile-btn .profile-info {
-    display: none;
-  }
-  .topbar-profile-btn {
-    padding: 4px;
-  }
+  .topbar-profile-btn .profile-info { display: none; }
+  .topbar-profile-btn { padding: 4px; }
 }
 
-/* Ẩn hoàn toàn profile trên mobile nhỏ (đã có bottom nav / sidebar) */
 @media (max-width: 640px) {
-  .topbar-profile-btn {
-    display: none;
-  }
+  .topbar-profile-btn { display: none; }
 }
 
-/* Dark mode */
 html.dark-mode .topbar-profile-btn:hover {
   background: #334155;
   border-color: #475569;
@@ -777,9 +751,6 @@ button, .primary-btn, .outline-btn, .small-btn,
 
 /* ============================================================
    PHẦN 8: FORMS
-   ------------------------------------------------------------
-   LƯU Ý: Rule `input:focus` global đã bị XÓA vì gây viền kép.
-   Focus ring cho input được định nghĩa trong styles-sky.css FIX-B.
    ============================================================ */
 
 .form-input {
@@ -937,7 +908,6 @@ tbody tr:hover { background: #f8faff; }
 .status.danger  { background: #fee2e2; color: #b91c1c; }
 .status.neutral { background: #e2e8f0; color: #475569; }
 
-
 /* ============================================================
    ATTENDANCE BADGES
    ============================================================ */
@@ -978,27 +948,18 @@ tbody tr:hover { background: #f8faff; }
 }
 
 html.dark-mode .att-badge--ontime {
-  background: #065f46;
-  color: #d1fae5;
-  border-color: #10b981;
+  background: #065f46; color: #d1fae5; border-color: #10b981;
 }
 html.dark-mode .att-badge--late {
-  background: #92400e;
-  color: #fef3c7;
-  border-color: #f59e0b;
+  background: #92400e; color: #fef3c7; border-color: #f59e0b;
 }
 html.dark-mode .att-badge--early {
-  background: #1e3a8a;
-  color: #dbeafe;
-  border-color: #3b82f6;
+  background: #1e3a8a; color: #dbeafe; border-color: #3b82f6;
 }
 html.dark-mode .att-badge--absent,
 html.dark-mode .att-badge--neutral {
-  background: #991b1b;
-  color: #fee2e2;
-  border-color: #ef4444;
+  background: #991b1b; color: #fee2e2; border-color: #ef4444;
 }
-
 
 /* ============================================================
    PHẦN 12: MODAL
@@ -1058,7 +1019,6 @@ body div[style*="position: fixed"][style*="inset: 0"][style*="rgba(0,0,0,0.5)"] 
   padding: 24px 24px 0 !important;
 }
 
-
 /* ============================================================
    INVENTORY BADGES
    ============================================================ */
@@ -1077,41 +1037,26 @@ body div[style*="position: fixed"][style*="inset: 0"][style*="rgba(0,0,0,0.5)"] 
 }
 
 .inv-badge--ok {
-  background: #d1fae5;
-  color: #065f46;
-  border: 1px solid #6ee7b7;
+  background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;
 }
 .inv-badge--low {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
+  background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
 }
 .inv-badge--out {
-  background: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fca5a5;
+  background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;
 }
 
 html.dark-mode .inv-badge--ok {
-  background: #065f46;
-  color: #d1fae5;
-  border-color: #10b981;
+  background: #065f46; color: #d1fae5; border-color: #10b981;
 }
 html.dark-mode .inv-badge--low {
-  background: #92400e;
-  color: #fef3c7;
-  border-color: #f59e0b;
+  background: #92400e; color: #fef3c7; border-color: #f59e0b;
 }
 html.dark-mode .inv-badge--out {
-  background: #991b1b;
-  color: #fee2e2;
-  border-color: #ef4444;
+  background: #991b1b; color: #fee2e2; border-color: #ef4444;
 }
 
-.inv-qty {
-  font-weight: 700;
-  transition: color 0.2s;
-}
+.inv-qty { font-weight: 700; transition: color 0.2s; }
 .inv-qty--ok  { color: #18a967; }
 .inv-qty--low { color: #f59e0b; }
 .inv-qty--out { color: #ef4444; }
@@ -1481,8 +1426,9 @@ html.dark-mode .inv-badge--out {
 
 .banner-dots { pointer-events: none !important; }
 .banner-dots button { pointer-events: auto !important; }
+
 /* ============================================================
-   PHẦN 15: FLASH MARQUEE & FLASH SALE — ĐỒNG NHẤT
+   PHẦN 15: FLASH MARQUEE & FLASH SALE
    ============================================================ */
 
 .flash-marquee {
@@ -1548,7 +1494,6 @@ html.dark-mode .inv-badge--out {
 }
 .flash-sep { color: rgba(255,255,255,0.6); margin-left: 12px; }
 
-/* ✅ Flash grid: đồng nhất với home grid (5 cột) */
 .flash-grid {
   display: grid !important;
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
@@ -1556,261 +1501,24 @@ html.dark-mode .inv-badge--out {
   align-items: stretch !important;
   grid-auto-rows: 1fr !important;
   margin-bottom: 26px !important;
-  justify-content: flex-start !important;
 }
 
-/* ✅ Card flash đồng nhất với food card */
 .flash-grid > * {
   width: 100% !important;
   max-width: 100% !important;
-  min-height: 320px !important;
-  max-height: none !important;
-}
-
-/* Voucher trong flash grid — ảnh vuông */
-.flash-grid > a[href*="promotions"] {
-  min-height: 320px !important;
-  max-height: none !important;
-  display: flex !important;
-  flex-direction: column !important;
-}
-
-.flash-grid > a[href*="promotions"] > div:first-child {
-  width: 100% !important;
-  height: 160px !important;
-  min-width: 100% !important;
-  max-width: 100% !important;
-  border-radius: 12px 12px 0 0 !important;
-  margin: 0 !important;
-  display: grid !important;
-  place-items: center !important;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899) !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-
-.flash-grid > a[href*="promotions"] > div:first-child > div {
-  text-align: center !important;
-  color: #fff !important;
-}
-
-.flash-grid > a[href*="promotions"] > div:first-child > div > div:first-child {
-  font-size: 40px !important;
-  line-height: 1 !important;
-}
-
-.flash-grid > a[href*="promotions"] > div:first-child > div > div:last-child {
-  font-size: 22px !important;
-  font-weight: 800 !important;
-  margin-top: 4px !important;
-}
-
-/* Responsive flash grid */
-@media (max-width: 1200px) {
-  .flash-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 1024px) {
-  .flash-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 768px) {
-  .flash-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 10px !important;
-  }
-
-  .flash-grid > * {
-    min-height: 280px !important;
-  }
-
-  .flash-grid > a[href*="promotions"] {
-    min-height: 280px !important;
-  }
-
-  .flash-grid > a[href*="promotions"] > div:first-child {
-    height: 140px !important;
-  }
-
-  .flash-grid > a[href*="promotions"] > div:first-child > div > div:first-child {
-    font-size: 32px !important;
-  }
-
-  .flash-grid > a[href*="promotions"] > div:first-child > div > div:last-child {
-    font-size: 18px !important;
-  }
-}
-
-@media (max-width: 480px) {
-  .flash-grid > a[href*="promotions"] > div:first-child {
-    height: 120px !important;
-  }
-
-  .flash-grid > a[href*="promotions"] > div:first-child > div > div:first-child {
-    font-size: 28px !important;
-  }
-
-  .flash-grid > a[href*="promotions"] > div:first-child > div > div:last-child {
-    font-size: 16px !important;
-  }
 }
 
 /* ============================================================
-   PHẦN 16: FOOD CARDS & MENU GRIDS
+   PHẦN 16: HOME FOOD GRID (dùng cho CustomerHome)
    ============================================================ */
 
-.home-food-grid-5 {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 14px;
-  align-items: stretch !important;
-  grid-auto-rows: 1fr !important;
-}
-
+.home-food-grid-5,
 .home-food-grid-4 {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 220px));
-  gap: 14px;
-  justify-content: flex-start;
-  align-items: stretch !important;
-  grid-auto-rows: 1fr !important;
-}
-
-.menu-food-grid {
   display: grid !important;
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   gap: 14px !important;
   grid-auto-rows: 1fr !important;
   align-items: stretch !important;
-}
-
-.home-cat-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 12px;
-}
-.home-testi-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-}
-
-.food-card-clickable {
-  background: var(--card-bg, #fff);
-  border: 1px solid #e5e9ef;
-  border-radius: 14px;
-  overflow: hidden;
-  cursor: pointer;
-  position: relative !important;
-  display: flex !important;
-  flex-direction: column !important;
-  height: 100% !important;
-  min-width: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
-  transition: all 0.25s;
-}
-.food-card-clickable:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 30px rgba(38, 52, 213, 0.15) !important;
-  border-color: #2634d5;
-}
-
-/* Ảnh cơ bản cho mọi food card — sẽ bị override bởi PHẦN 35 */
-.food-card-clickable > img,
-.food-card-clickable > div:first-child > img {
-  display: block !important;
-  object-fit: cover !important;
-  transition: transform 0.3s ease !important;
-}
-.food-card-clickable:hover > img,
-.food-card-clickable:hover > div:first-child > img {
-  transform: scale(1.05) !important;
-}
-
-.food-card-clickable > div {
-  text-align: center !important;
-  padding: 0 10px 10px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  flex: 1 !important;
-}
-
-.food-card-clickable h4 {
-  text-align: center !important;
-  min-height: 34px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  margin: 4px 0 !important;
-  font-size: 13px !important;
-  line-height: 1.3 !important;
-  color: var(--text-primary, #172033) !important;
-}
-
-.food-card-clickable > div > b,
-.food-card-clickable > div > span[style*="18a967"] {
-  display: block !important;
-  text-align: center !important;
-  margin-top: auto !important;
-  margin-bottom: 8px !important;
-  min-height: 24px !important;
-  font-size: 16px !important;
-  color: #18a967 !important;
-}
-
-.food-card-clickable > div > div:last-child {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 6px !important;
-  margin-top: 8px !important;
-  padding: 0 4px 8px !important;
-}
-
-.food-card-clickable > div > div:last-child > button:first-child {
-  background: var(--bg-tertiary, #f5f7fb) !important;
-  background-image: none !important;
-  color: var(--text-primary, #172033) !important;
-  -webkit-text-fill-color: #172033 !important;
-  border: 1px solid var(--border-color, #e5e9ef) !important;
-  padding: 8px 6px !important;
-  border-radius: 8px !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  height: 34px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px !important;
-  cursor: pointer !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-  line-height: 1 !important;
-}
-
-.food-card-clickable > div > div:last-child > button:last-child {
-  background-color: #2634d5 !important;
-  background-image: linear-gradient(135deg, #2634d5, #3b4bef) !important;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
-  border: 1.5px solid #2634d5 !important;
-  padding: 8px 6px !important;
-  border-radius: 8px !important;
-  font-size: 12px !important;
-  font-weight: 700 !important;
-  height: 34px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px !important;
-  cursor: pointer !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-  line-height: 1 !important;
-  box-shadow: 0 2px 8px rgba(38, 52, 213, 0.3) !important;
 }
 
 /* ============================================================
@@ -1840,9 +1548,6 @@ html.dark-mode .inv-badge--out {
   top: 80px !important;
   width: 100% !important;
   box-sizing: border-box !important;
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
 }
 
 .checkout-2col > div:last-child table,
@@ -2136,9 +1841,7 @@ html.dark-mode .inv-badge--out {
 }
 
 /* ============================================================
-   PHẦN 20: TOAST
-   ------------------------------------------------------------
-   Toast căn giữa màn hình. Các rule cũ (góc phải trên) đã xóa.
+   PHẦN 20: TOAST — căn giữa màn hình
    ============================================================ */
 
 .toast-container {
@@ -2178,7 +1881,6 @@ html.dark-mode .inv-badge--out {
     0 8px 20px rgba(0, 0, 0, 0.2) !important;
   pointer-events: auto !important;
   animation: toastCenterPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-  will-change: transform, opacity;
 }
 
 .toast.toast-exit {
@@ -2222,13 +1924,11 @@ html.dark-mode .inv-badge--out {
   place-items: center !important;
   padding: 0 !important;
   opacity: 0.85 !important;
-  transition: all 0.15s !important;
 }
 
 .toast__close:hover {
   opacity: 1 !important;
   background: rgba(255, 255, 255, 0.4) !important;
-  transform: scale(1.05);
 }
 
 .toast__close svg {
@@ -2237,13 +1937,11 @@ html.dark-mode .inv-badge--out {
   stroke-width: 2.5 !important;
 }
 
-/* Type variants */
 .toast--success { background: linear-gradient(135deg, #18a967, #158a54) !important; }
 .toast--error   { background: linear-gradient(135deg, #ef4444, #dc2626) !important; }
 .toast--warning { background: linear-gradient(135deg, #f59e0b, #d97706) !important; }
 .toast--info    { background: linear-gradient(135deg, #2634d5, #1c28b0) !important; }
 
-/* Animations */
 @keyframes toastCenterPop {
   0%   { opacity: 0; transform: scale(0.85); }
   100% { opacity: 1; transform: scale(1); }
@@ -2254,7 +1952,6 @@ html.dark-mode .inv-badge--out {
   100% { opacity: 0; transform: scale(0.9); }
 }
 
-/* Mobile: co lại cho vừa */
 @media (max-width: 480px) {
   .toast-container {
     left: 16px !important;
@@ -2310,8 +2007,6 @@ html.dark-mode .inv-badge--out {
   top: 64px !important;
   z-index: 90 !important;
   width: 100% !important;
-  justify-content: center !important;
-  align-items: center !important;
   box-shadow: 0 2px 8px -2px rgba(0,0,0,0.04);
 }
 
@@ -2415,37 +2110,21 @@ html.dark-mode { color-scheme: dark; }
 html.dark-mode body { background: #0f172a; color: #e2e8f0; }
 html.dark-mode .app-shell, html.dark-mode .main { background: #0f172a; }
 html.dark-mode .sidebar, html.dark-mode aside { background: #020617; }
-html.dark-mode .topbar {
-  background: #1e293b !important;
-  border-bottom-color: #334155 !important;
-}
-html.dark-mode .panel, html.dark-mode .card {
-  background: #1e293b;
-  border-color: #334155;
-  color: #e2e8f0;
-}
+html.dark-mode .topbar { background: #1e293b !important; border-bottom-color: #334155 !important; }
+html.dark-mode .panel, html.dark-mode .card { background: #1e293b; border-color: #334155; color: #e2e8f0; }
 html.dark-mode .page-heading h1 { color: #f1f5f9; }
 html.dark-mode .page-heading p { color: #94a3b8; }
 
 html.dark-mode table { background: transparent; color: #e2e8f0; }
-html.dark-mode table th {
-  background: #334155;
-  color: #cbd5e1;
-  border-bottom-color: #475569;
-}
-html.dark-mode table td {
-  color: #e2e8f0;
-  border-bottom-color: #334155;
-}
+html.dark-mode table th { background: #334155; color: #cbd5e1; border-bottom-color: #475569; }
+html.dark-mode table td { color: #e2e8f0; border-bottom-color: #334155; }
 html.dark-mode tbody tr:hover { background: rgba(59, 130, 246, 0.08); }
 
 html.dark-mode .form-input,
 html.dark-mode input:not([type="checkbox"]),
 html.dark-mode textarea,
 html.dark-mode select {
-  background: #0f172a;
-  color: #e2e8f0;
-  border-color: #334155;
+  background: #0f172a; color: #e2e8f0; border-color: #334155;
 }
 
 html.dark-mode .primary-btn { background: #3b82f6; }
@@ -2472,9 +2151,9 @@ html.dark-mode .empty-state,
 html.dark-mode .success-state { background: #1e293b; color: #cbd5e1; }
 
 html.dark-mode .app-footer { background: #1e293b; border-color: #334155; }
-html.dark-mode .footer-brand b, html.dark-mode .footer-value { color: #f1f5f9; }
-html.dark-mode .footer-desc, html.dark-mode .footer-heading, html.dark-mode .footer-label { color: #94a3b8; }
-html.dark-mode .footer-link { color: #60a5fa; }
+html.dark-mode .footer-brand b { color: #f1f5f9; }
+html.dark-mode .footer-desc,
+html.dark-mode .footer-heading { color: #94a3b8; }
 html.dark-mode .footer-social { background: #0f172a; border-color: #334155; }
 html.dark-mode .footer-map { border-color: #334155; }
 
@@ -2495,12 +2174,10 @@ html.dark-mode .menu-cats-scroll {
 }
 html.dark-mode .menu-cats-scroll > button.cat-chip { color: #94a3b8 !important; }
 html.dark-mode .menu-cats-scroll > button.cat-chip:hover {
-  color: #60a5fa !important;
-  background: rgba(255, 255, 255, 0.05) !important;
+  color: #60a5fa !important; background: rgba(255, 255, 255, 0.05) !important;
 }
 html.dark-mode .menu-cats-scroll > button.cat-chip.active {
-  background: #0f172a !important;
-  color: #60a5fa !important;
+  background: #0f172a !important; color: #60a5fa !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
 }
 
@@ -2520,18 +2197,13 @@ html.dark-mode .topbar-icon-btn[title="Đăng xuất"]:hover { background: rgba(
 html.dark-mode .nav-badge { background: #ef4444; color: #fff; }
 html.dark-mode .nav-link.active .nav-badge { background: #fff; color: #ef4444; }
 
-html.dark-mode .header-nav,
-html.dark-mode .menu-cats-scroll {
+html.dark-mode .header-nav {
   background: var(--card-bg, #1e293b) !important;
   border-color: #334155 !important;
 }
 
 html.dark-mode ::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.3);
-  background-clip: padding-box;
-}
-html.dark-mode ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
   background-clip: padding-box;
 }
 html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
@@ -2541,8 +2213,11 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
    ============================================================ */
 
 @media (max-width: 1200px) {
-  .home-food-grid-5 { grid-template-columns: repeat(4, 1fr); }
-  .menu-food-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .home-food-grid-5,
+  .home-food-grid-4,
+  .flash-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -2579,18 +2254,18 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   }
   .hamburger-btn svg { width: 20px !important; height: 20px !important; }
 
-  .home-food-grid-5 { grid-template-columns: repeat(3, 1fr); }
+  .home-food-grid-5,
+  .home-food-grid-4,
+  .flash-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
   .home-cat-grid { grid-template-columns: repeat(4, 1fr); }
   .home-testi-grid { grid-template-columns: repeat(2, 1fr); }
-  .menu-food-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
   .stats-grid-4 { grid-template-columns: repeat(2, 1fr); }
-  .emp-home-grid { grid-template-columns: 1fr; }
   .dashboard-2col { grid-template-columns: 1fr; }
+
   .banner-carousel { height: 260px !important; }
   .banner-title { font-size: 24px !important; }
-  .topbar-logo { gap: 10px !important; padding-right: 8px !important; }
-  .topbar-logo-text b { font-size: 13px !important; }
-  .topbar-logo-text small { font-size: 9px !important; letter-spacing: 1.5px !important; }
 }
 
 @media (max-width: 768px) {
@@ -2615,8 +2290,7 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .global-search-input input { font-size: 12px !important; }
 
   .topbar-right, header > div:last-child {
-    gap: 4px !important;
-    flex-shrink: 0 !important;
+    gap: 4px !important; flex-shrink: 0 !important;
   }
   .topbar-right > *,
   .topbar-right .icon-btn,
@@ -2634,8 +2308,6 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
     min-width: 16px !important; height: 16px !important;
     font-size: 9px !important; border-width: 1.5px !important;
   }
-
-  .topbar-right::before { display: none; }
 
   .sidebar, aside {
     width: clamp(190px, 52vw, 240px) !important;
@@ -2657,32 +2329,23 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .sidebar nav a svg,
   aside nav a svg,
   .nav-link svg {
-    width: 16px !important;
-    height: 16px !important;
-    flex-shrink: 0 !important;
+    width: 16px !important; height: 16px !important; flex-shrink: 0 !important;
   }
   .sidebar .brand, aside > div:first-child {
-    padding: 6px 2px 14px !important;
-    gap: 10px !important;
+    padding: 6px 2px 14px !important; gap: 10px !important;
   }
   .brand-mark {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 16px !important;
-    border-radius: 8px !important;
+    width: 32px !important; height: 32px !important;
+    font-size: 16px !important; border-radius: 8px !important;
   }
   .brand-text strong { font-size: 12px !important; letter-spacing: 0.5px !important; }
   .brand-text small { font-size: 9px !important; letter-spacing: 1.5px !important; }
   .role-chip {
-    font-size: 10px !important;
-    padding: 4px 10px !important;
-    margin-bottom: 10px !important;
+    font-size: 10px !important; padding: 4px 10px !important; margin-bottom: 10px !important;
   }
   .nav-badge {
-    font-size: 9px !important;
-    min-width: 16px !important;
-    height: 16px !important;
-    padding: 0 4px !important;
+    font-size: 9px !important; min-width: 16px !important;
+    height: 16px !important; padding: 0 4px !important;
   }
   .logout-btn {
     padding: 10px 10px !important;
@@ -2690,51 +2353,25 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
     gap: 10px !important;
   }
 
-  .sidebar.mobile-open .close-sidebar,
-  aside.mobile-open .close-sidebar,
-  body.sidebar-open .sidebar .close-sidebar,
-  body.sidebar-open aside .close-sidebar {
-    display: none !important;
-  }
-
   .mobile-overlay.active {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 19;
+    display: block; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 19;
     animation: fadeIn 0.2s ease;
   }
 
-  .food-grid,
   .home-food-grid-5,
   .home-food-grid-4,
-  .menu-food-grid {
+  .flash-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
   }
   .home-cat-grid { grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important; }
   .home-testi-grid { grid-template-columns: 1fr !important; }
   .stats-grid-4 { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
-  .emp-home-grid { grid-template-columns: 1fr !important; }
   .dashboard-2col { grid-template-columns: 1fr !important; }
   .checkout-2col, .cart-2col { grid-template-columns: 1fr !important; }
   .footer-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
   .app-footer { padding: 16px !important; border-radius: 12px !important; }
-
-  .menu-food-grid .food-card-clickable > img,
-  .menu-food-grid .food-card-clickable > div:first-child > img {
-    height: 140px !important;
-  }
-
-  .food-card-clickable h4 {
-    font-size: 12px !important;
-    min-height: 30px !important;
-  }
-  .food-card-clickable > div > b { font-size: 14px !important; }
-  .food-card-clickable > div { padding: 8px !important; }
-  .food-card-clickable button { font-size: 10px !important; padding: 6px 4px !important; gap: 2px !important; }
-  .food-card-clickable button svg { width: 11px !important; height: 11px !important; }
 
   table {
     display: block !important;
@@ -2819,9 +2456,7 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .footer-socials { gap: 8px !important; }
   .footer-social { width: 36px !important; height: 36px !important; border-radius: 10px !important; }
   .footer-copyright {
-    margin-top: 12px !important;
-    padding-top: 12px !important;
-    font-size: 10.5px !important;
+    margin-top: 12px !important; padding-top: 12px !important; font-size: 10.5px !important;
   }
   body.has-bottom-nav .page-content .app-footer { margin-bottom: 70px !important; }
 
@@ -2835,106 +2470,17 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .flash-item { font-size: 12px !important; }
   .flash-track { gap: 28px !important; padding-left: 16px !important; }
 
-  .flash-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 10px !important;
-  }
-  .flash-grid > * {
-    max-width: 100% !important;
-    min-height: 240px !important;
-    max-height: none !important;
-  }
-  .flash-grid > a[href*="promotions"] > div:first-child {
-    width: 70px !important; height: 70px !important;
-    min-width: 70px !important; max-width: 70px !important;
-    margin: 14px auto 10px !important;
-  }
-  .flash-grid > a[href*="promotions"] > div:first-child > div > div:first-child { font-size: 22px !important; }
-  .flash-grid > a[href*="promotions"] > div:first-child > div > div:last-child { font-size: 13px !important; }
-
-  .page-content > div > h3 {
-    font-size: 15px !important;
-    margin-bottom: 10px !important;
-  }
-  .page-content h3 span[style*="HOT"] { font-size: 8px !important; padding: 2px 7px !important; }
-
-  .home-cat-grid > a { padding: 10px 4px !important; gap: 4px !important; }
-  .home-cat-grid > a > div:first-child {
-    width: 36px !important; height: 36px !important;
-    font-size: 18px !important;
-  }
-  .home-cat-grid > a > span:last-child { font-size: 10px !important; }
-
-  .chat-tabs button { padding: 12px 8px !important; gap: 6px !important; }
-  .chat-tabs button svg { width: 16px !important; height: 16px !important; }
-  .chat-tabs button > div:last-child { font-size: 12px !important; }
-
-  .stats-grid-4 h2, .kpi-body b { font-size: 18px !important; }
-  .stats-grid-4 > div { padding: 12px !important; }
-  .stats-grid-4 h2 { font-size: 16px !important; }
-  .stats-grid-4 > div > div:first-child { width: 36px !important; height: 36px !important; }
-
-  .orders-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
-
-  html body .page-content .order-filter-row {
-    display: flex !important;
-    gap: 8px !important;
-    overflow-x: auto !important;
-    flex-wrap: nowrap !important;
-    padding: 4px 0 10px !important;
-    scrollbar-width: none !important;
-    -webkit-overflow-scrolling: touch !important;
-    margin-left: -12px !important;
-    margin-right: -12px !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-  }
-  html body .page-content .order-filter-row::-webkit-scrollbar { display: none !important; }
-  html body .page-content .order-filter-row > button {
-    flex-shrink: 0 !important;
-    padding: 8px 14px !important;
-    font-size: 12.5px !important;
-    border-radius: 20px !important;
-    white-space: nowrap !important;
-    font-weight: 600 !important;
-  }
-
-  .wallet-hero-btns {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
-    flex-wrap: nowrap !important;
-    width: 100% !important;
-  }
-  .wallet-hero-btns > button {
-    width: 100% !important;
-    justify-content: center !important;
-    padding: 12px 8px !important;
-    font-size: 12.5px !important;
-  }
-  .wallet-hero-btns > button:nth-child(3) {
-    grid-column: 1 / -1 !important;
-    padding: 12px 16px !important;
-  }
-
   body.has-bottom-nav .page-content { padding-bottom: 90px !important; }
   .header-nav { display: none !important; }
   .bottom-nav { display: flex !important; }
-
-  .menu-cats-scroll {
-    position: sticky !important;
-    top: 105px !important;
-    z-index: 8 !important;
-    background: var(--bg-primary, #f5f7fb) !important;
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
-  }
 }
 
 @media (max-width: 480px) {
   .page-content { padding: 12px !important; }
 
-  .topbar, header[style*="sticky"] { padding: 0 8px !important; gap: 6px !important; height: 54px !important; }
+  .topbar, header[style*="sticky"] {
+    padding: 0 8px !important; gap: 6px !important; height: 54px !important;
+  }
   .topbar-logo-img { width: 32px !important; height: 32px !important; }
   .topbar-icon-btn, .cart-topbar-icon {
     width: 32px !important; height: 32px !important;
@@ -2948,19 +2494,13 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .hamburger-btn { width: 34px !important; height: 34px !important; margin-right: 8px !important; }
   .hamburger-btn svg { width: 18px !important; height: 18px !important; }
 
-  .food-grid, .home-food-grid-5, .home-food-grid-4, .menu-food-grid {
+  .home-food-grid-5,
+  .home-food-grid-4,
+  .flash-grid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 8px !important;
   }
   .home-cat-grid { grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important; }
-
-  .menu-food-grid .food-card-clickable > img,
-  .menu-food-grid .food-card-clickable > div:first-child > img {
-    height: 120px !important;
-  }
-
-  .food-card-clickable h4 { font-size: 12px !important; min-height: 28px !important; }
-  .food-card-clickable > div > b { font-size: 13px !important; }
 
   .banner-carousel { height: 220px !important; }
   .banner-carousel > div > div { padding: 0 36px !important; }
@@ -2982,9 +2522,13 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .login-card .input-icon { padding: 8px 11px !important; min-height: 38px !important; max-height: 38px !important; }
   .login-card .input-icon input { font-size: 12.5px !important; }
   .login-card .input-icon svg { width: 14px !important; height: 14px !important; }
-  .login-icon::after { display: none !important; }
 
-  .flash-marquee { padding-left: 100px !important; padding-right: 30px !important; height: 38px !important; border-radius: 20px !important; }
+  .flash-marquee {
+    padding-left: 100px !important;
+    padding-right: 30px !important;
+    height: 38px !important;
+    border-radius: 20px !important;
+  }
   .flash-label { padding: 0 10px !important; font-size: 9px !important; }
 
   html body .cart-item-grid {
@@ -3004,7 +2548,8 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .profile-info { display: none !important; }
   .banner-carousel { height: 200px !important; }
   .banner-title { font-size: 15px !important; }
-  .home-food-grid-5, .home-food-grid-4, .menu-food-grid {
+  .home-food-grid-5,
+  .home-food-grid-4 {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 8px !important;
   }
@@ -3026,7 +2571,6 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .icon-btn, .hamburger-btn, .nav-link, .primary-btn, .outline-btn, .small-btn {
     min-height: 40px;
   }
-  .food-card-clickable button { min-height: 34px; }
   button, a { -webkit-tap-highlight-color: transparent; }
 }
 
@@ -3039,7 +2583,7 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
    PHẦN 26: UX POLISH & ANIMATIONS
    ============================================================ */
 
-button, a, input, textarea, select, .nav-link, .food-card-clickable,
+button, a, input, textarea, select, .nav-link,
 .icon-btn, .primary-btn, .outline-btn, .small-btn, .cat-chip,
 .status, .card, .panel, .modal, .sidebar {
   transition: background-color 0.2s ease, color 0.2s ease,
@@ -3103,12 +2647,10 @@ button svg, .primary-btn svg, .outline-btn svg, .small-btn svg {
 @media (min-width: 1025px) {
   .hamburger-btn { display: none !important; visibility: hidden !important; }
 }
+
 @media (min-width: 769px) {
   .mobile-overlay { display: none !important; }
   .close-sidebar { display: none !important; }
-}
-
-@media (min-width: 769px) {
   .bottom-nav { display: none !important; }
   .header-nav { display: block !important; }
 }
@@ -3189,7 +2731,7 @@ button svg, .primary-btn svg, .outline-btn svg, .small-btn svg {
 }
 
 /* ============================================================
-   PHẦN 29: BỔ SUNG CHO CÁC COMPONENT MỚI
+   PHẦN 29: CHATBOT PULSE + TYPING DOTS
    ============================================================ */
 
 .chatbot-pulse {
@@ -3231,7 +2773,6 @@ button svg, .primary-btn svg, .outline-btn svg, .small-btn svg {
 }
 
 html.dark-mode .dot-typing { background: #a78bfa; }
-
 
 /* ---------- BottomNav: Menu "Thêm" ---------- */
 
@@ -3335,255 +2876,11 @@ html.dark-mode .dot-typing { background: #a78bfa; }
   margin: 8px 4px;
 }
 
-html.dark-mode .bottom-nav-more-menu {
-  background: #1e293b;
-}
-html.dark-mode .bottom-nav-more-head {
-  border-color: #334155;
-}
-html.dark-mode .bottom-nav-more-item {
-  color: #e2e8f0;
-}
+html.dark-mode .bottom-nav-more-menu { background: #1e293b; }
+html.dark-mode .bottom-nav-more-head { border-color: #334155; }
+html.dark-mode .bottom-nav-more-item { color: #e2e8f0; }
 html.dark-mode .bottom-nav-more-item:hover,
-html.dark-mode .bottom-nav-more-item.active {
-  background: #334155;
-}
-
-
-/* ---------- Profile ---------- */
-
-.profile-grid {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: 20px;
-}
-
-.profile-card-left,
-.profile-card-right {
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--border-color, #e7ebf0);
-  border-radius: 12px;
-  padding: 24px;
-}
-
-.profile-avatar-wrap {
-  position: relative;
-  width: 100px;
-  height: 100px;
-  margin: 0 auto 14px;
-}
-
-.profile-avatar {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 36px;
-  border: 3px solid var(--border-color, #e5e9ef);
-  overflow: hidden;
-}
-
-.profile-points-card {
-  margin-top: 20px;
-  padding: 16px;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(239, 68, 68, 0.12));
-  border-radius: 12px;
-  border: 1px solid rgba(245, 158, 11, 0.25);
-}
-
-.btn-change-pwd {
-  width: 100%;
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--bg-tertiary, #f5f7fb);
-  color: var(--text-primary, #172033);
-  border: 1px solid var(--border-color, #e5e9ef);
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: all 0.15s;
-}
-
-.btn-change-pwd:hover {
-  background: var(--card-bg, #fff);
-  border-color: #2634d5;
-  color: #2634d5;
-}
-
-.btn-cancel,
-.btn-save {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.btn-cancel {
-  background: var(--card-bg, #fff);
-  color: var(--text-primary, #475569);
-  border: 1px solid var(--border-color, #e5e9ef);
-}
-
-.btn-cancel:hover {
-  background: var(--bg-tertiary, #f5f7fb);
-}
-
-.btn-save {
-  background: #18a967;
-  color: #fff;
-  border: 0;
-}
-
-.btn-save:hover {
-  background: #158a54;
-}
-
-@media (max-width: 900px) {
-  .profile-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-
-/* ---------- Orders ---------- */
-
-.order-card {
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--border-color, #e7ebf0);
-  border-radius: 14px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  transition: all 0.2s;
-}
-
-.order-card:hover {
-  box-shadow: 0 8px 24px rgba(38, 52, 213, 0.08);
-  transform: translateY(-2px);
-}
-
-.order-filter-box {
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--border-color, #e7ebf0);
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 20px;
-}
-
-.order-filter-row {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-@keyframes rainbow {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-html.dark-mode .order-card {
-  background: #1e293b;
-  border-color: #334155;
-}
-html.dark-mode .order-filter-box {
-  background: #1e293b;
-  border-color: #334155;
-}
-
-
-/* ---------- Success page ---------- */
-
-.success-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  padding: 48px 32px;
-  text-align: center;
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--border-color, #e7ebf0);
-  border-radius: 14px;
-}
-
-.success-icon {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, rgba(24, 169, 103, 0.15), rgba(24, 169, 103, 0.08));
-  color: #18a967;
-  display: grid;
-  place-items: center;
-  margin-bottom: 8px;
-  animation: successPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes successPop {
-  0%   { transform: scale(0.5); opacity: 0; }
-  100% { transform: scale(1);   opacity: 1; }
-}
-
-.success-box {
-  display: inline-flex;
-  align-items: center;
-  gap: 40px;
-  padding: 14px 24px;
-  background: linear-gradient(135deg, rgba(38, 52, 213, 0.06), rgba(32, 199, 121, 0.06));
-  border-radius: 12px;
-  border: 1px solid rgba(38, 52, 213, 0.15);
-  min-width: 260px;
-  justify-content: space-between;
-}
-
-html.dark-mode .success-state {
-  background: #1e293b;
-  border-color: #334155;
-}
-
-
-/* ---------- Wallet ---------- */
-
-.wallet-hero-btns {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.wallet-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-@media (max-width: 640px) {
-  .wallet-stats-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-}
-
-
-/* ---------- Utilities ---------- */
-
-@media (hover: none) {
-  .food-card-clickable:hover {
-    transform: none !important;
-  }
-}
-
+html.dark-mode .bottom-nav-more-item.active { background: #334155; }
 
 /* ============================================================
    PHẦN 30: CURSOR GLOW & BG PARTICLES
@@ -3622,9 +2919,7 @@ html.dark-mode .cursor-glow {
 }
 
 @media (hover: none) {
-  .cursor-glow {
-    display: none !important;
-  }
+  .cursor-glow { display: none !important; }
 }
 
 .bg-particles {
@@ -3652,7 +2947,7 @@ html.dark-mode .bg-particles {
 }
 
 /* ============================================================
-   PHẦN 30 (bổ sung): PAYMENT SELECTOR
+   PHẦN 31: PAYMENT SELECTOR
    ============================================================ */
 
 .payment-selector { margin-bottom: 16px; }
@@ -3785,7 +3080,7 @@ html.dark-mode .payment-card .pm-body > span { color: #94a3b8; }
 }
 
 /* ============================================================
-   PHẦN 31: TOPBAR FIX — Căn đều + search rộng
+   PHẦN 32: TOPBAR LAYOUT FINAL
    ============================================================ */
 
 .topbar {
@@ -3867,7 +3162,7 @@ html.dark-mode .payment-card .pm-body > span { color: #94a3b8; }
 }
 
 /* ============================================================
-   PHẦN 32: BANNER IMAGE FIX
+   PHẦN 33: BANNER DETAILS
    ============================================================ */
 
 .banner-carousel > div > div {
@@ -3886,222 +3181,13 @@ html.dark-mode .payment-card .pm-body > span { color: #94a3b8; }
   inset: 0 !important;
   background: linear-gradient(
     120deg,
-    rgba(10, 15, 30, 0.92) 0%,
-    rgba(10, 15, 30, 0.7) 50%,
-    rgba(10, 15, 30, 0.4) 100%
+    rgba(10, 15, 30, 0.85) 0%,
+    rgba(10, 15, 30, 0.6) 50%,
+    rgba(10, 15, 30, 0.3) 100%
   ) !important;
   pointer-events: none !important;
   z-index: 1 !important;
 }
-
-/* ============================================================
-   PHẦN 33: HEADER NAV FIX — Tab gọn hơn
-   ============================================================ */
-
-.header-nav-inner { gap: 2px !important; justify-content: center !important; }
-
-.header-nav-item {
-  padding: 14px 20px !important;
-  border-radius: 8px !important;
-  border-bottom: 3px solid transparent !important;
-}
-
-.header-nav-item:hover {
-  background: rgba(38, 52, 213, 0.05) !important;
-  border-radius: 8px 8px 0 0 !important;
-}
-
-/* ============================================================
-   PHẦN 34: FLASH MARQUEE FIX — Label rõ hơn
-   ============================================================ */
-
-.flash-label {
-  background: linear-gradient(135deg, #fff, #ffe4e6) !important;
-  color: #ef4444 !important;
-  font-weight: 800 !important;
-  letter-spacing: 1px !important;
-  box-shadow: 4px 0 16px rgba(239, 68, 68, 0.4) !important;
-  padding: 0 20px !important;
-}
-
-/* ============================================================
-   PHẦN 35: FOOD CARD FIX — ĐỒNG NHẤT TẤT CẢ CÁC TRANG
-   ------------------------------------------------------------
-   ✅ ẢNH VUÔNG/CHỮ NHẬT cho TẤT CẢ grid (không còn tròn)
-   ✅ Đồng nhất kích thước card giữa trang chủ / menu / signature
-   ✅ Fix lệch chữ: rating row luôn có min-height cố định
-   ============================================================ */
-
-/* ---------- Ảnh trong home grids + menu grid: ĐỀU LÀ 160px ---------- */
-.home-food-grid-5 .food-card-clickable > img,
-.home-food-grid-5 .food-card-clickable > div:first-child > img,
-.home-food-grid-4 .food-card-clickable > img,
-.home-food-grid-4 .food-card-clickable > div:first-child > img,
-.menu-food-grid .food-card-clickable > img,
-.menu-food-grid .food-card-clickable > div:first-child > img,
-.flash-grid .food-card-clickable > img,
-.flash-grid .food-card-clickable > div:first-child > img {
-  width: 100% !important;
-  height: 160px !important;
-  border-radius: 12px 12px 0 0 !important;
-  object-fit: cover !important;
-  object-position: center !important;
-  display: block !important;
-  margin: 0 !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-
-.home-food-grid-5 .food-card-clickable:hover > img,
-.home-food-grid-5 .food-card-clickable:hover > div:first-child > img,
-.home-food-grid-4 .food-card-clickable:hover > img,
-.home-food-grid-4 .food-card-clickable:hover > div:first-child > img,
-.menu-food-grid .food-card-clickable:hover > img,
-.menu-food-grid .food-card-clickable:hover > div:first-child > img {
-  transform: scale(1.05) !important;
-  box-shadow: none !important;
-}
-
-/* ---------- Đồng nhất grid: 5 cột cho mọi trang ---------- */
-.home-food-grid-5,
-.home-food-grid-4 {
-  display: grid !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  gap: 14px !important;
-  grid-auto-rows: 1fr !important;
-  align-items: stretch !important;
-}
-
-.menu-food-grid {
-  display: grid !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  gap: 14px !important;
-  grid-auto-rows: 1fr !important;
-  align-items: stretch !important;
-}
-
-/* ---------- Card đồng nhất chiều cao ---------- */
-.food-card-clickable {
-  display: flex !important;
-  flex-direction: column !important;
-  min-height: 320px !important;
-  height: 100% !important;
-}
-
-/* Phần body của card: ép dùng flex để các phần căn đều */
-.food-card-clickable > div:last-child {
-  display: flex !important;
-  flex-direction: column !important;
-  flex: 1 !important;
-  padding: 12px 14px 14px !important;
-}
-
-/* ---------- Fix lệch chữ: RATING ROW luôn có min-height ---------- */
-.food-card-clickable .food-rating-row,
-.food-card-clickable > div:last-child > div[style*="Star"],
-.food-card-clickable > div:last-child > div:has(svg) {
-  min-height: 22px !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-  margin-bottom: 8px !important;
-  font-size: 12px !important;
-}
-
-/* ---------- Giá: luôn nằm dưới cùng với min-height ---------- */
-.food-card-clickable > div:last-child > b,
-.food-card-clickable > div:last-child > span:last-of-type {
-  margin-top: auto !important;
-  margin-bottom: 8px !important;
-  min-height: 24px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  font-size: 16px !important;
-  color: #18a967 !important;
-}
-
-/* ---------- Nút Thêm / Mua ngay: đồng nhất ---------- */
-.food-card-clickable > div:last-child > div:last-child {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 8px !important;
-  margin-top: auto !important;
-  padding-top: 8px !important;
-}
-
-.food-card-clickable > div:last-child > div:last-child > button {
-  height: 36px !important;
-  padding: 0 8px !important;
-  font-size: 12px !important;
-  border-radius: 8px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-/* ---------- Responsive: giảm cột trên tablet/mobile ---------- */
-@media (max-width: 1200px) {
-  .home-food-grid-5,
-  .home-food-grid-4,
-  .menu-food-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 1024px) {
-  .home-food-grid-5,
-  .home-food-grid-4,
-  .menu-food-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 768px) {
-  .home-food-grid-5,
-  .home-food-grid-4,
-  .menu-food-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 10px !important;
-  }
-
-  /* Mobile: ảnh cũng vuông chữ nhật 140px */
-  .home-food-grid-5 .food-card-clickable > img,
-  .home-food-grid-5 .food-card-clickable > div:first-child > img,
-  .home-food-grid-4 .food-card-clickable > img,
-  .home-food-grid-4 .food-card-clickable > div:first-child > img,
-  .menu-food-grid .food-card-clickable > img,
-  .menu-food-grid .food-card-clickable > div:first-child > img {
-    height: 140px !important;
-  }
-
-  .food-card-clickable {
-    min-height: 280px !important;
-  }
-}
-
-@media (max-width: 480px) {
-  .home-food-grid-5 .food-card-clickable > img,
-  .home-food-grid-5 .food-card-clickable > div:first-child > img,
-  .home-food-grid-4 .food-card-clickable > img,
-  .home-food-grid-4 .food-card-clickable > div:first-child > img,
-  .menu-food-grid .food-card-clickable > img,
-  .menu-food-grid .food-card-clickable > div:first-child > img {
-    height: 120px !important;
-  }
-
-  .food-card-clickable {
-    min-height: 260px !important;
-  }
-}
-
-/* ============================================================
-   PHẦN 36: BANNER DOTS + CTA FIX
-   ============================================================ */
 
 .banner-dots {
   z-index: 100 !important;
@@ -4133,15 +3219,6 @@ html.dark-mode .payment-card .pm-body > span { color: #94a3b8; }
   width: 28px !important;
   background: #fff !important;
   box-shadow: 0 2px 12px rgba(255, 255, 255, 0.6) !important;
-}
-
-.banner-carousel > div > div::after {
-  background: linear-gradient(
-    120deg,
-    rgba(10, 15, 30, 0.85) 0%,
-    rgba(10, 15, 30, 0.6) 50%,
-    rgba(10, 15, 30, 0.3) 100%
-  ) !important;
 }
 
 .banner-btn {
@@ -4193,7 +3270,33 @@ html.dark-mode .payment-card .pm-body > span { color: #94a3b8; }
 }
 
 /* ============================================================
-   PHẦN 37: LOGIN V8 — clean version
+   PHẦN 34: HEADER NAV FINAL + FLASH LABEL
+   ============================================================ */
+
+.header-nav-inner { gap: 2px !important; justify-content: center !important; }
+
+.header-nav-item {
+  padding: 14px 20px !important;
+  border-radius: 8px !important;
+  border-bottom: 3px solid transparent !important;
+}
+
+.header-nav-item:hover {
+  background: rgba(38, 52, 213, 0.05) !important;
+  border-radius: 8px 8px 0 0 !important;
+}
+
+.flash-label {
+  background: linear-gradient(135deg, #fff, #ffe4e6) !important;
+  color: #ef4444 !important;
+  font-weight: 800 !important;
+  letter-spacing: 1px !important;
+  box-shadow: 4px 0 16px rgba(239, 68, 68, 0.4) !important;
+  padding: 0 20px !important;
+}
+
+/* ============================================================
+   PHẦN 35: LOGIN V8 — trang login mới
    ============================================================ */
 
 main.v8-login-right {
@@ -4363,15 +3466,67 @@ main.v8-login-right {
   position: relative;
 }
 
+.v8-form-top {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin-bottom: 24px !important;
+}
+
+.v8-form-logo {
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+.v8-form-logo-mark {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #2634d5 0%, #3b82f6 50%, #20c779 100%) !important;
+  color: #fff !important;
+  display: grid !important;
+  place-items: center !important;
+  font-weight: 800 !important;
+  font-size: 22px !important;
+  box-shadow: 0 6px 18px rgba(38, 52, 213, 0.3) !important;
+  flex-shrink: 0 !important;
+}
+
+.v8-tabs {
+  display: inline-flex !important;
+  gap: 4px !important;
+  background: #f5f7fb !important;
+  padding: 4px !important;
+  border-radius: 10px !important;
+  margin: 0 !important;
+  width: auto !important;
+  max-width: 100% !important;
+  flex-shrink: 0 !important;
+}
+
+.v8-tab {
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+  border-radius: 7px !important;
+  text-decoration: none !important;
+  transition: all 0.2s !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  background: transparent !important;
+}
+
 .v8-tab.active {
-  background: #1f2937;
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(31, 41, 55, 0.25);
+  background: #1f2937 !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(31, 41, 55, 0.25) !important;
 }
 
 .v8-tab:not(.active):hover {
-  color: #172033;
-  background: rgba(31, 41, 55, 0.05);
+  color: #172033 !important;
+  background: rgba(31, 41, 55, 0.05) !important;
 }
 
 .v8-form-title {
@@ -4641,9 +3796,9 @@ html.dark-mode .v8-form-subtitle { color: #94a3b8; }
 html.dark-mode main.v8-login-right { background: #0f172a !important; }
 html.dark-mode .v8-input-wrap { background: #1e293b; border-color: #334155; }
 html.dark-mode .v8-input-wrap input { color: #f1f5f9 !important; }
-html.dark-mode .v8-tabs { background: #1e293b; }
-html.dark-mode .v8-tab { color: #94a3b8; }
-html.dark-mode .v8-tab.active { background: #f1f5f9; color: #0f172a; }
+html.dark-mode .v8-tabs { background: #1e293b !important; }
+html.dark-mode .v8-tab { color: #94a3b8 !important; }
+html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !important; }
 html.dark-mode .v8-social { background: #1e293b; border-color: #334155; }
 html.dark-mode .v8-social:hover { background: #334155; }
 html.dark-mode .v8-demo { background: #1e293b; border-color: #334155; }
@@ -4651,15 +3806,9 @@ html.dark-mode .v8-demo-item { background: #0f172a; border-color: #334155; }
 html.dark-mode .v8-label { color: #cbd5e1; }
 
 @media (max-width: 1024px) and (min-width: 769px) {
-  .v8-login-page {
-    grid-template-columns: 0.8fr 1.2fr !important;
-  }
-  .v8-illustration-inner {
-    max-width: 380px !important;
-  }
-  .v8-form-inner {
-    max-width: 400px !important;
-  }
+  .v8-login-page { grid-template-columns: 0.8fr 1.2fr !important; }
+  .v8-illustration-inner { max-width: 380px !important; }
+  .v8-form-inner { max-width: 400px !important; }
   .v8-form-title { font-size: 26px !important; }
 }
 
@@ -4693,100 +3842,13 @@ html.dark-mode .v8-label { color: #cbd5e1; }
   .v8-illustration-inner { max-width: 240px !important; }
   .v8-speech-bubble { font-size: 10px; padding: 5px 10px; }
   main.v8-login-right { padding: 24px 16px !important; }
-}
-
-/* ============================================================
-   V8 FORM TOP — Logo + Tabs cùng hàng
-   ============================================================ */
-
-.v8-form-top {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 12px !important;
-  margin-bottom: 24px !important;
-}
-
-.v8-form-logo {
-  margin: 0 !important;
-  flex-shrink: 0 !important;
-}
-
-.v8-form-logo-mark {
-  width: 44px !important;
-  height: 44px !important;
-  border-radius: 12px !important;
-  background: linear-gradient(135deg, #2634d5 0%, #3b82f6 50%, #20c779 100%) !important;
-  color: #fff !important;
-  display: grid !important;
-  place-items: center !important;
-  font-weight: 800 !important;
-  font-size: 22px !important;
-  box-shadow: 0 6px 18px rgba(38, 52, 213, 0.3) !important;
-  flex-shrink: 0 !important;
-}
-
-.v8-tabs {
-  display: inline-flex !important;
-  gap: 4px !important;
-  background: #f5f7fb !important;
-  padding: 4px !important;
-  border-radius: 10px !important;
-  margin: 0 !important;
-  width: auto !important;
-  max-width: 100% !important;
-  flex-shrink: 0 !important;
-}
-
-.v8-tab {
-  padding: 6px 12px !important;
-  font-size: 12px !important;
-  font-weight: 700 !important;
-  color: #64748b !important;
-  border-radius: 7px !important;
-  text-decoration: none !important;
-  transition: all 0.2s !important;
-  cursor: pointer !important;
-  white-space: nowrap !important;
-  background: transparent !important;
-}
-
-.v8-tab.active {
-  background: #1f2937 !important;
-  color: #fff !important;
-  box-shadow: 0 2px 8px rgba(31, 41, 55, 0.25) !important;
-}
-
-.v8-tab:not(.active):hover {
-  color: #172033 !important;
-  background: rgba(31, 41, 55, 0.05) !important;
-}
-
-html.dark-mode .v8-tabs { background: #1e293b !important; }
-html.dark-mode .v8-tab { color: #94a3b8 !important; }
-html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !important; }
-
-@media (max-width: 480px) {
   .v8-form-top { margin-bottom: 20px !important; }
   .v8-form-logo-mark { width: 40px !important; height: 40px !important; font-size: 20px !important; }
   .v8-tab { padding: 5px 10px !important; font-size: 11.5px !important; }
 }
 
 /* ============================================================
-   FIX: Khi KHÔNG có page-heading → giảm padding-top
-   ============================================================ */
-.page-content:not(:has(> .page-heading)) {
-  padding-top: 18px !important;
-}
-
-@media (max-width: 900px) {
-  .page-content:not(:has(> .page-heading)) {
-    padding-top: 12px !important;
-  }
-}
-
-/* ============================================================
-   PHẦN 38: BATCH 6D.3 — RESPONSIVE POLISH
+   PHẦN 36: RESPONSIVE POLISH CHO CÁC TRANG ADMIN
    ============================================================ */
 
 @media (max-width: 768px) {
@@ -4811,7 +3873,7 @@ html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !
 }
 
 /* ============================================================
-   PHẦN 39: SIDEBAR PUSH/AUTO-FIT (bulletproof)
+   PHẦN 37: SIDEBAR PUSH/AUTO-FIT
    ============================================================ */
 
 .main {
@@ -4852,208 +3914,175 @@ html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !
     display: none !important;
   }
 }
+
 /* ============================================================
-   FOOD CARD — Actions block (Thêm / Mua ngay)
+   PHẦN 38: GRAB-FOOD CARD — dùng cho CustomerMenu + CustomerHome
+   ------------------------------------------------------------
+   Ảnh VUÔNG (aspect-ratio 1:1) · badge trên ảnh · nút + nổi góc dưới phải
+   Đây là layout DUY NHẤT cho food card. Mọi class .food-card-*
+   bên dưới là fallback cho code cũ — đã deprecated.
    ============================================================ */
 
-.food-card-actions {
-  padding: 0 14px 14px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
-  margin-top: auto !important;
-}
-
-.food-card-price {
-  color: #18a967 !important;
-  font-size: 17px !important;
-  font-weight: 800 !important;
-  display: block !important;
-  text-align: center !important;
-}
-
-.food-card-buttons {
+/* ---------- 38.1 GRID ---------- */
+.menu-food-grid {
   display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 8px !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+  align-items: stretch !important;
+  grid-auto-rows: 1fr !important;
+  width: 100% !important;
+  margin-top: 4px !important;
 }
 
-.food-card-btn-add,
-.food-card-btn-buy {
-  height: 36px !important;
-  padding: 0 8px !important;
-  font-size: 13px !important;
-  border-radius: 9px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 5px !important;
-  cursor: pointer !important;
-  white-space: nowrap !important;
-  font-weight: 600 !important;
-  transition: all 0.15s ease !important;
+@media (max-width: 1200px) {
+  .menu-food-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 1024px) {
+  .menu-food-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 768px) {
+  .menu-food-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+}
+@media (max-width: 480px) {
+  .menu-food-grid { gap: 8px !important; }
 }
 
-.food-card-btn-add {
-  background: var(--bg-tertiary, #f5f7fb) !important;
-  color: var(--text-primary, #172033) !important;
-  border: 1px solid var(--border-color, #e5e9ef) !important;
-}
-
-.food-card-btn-add:hover {
-  background: var(--border-color, #e5e9ef) !important;
-}
-
-.food-card-btn-buy {
-  background: linear-gradient(135deg, #2634d5, #3b4bef) !important;
-  color: #fff !important;
-  border: 1.5px solid #2634d5 !important;
-  font-weight: 700 !important;
-  box-shadow: 0 2px 8px rgba(38, 52, 213, 0.3) !important;
-}
-
-.food-card-btn-buy:hover {
-  background: linear-gradient(135deg, #1c28b0, #2634d5) !important;
-  transform: translateY(-1px) !important;
-}
-
-/* ============================================================
-   Rating row — đồng nhất chiều cao
-   ============================================================ */
-
-.food-rating-row {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px !important;
-  margin-bottom: 8px !important;
-  font-size: 12px !important;
-  min-height: 20px !important;
-  height: 20px !important;
-}.food-rating-row {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px !important;
-  margin-bottom: 8px !important;
-  font-size: 12px !important;
-  min-height: 20px !important;
-  height: 20px !important;
-}
-/* ============================================================
-   FIX ALIGNMENT — Căn thẳng hàng cho food card Menu
-   ------------------------------------------------------------
-   Đảm bảo category + tên món + rating luôn cùng vị trí
-   trên mọi card, bất kể có rating hay không.
-   ============================================================ */
-
-
-/* ---------- Category (label nhỏ, uppercase) ---------- */
-.menu-food-grid .food-card-clickable > div:first-child > div > span:first-child,
-.home-food-grid-5 .food-card-clickable > div:first-child > div > span:first-child,
-.home-food-grid-4 .food-card-clickable > div:first-child > div > span:first-child,
-.flash-grid .food-card-clickable > div:first-child > div > span:first-child {
-  display: block !important;
-  font-size: 10.5px !important;
-  color: var(--text-light, #8993a3) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.4px !important;
-  line-height: 1.2 !important;
-  min-height: 14px !important;
-  height: 14px !important;
-  margin: 0 !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-}
-/* ============================================================
-   FOOD CARD V4 — REDESIGN TOÀN DIỆN
-   ------------------------------------------------------------
-   Áp dụng cho: Menu, Home, Signature, Promotions
-   Nguyên tắc:
-     - Tất cả phần tử căn GIỮA
-     - Chiều cao CỐ ĐỊNH từng block
-     - Đồng nhất giữa các card
-   ============================================================ */
-
-/* ---------- Card container ---------- */
-.food-card-clickable {
+/* ---------- 38.2 CARD ---------- */
+.grab-food-card {
   display: flex !important;
   flex-direction: column !important;
-  background: var(--card-bg, #fff) !important;
-  border: 1px solid var(--border-color, #e5e9ef) !important;
-  border-radius: 16px !important;
+  background: #ffffff !important;
+  border: 1px solid #e5e9ef !important;
+  border-radius: 14px !important;
   overflow: hidden !important;
-  transition: all 0.25s ease !important;
+  cursor: pointer !important;
   height: 100% !important;
-  min-height: 380px !important;
+  min-height: 0 !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+  position: relative !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-.food-card-clickable:hover {
-  transform: translateY(-4px) !important;
+.grab-food-card:hover {
+  transform: translateY(-3px) !important;
   border-color: #2634d5 !important;
-  box-shadow: 0 12px 32px rgba(38, 52, 213, 0.15) !important;
+  box-shadow: 0 10px 28px rgba(38, 52, 213, 0.14) !important;
 }
 
-/* ---------- Ảnh: cố định 160px ---------- */
-.food-card-clickable > img,
-.food-card-clickable > div:first-child > img {
+/* ---------- 38.3 ẢNH VUÔNG 1:1 ---------- */
+.grab-food-card__image-wrap {
+  position: relative !important;
   width: 100% !important;
-  height: 160px !important;
-  min-height: 160px !important;
-  max-height: 160px !important;
+  aspect-ratio: 1 / 1 !important;
+  overflow: hidden !important;
+  background: #f5f7fb !important;
+  flex-shrink: 0 !important;
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.grab-food-card__image-wrap img {
+  width: 100% !important;
+  height: 100% !important;
   object-fit: cover !important;
   object-position: center !important;
   display: block !important;
-  flex-shrink: 0 !important;
-  transition: transform 0.3s ease !important;
+  transition: transform 0.35s ease !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
 }
 
-.food-card-clickable:hover > img,
-.food-card-clickable:hover > div:first-child > img {
+.grab-food-card:hover .grab-food-card__image-wrap img {
   transform: scale(1.05) !important;
 }
 
-/* ---------- Info block: category + name + rating ---------- */
-.food-card-info {
-  padding: 14px 14px 10px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  gap: 6px !important;
-  flex: 1 !important;
-  text-align: center !important;
-}
-
-/* ---------- Category — chip nhỏ, căn giữa ---------- */
-.food-card-category {
+/* ---------- 38.4 BADGE ---------- */
+.grab-food-card__badge {
+  position: absolute !important;
+  top: 8px !important;
+  left: 8px !important;
   display: inline-flex !important;
   align-items: center !important;
-  justify-content: center !important;
-  padding: 3px 10px !important;
-  border-radius: 10px !important;
-  background: rgba(38, 52, 213, 0.08) !important;
-  color: #2634d5 !important;
+  gap: 3px !important;
+  padding: 3px 9px !important;
+  border-radius: 14px !important;
   font-size: 10px !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.5px !important;
-  line-height: 1.2 !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.2px !important;
+  color: #fff !important;
+  z-index: 3 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
   white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  max-width: 100% !important;
-  height: 20px !important;
+  line-height: 1.2 !important;
 }
 
-/* ---------- Tên món: 2 dòng, căn giữa ---------- */
-.food-card-name {
-  font-size: 14px !important;
+.grab-food-card__badge--hot {
+  background: linear-gradient(135deg, #ef4444, #f59e0b) !important;
+}
+
+.grab-food-card__badge--out {
+  background: linear-gradient(135deg, #6b7280, #4b5563) !important;
+}
+
+/* ---------- 38.5 NÚT + NỔI GÓC DƯỚI PHẢI ---------- */
+.grab-food-card__add-btn {
+  position: absolute !important;
+  bottom: 8px !important;
+  right: 8px !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background: #2634d5 !important;
+  color: #fff !important;
+  border: 3px solid #ffffff !important;
+  display: grid !important;
+  place-items: center !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  z-index: 4 !important;
+  box-shadow: 0 4px 14px rgba(38, 52, 213, 0.45) !important;
+  transition: transform 0.18s ease, background 0.18s ease !important;
+  line-height: 1 !important;
+  font-family: inherit !important;
+}
+
+.grab-food-card__add-btn:hover {
+  background: #1c28b0 !important;
+  transform: scale(1.1) !important;
+}
+
+.grab-food-card__add-btn:active {
+  transform: scale(0.94) !important;
+}
+
+.grab-food-card__add-btn svg {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+}
+
+/* ---------- 38.6 INFO DƯỚI ẢNH ---------- */
+.grab-food-card__info {
+  padding: 10px 12px 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  flex: 1 !important;
+  min-height: 0 !important;
+}
+
+.grab-food-card__name {
+  margin: 0 !important;
+  font-size: 13.5px !important;
   font-weight: 700 !important;
   line-height: 1.35 !important;
-  color: var(--text-primary, #172033) !important;
-  margin: 0 !important;
-  text-align: center !important;
+  color: #172033 !important;
   height: 38px !important;
   min-height: 38px !important;
   max-height: 38px !important;
@@ -5063,572 +4092,97 @@ html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !
   -webkit-box-orient: vertical !important;
   text-overflow: ellipsis !important;
   word-break: break-word !important;
-  width: 100% !important;
 }
 
-/* ---------- Rating row: căn giữa, cố định 20px ---------- */
-.food-rating-row {
+.grab-food-card__price-row {
   display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px !important;
-  height: 20px !important;
-  min-height: 20px !important;
-  max-height: 20px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  flex-shrink: 0 !important;
-  width: 100% !important;
-}
-
-.food-card-rating-value {
-  color: #f59e0b !important;
-  font-size: 12px !important;
-  font-weight: 700 !important;
-}
-
-.food-card-rating-count {
-  color: var(--text-light, #8993a3) !important;
-  font-size: 11px !important;
-}
-
-.food-card-rating-empty {
-  color: var(--text-light, #cbd5e1) !important;
-  font-size: 11px !important;
-  font-style: italic !important;
-}
-
-/* ---------- Actions: giá + nút, căn đáy ---------- */
-.food-card-actions {
-  padding: 0 14px 14px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
+  align-items: baseline !important;
+  gap: 6px !important;
   margin-top: auto !important;
-  align-items: stretch !important;
+  flex-wrap: wrap !important;
 }
 
-/* ---------- Giá: to, đậm, căn giữa ---------- */
-.food-card-price {
+.grab-food-card__price {
   color: #18a967 !important;
-  font-size: 18px !important;
+  font-size: 15px !important;
   font-weight: 800 !important;
-  display: block !important;
-  text-align: center !important;
-  line-height: 1.2 !important;
   letter-spacing: -0.3px !important;
-  padding-bottom: 4px !important;
-  border-bottom: 1px dashed var(--border-color, #e5e9ef) !important;
-  margin-bottom: 2px !important;
+  line-height: 1.2 !important;
 }
 
-/* ---------- 2 nút: grid đều ---------- */
-.food-card-buttons {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 8px !important;
-  width: 100% !important;
+.grab-food-card__price-old {
+  color: #94a3b8 !important;
+  font-size: 11.5px !important;
+  text-decoration: line-through !important;
+  font-weight: 500 !important;
 }
 
-.food-card-btn-add,
-.food-card-btn-buy {
-  height: 38px !important;
-  padding: 0 10px !important;
-  font-size: 12.5px !important;
-  font-weight: 700 !important;
-  border-radius: 10px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 5px !important;
-  cursor: pointer !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  transition: all 0.15s ease !important;
-  font-family: inherit !important;
+/* ---------- 38.7 HẾT HÀNG ---------- */
+.grab-food-card:has(.grab-food-card__badge--out) {
+  cursor: not-allowed !important;
+  opacity: 0.72 !important;
+}
+.grab-food-card:has(.grab-food-card__badge--out):hover {
+  transform: none !important;
+  border-color: #e5e9ef !important;
+  box-shadow: none !important;
 }
 
-.food-card-btn-add {
-  background: var(--bg-tertiary, #f5f7fb) !important;
-  color: var(--text-primary, #172033) !important;
-  border: 1.5px solid var(--border-color, #e5e9ef) !important;
-}
-
-.food-card-btn-add:hover {
-  background: #fff !important;
-  border-color: #2634d5 !important;
-  color: #2634d5 !important;
-}
-
-.food-card-btn-add:active {
-  transform: scale(0.97) !important;
-}
-
-.food-card-btn-buy {
-  background: linear-gradient(135deg, #2634d5, #3b4bef) !important;
-  color: #fff !important;
-  border: 1.5px solid #2634d5 !important;
-  box-shadow: 0 3px 10px rgba(38, 52, 213, 0.3) !important;
-}
-
-.food-card-btn-buy:hover {
-  background: linear-gradient(135deg, #1c28b0, #2634d5) !important;
-  transform: translateY(-1px) !important;
-  box-shadow: 0 5px 14px rgba(38, 52, 213, 0.4) !important;
-}
-
-.food-card-btn-buy:active {
-  transform: translateY(0) scale(0.97) !important;
-}
-
-/* ---------- Dark mode ---------- */
-html.dark-mode .food-card-clickable {
+/* ---------- 38.8 DARK MODE ---------- */
+html.dark-mode .grab-food-card {
   background: #1e293b !important;
   border-color: #334155 !important;
 }
-
-html.dark-mode .food-card-category {
-  background: rgba(96, 165, 250, 0.15) !important;
-  color: #60a5fa !important;
+html.dark-mode .grab-food-card__image-wrap {
+  background: #0f172a !important;
 }
+html.dark-mode .grab-food-card__name { color: #f1f5f9 !important; }
+html.dark-mode .grab-food-card__price { color: #4ade80 !important; }
+html.dark-mode .grab-food-card__price-old { color: #94a3b8 !important; }
+html.dark-mode .grab-food-card__add-btn { border-color: #1e293b !important; }
 
-html.dark-mode .food-card-name {
-  color: #f1f5f9 !important;
-}
-
-html.dark-mode .food-card-price {
-  color: #4ade80 !important;
-  border-bottom-color: #334155 !important;
-}
-
-html.dark-mode .food-card-btn-add {
-  background: #334155 !important;
-  color: #e2e8f0 !important;
-  border-color: #475569 !important;
-}
-
-html.dark-mode .food-card-btn-add:hover {
-  background: #475569 !important;
-  border-color: #60a5fa !important;
-  color: #60a5fa !important;
-}
-
-/* ---------- Responsive: Tablet ---------- */
-@media (max-width: 1024px) {
-  .food-card-clickable {
-    min-height: 360px !important;
-  }
-
-  .food-card-clickable > img,
-  .food-card-clickable > div:first-child > img {
-    height: 150px !important;
-    min-height: 150px !important;
-    max-height: 150px !important;
-  }
-}
-
-/* ---------- Responsive: Mobile ---------- */
-@media (max-width: 768px) {
-  .food-card-clickable {
-    min-height: 340px !important;
-    border-radius: 14px !important;
-  }
-
-  .food-card-clickable > img,
-  .food-card-clickable > div:first-child > img {
-    height: 130px !important;
-    min-height: 130px !important;
-    max-height: 130px !important;
-  }
-
-  .food-card-info {
-    padding: 10px 10px 6px !important;
-    gap: 4px !important;
-  }
-
-  .food-card-category {
-    font-size: 9px !important;
-    padding: 2px 8px !important;
-    height: 18px !important;
-  }
-
-  .food-card-name {
-    font-size: 13px !important;
+/* ---------- 38.9 MOBILE ---------- */
+@media (max-width: 480px) {
+  .grab-food-card__info { padding: 8px 10px 10px !important; gap: 4px !important; }
+  .grab-food-card__name {
+    font-size: 12.5px !important;
     height: 34px !important;
     min-height: 34px !important;
     max-height: 34px !important;
   }
-
-  .food-card-price {
-    font-size: 16px !important;
+  .grab-food-card__price { font-size: 14px !important; }
+  .grab-food-card__add-btn {
+    width: 32px !important;
+    height: 32px !important;
+    bottom: 6px !important;
+    right: 6px !important;
+    border-width: 2px !important;
   }
-
-  .food-card-actions {
-    padding: 0 10px 12px !important;
-    gap: 8px !important;
-  }
-
-  .food-card-btn-add,
-  .food-card-btn-buy {
-    height: 34px !important;
-    font-size: 11.5px !important;
-    padding: 0 6px !important;
-    gap: 3px !important;
-  }
-
-  .food-card-btn-add svg,
-  .food-card-btn-buy svg {
-    width: 13px !important;
-    height: 13px !important;
-  }
+  .grab-food-card__add-btn svg { width: 16px !important; height: 16px !important; }
+  .grab-food-card__badge { font-size: 9px !important; padding: 3px 7px !important; }
 }
 
-/* ---------- Responsive: Mobile nhỏ ---------- */
-@media (max-width: 480px) {
-  .food-card-clickable {
-    min-height: 320px !important;
-  }
-
-  .food-card-clickable > img,
-  .food-card-clickable > div:first-child > img {
-    height: 115px !important;
-    min-height: 115px !important;
-    max-height: 115px !important;
-  }
-
-  .food-card-name {
-    font-size: 12px !important;
-    height: 32px !important;
-    min-height: 32px !important;
-    max-height: 32px !important;
-  }
-
-  .food-card-price {
-    font-size: 15px !important;
-  }
-
-  .food-card-btn-add,
-  .food-card-btn-buy {
-    height: 32px !important;
-    font-size: 11px !important;
-    border-radius: 8px !important;
-  }
-}
 /* ============================================================
-   FOOD CARD — Badge trạng thái kho (Hết hàng / Sắp hết)
+   PHẦN 39: MENU CATEGORY STICKY — đúng vị trí topbar
    ============================================================ */
 
-.food-card-badge {
-  position: absolute !important;
-  top: 10px !important;
-  left: 10px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-  padding: 4px 10px !important;
-  border-radius: 20px !important;
-  font-size: 10.5px !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.3px !important;
-  color: #fff !important;
-  z-index: 3 !important;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25) !important;
-  white-space: nowrap !important;
+.menu-cats-sticky {
+  /* mặc định desktop: topbar = 64px */
 }
 
-.food-card-badge--out {
-  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-}
-
-.food-card-badge--low {
-  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-}
-
-/* Disabled button khi hết hàng */
-.food-card-btn-add:disabled,
-.food-card-btn-buy:disabled {
-  opacity: 0.5 !important;
-  cursor: not-allowed !important;
-  filter: grayscale(0.5) !important;
-}
-
-.food-card-btn-add:disabled:hover,
-.food-card-btn-buy:disabled:hover {
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-/* ---------- Tên món — cố định chiều cao 2 dòng (40px) ---------- */
-.menu-food-grid .food-card-clickable > div:first-child > div > h4,
-.home-food-grid-5 .food-card-clickable > div:first-child > div > h4,
-.home-food-grid-4 .food-card-clickable > div:first-child > div > h4,
-.flash-grid .food-card-clickable > div:first-child > div > h4 {
-  margin: 2px 0 !important;
-  font-size: 14px !important;
-  font-weight: 700 !important;
-  line-height: 1.3 !important;
-  color: var(--text-primary, #172033) !important;
-  height: 40px !important;
-  min-height: 40px !important;
-  max-height: 40px !important;
-  overflow: hidden !important;
-  display: -webkit-box !important;
-  -webkit-line-clamp: 2 !important;
-  -webkit-box-orient: vertical !important;
-  text-overflow: ellipsis !important;
-  text-align: center !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-/* ---------- Rating row — cố định chiều cao ---------- */
-.menu-food-grid .food-rating-row,
-.home-food-grid-5 .food-rating-row,
-.home-food-grid-4 .food-rating-row,
-.flash-grid .food-rating-row {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px !important;
-  height: 20px !important;
-  min-height: 20px !important;
-  max-height: 20px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  font-size: 12px !important;
-  overflow: hidden !important;
-}
-
-/* ---------- Actions block (giá + nút) — căn đáy ---------- */
-.menu-food-grid .food-card-actions,
-.home-food-grid-5 .food-card-actions,
-.home-food-grid-4 .food-card-actions,
-.flash-grid .food-card-actions {
-  padding: 10px 14px 14px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
-  margin-top: auto !important;
-}
-/* ============================================================
-   FOOD CARD — Layout chuẩn cho Menu + Home
-   ------------------------------------------------------------
-   Tất cả các phần tử có chiều cao CỐ ĐỊNH để card đều nhau
-   100% bất kể có rating hay không, tên dài hay ngắn.
-   ============================================================ */
-
-/* ---------- Info block: category + name + rating ---------- */
-.food-card-info {
-  padding: 12px 14px 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 2px !important;
-  min-height: 96px !important;
-  max-height: 96px !important;
-  height: 96px !important;
-  overflow: hidden !important;
-}
-
-/* ---------- Category: 1 dòng, cố định 16px ---------- */
-.food-card-category {
-  display: block !important;
-  font-size: 10.5px !important;
-  color: var(--text-light, #8993a3) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.4px !important;
-  line-height: 1.2 !important;
-  height: 16px !important;
-  min-height: 16px !important;
-  max-height: 16px !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  margin: 0 !important;
-}
-
-/* ---------- Tên món: tối đa 2 dòng, cố định 40px ---------- */
-.food-card-name {
-  font-size: 14px !important;
-  font-weight: 700 !important;
-  line-height: 1.3 !important;
-  color: var(--text-primary, #172033) !important;
-  height: 40px !important;
-  min-height: 40px !important;
-  max-height: 40px !important;
-  margin: 2px 0 !important;
-  overflow: hidden !important;
-  display: -webkit-box !important;
-  -webkit-line-clamp: 2 !important;
-  -webkit-box-orient: vertical !important;
-  text-overflow: ellipsis !important;
-  word-break: break-word !important;
-  text-align: center !important;
-}
-
-/* ---------- Rating row: cố định 22px ---------- */
-.food-rating-row {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px !important;
-  height: 22px !important;
-  min-height: 22px !important;
-  max-height: 22px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  flex-shrink: 0 !important;
-}
-
-.food-card-rating-value {
-  color: var(--text-primary, #172033) !important;
-  font-size: 12px !important;
-  font-weight: 700 !important;
-}
-
-.food-card-rating-count {
-  color: var(--text-light, #8993a3) !important;
-  font-size: 11px !important;
-}
-
-.food-card-rating-empty {
-  color: var(--text-light, #cbd5e1) !important;
-  font-size: 10px !important;
-  font-style: italic !important;
-}
-
-/* ---------- Actions block: giá + nút ở đáy ---------- */
-.food-card-actions {
-  padding: 8px 14px 14px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
-  margin-top: auto !important;
-}
-
-.food-card-price {
-  color: #18a967 !important;
-  font-size: 17px !important;
-  font-weight: 800 !important;
-  display: block !important;
-  text-align: center !important;
-  line-height: 1.2 !important;
-  min-height: 22px !important;
-}
-
-.food-card-buttons {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 8px !important;
-}
-
-.food-card-btn-add,
-.food-card-btn-buy {
-  height: 36px !important;
-  padding: 0 8px !important;
-  font-size: 12px !important;
-  border-radius: 9px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px !important;
-  cursor: pointer !important;
-  white-space: nowrap !important;
-  font-weight: 600 !important;
-  transition: all 0.15s ease !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-.food-card-btn-add {
-  background: var(--bg-tertiary, #f5f7fb) !important;
-  color: var(--text-primary, #172033) !important;
-  border: 1px solid var(--border-color, #e5e9ef) !important;
-}
-
-.food-card-btn-add:hover {
-  background: var(--border-color, #e5e9ef) !important;
-}
-
-.food-card-btn-buy {
-  background: linear-gradient(135deg, #2634d5, #3b4bef) !important;
-  color: #fff !important;
-  border: 1.5px solid #2634d5 !important;
-  font-weight: 700 !important;
-  box-shadow: 0 2px 8px rgba(38, 52, 213, 0.3) !important;
-}
-
-.food-card-btn-buy:hover {
-  background: linear-gradient(135deg, #1c28b0, #2634d5) !important;
-  transform: translateY(-1px) !important;
-}
-
-/* ---------- Card: tổng chiều cao cố định ---------- */
-.food-card-clickable {
-  display: flex !important;
-  flex-direction: column !important;
-  min-height: 400px !important;
-  height: 100% !important;
-}
-
-.food-card-clickable > img,
-.food-card-clickable > div:first-child > img {
-  width: 100% !important;
-  height: 160px !important;
-  min-height: 160px !important;
-  max-height: 160px !important;
-  object-fit: cover !important;
-  display: block !important;
-  flex-shrink: 0 !important;
-}
-
-/* ---------- Responsive ---------- */
 @media (max-width: 768px) {
-  .food-card-info {
-    min-height: 88px !important;
-    max-height: 88px !important;
-    height: 88px !important;
-  }
-
-  .food-card-name {
-    font-size: 13px !important;
-    height: 36px !important;
-    min-height: 36px !important;
-    max-height: 36px !important;
-  }
-
-  .food-card-clickable > img,
-  .food-card-clickable > div:first-child > img {
-    height: 140px !important;
-    min-height: 140px !important;
-    max-height: 140px !important;
-  }
-
-  .food-card-clickable {
-    min-height: 360px !important;
+  .menu-cats-sticky {
+    top: 56px !important;    /* topbar mobile = 56px */
+    padding-top: 10px !important;
   }
 }
 
 @media (max-width: 480px) {
-  .food-card-clickable > img,
-  .food-card-clickable > div:first-child > img {
-    height: 120px !important;
-    min-height: 120px !important;
-    max-height: 120px !important;
-  }
-
-  .food-card-clickable {
-    min-height: 340px !important;
-  }
-
-  .food-card-btn-add,
-  .food-card-btn-buy {
-    font-size: 11px !important;
-    padding: 0 6px !important;
+  .menu-cats-sticky {
+    top: 54px !important;    /* topbar nhỏ = 54px */
   }
 }
+
 /* ============================================================
    KẾT THÚC FILE
    ============================================================ */
