@@ -16,7 +16,7 @@ import { Skeleton, SkeletonStats } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   Calendar, Clock, Users, CheckCircle2, AlertTriangle, UserX,
-  Plus, Trash2, Sun, Sunrise, Moon, Save, X, Search,
+  Plus, Trash2, Sun, Sunrise, Save, X, Search,
   ChevronLeft, ChevronRight, CalendarDays, Edit, Loader2,
   AlertCircle, Check,
 } from "lucide-react";
@@ -46,9 +46,8 @@ function normalize(s) {
 // ============================================================
 
 const SHIFTS = [
-  { id: "Ca sáng",  label: "Ca sáng",  time: "06:00 - 12:00", icon: Sunrise, color: "#f59e0b" },
-  { id: "Ca chiều", label: "Ca chiều", time: "12:00 - 18:00", icon: Sun,     color: "#2634d5" },
-  { id: "Ca tối",   label: "Ca tối",   time: "18:00 - 22:00", icon: Moon,    color: "#8b5cf6" },
+  { id: "Ca sáng",  label: "Ca sáng",  time: "06:30 - 12:30", icon: Sunrise, color: "#f59e0b" },
+  { id: "Ca chiều", label: "Ca chiều", time: "12:30 - 18:30", icon: Sun,     color: "#2634d5" },
 ];
 
 const TABS = [
@@ -102,10 +101,8 @@ function shiftColor(shiftId) {
 function shiftCode(shiftId) {
   if (shiftId === "Ca sáng") return "S";
   if (shiftId === "Ca chiều") return "C";
-  if (shiftId === "Ca tối") return "T";
   return "?";
 }
-
 // ============================================================
 // MAIN COMPONENT
 // ============================================================

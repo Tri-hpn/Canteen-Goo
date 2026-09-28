@@ -23,7 +23,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import {
   Calendar, Clock, TrendingUp, AlertTriangle, Search,
-  LogIn, LogOut, Sunrise, Sun, Moon, BellRing, CheckCircle2,
+  LogIn, LogOut, Sunrise, Sun, BellRing, CheckCircle2,
   PlusCircle, ClipboardList, X, Save, CalendarDays,
 } from "lucide-react";
 import { api } from "../../api";
@@ -34,9 +34,8 @@ import { toast } from "../../components/Effects";
 // ============================================================
 
 const SHIFTS = [
-  { id: "Ca sáng",  label: "Ca sáng",  time: "06:00 - 12:00", startHour: 6,  endHour: 12, icon: Sunrise, color: "#f59e0b" },
-  { id: "Ca chiều", label: "Ca chiều", time: "12:00 - 18:00", startHour: 12, endHour: 18, icon: Sun,     color: "#2634d5" },
-  { id: "Ca tối",   label: "Ca tối",   time: "18:00 - 22:00", startHour: 18, endHour: 22, icon: Moon,    color: "#8b5cf6" },
+  { id: "Ca sáng",  label: "Ca sáng",  time: "06:30 - 12:30", startHour: 6,  startMin: 30, endHour: 12, endMin: 30, icon: Sunrise, color: "#f59e0b" },
+  { id: "Ca chiều", label: "Ca chiều", time: "12:30 - 18:30", startHour: 12, startMin: 30, endHour: 18, endMin: 30, icon: Sun,     color: "#2634d5" },
 ];
 
 const MODAL_Z = 2147483600;
@@ -116,10 +115,11 @@ function getNextWeekDays() {
 }
 
 function getAutoShift() {
-  const h = new Date().getHours();
-  if (h >= 6 && h < 12) return "Ca sáng";
-  if (h >= 12 && h < 18) return "Ca chiều";
-  if (h >= 18 && h < 22) return "Ca tối";
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const hhmm = (h, m) => h * 60 + m;
+  if (minutes >= hhmm(6, 30) && minutes < hhmm(12, 30)) return "Ca sáng";
+  if (minutes >= hhmm(12, 30) && minutes < hhmm(18, 30)) return "Ca chiều";
   return "Ngoài giờ";
 }
 
@@ -340,7 +340,7 @@ export default function EmployeeCheckInOut() {
 
     const todayStr = getToday();
     const tomorrowStr = getTomorrow();
-    const shiftOrder = { "Ca sáng": 1, "Ca chiều": 2, "Ca tối": 3 };
+    const shiftOrder = { "Ca sáng": 1, "Ca chiều": 2 };
 
     return Object.keys(map)
       .sort((a, b) => a.localeCompare(b))
@@ -404,11 +404,10 @@ export default function EmployeeCheckInOut() {
   };
 
   const shiftColor = (s) => {
-    if (s === "Ca sáng") return { bg: "#fef3c7", color: "#92400e" };
-    if (s === "Ca chiều") return { bg: "#dbeafe", color: "#1e40af" };
-    if (s === "Ca tối") return { bg: "#ede9fe", color: "#6d28d9" };
-    return { bg: "#f1f5f9", color: "#475569" };
-  };
+  if (s === "Ca sáng") return { bg: "#fef3c7", color: "#92400e" };
+  if (s === "Ca chiều") return { bg: "#dbeafe", color: "#1e40af" };
+  return { bg: "#f1f5f9", color: "#475569" };
+};
 
   // ============================================================
   // RENDER
@@ -776,7 +775,7 @@ export default function EmployeeCheckInOut() {
               textAlign: "center",
             }}
           >
-            Giờ chuẩn: 8:00 — 17:00. Đi muộn sau 8:15.
+            Ca sáng: 06:30 - 12:30 · Ca chiều: 12:30 - 18:30 · Đi muộn sau 15 phút.
           </p>
         </div>
       </div>

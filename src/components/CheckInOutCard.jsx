@@ -23,7 +23,7 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
-  LogIn, LogOut, Clock, Sunrise, Sun, Moon,
+  LogIn, LogOut, Clock, Sunrise, Sun,
   Loader2, AlertCircle, RefreshCw, Timer,
 } from "lucide-react";
 import { api } from "../api";
@@ -37,26 +37,22 @@ const SHIFTS = [
   {
     id: "Ca sáng",
     startHour: 6,
+    startMin: 30,
     endHour: 12,
+    endMin: 30,
     icon: Sunrise,
     color: "#f59e0b",
-    time: "06:00 - 12:00",
+    time: "06:30 - 12:30",
   },
   {
     id: "Ca chiều",
     startHour: 12,
+    startMin: 30,
     endHour: 18,
+    endMin: 30,
     icon: Sun,
     color: "#2634d5",
-    time: "12:00 - 18:00",
-  },
-  {
-    id: "Ca tối",
-    startHour: 18,
-    endHour: 22,
-    icon: Moon,
-    color: "#8b5cf6",
-    time: "18:00 - 22:00",
+    time: "12:30 - 18:30",
   },
 ];
 
@@ -79,19 +75,17 @@ function getLocalDateStr(d = new Date()) {
 }
 
 function getCurrentShift(now = new Date()) {
-  const h = now.getHours();
-  if (h >= 6 && h < 12) return SHIFTS[0];
-  if (h >= 12 && h < 18) return SHIFTS[1];
-  if (h >= 18 && h < 22) return SHIFTS[2];
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  if (minutes >= 6 * 60 + 30 && minutes < 12 * 60 + 30) return SHIFTS[0];
+  if (minutes >= 12 * 60 + 30 && minutes < 18 * 60 + 30) return SHIFTS[1];
   return null;
 }
 
 function getNextShift(now = new Date()) {
-  const h = now.getHours();
-  if (h < 6) return SHIFTS[0];
-  if (h < 12) return SHIFTS[1];
-  if (h < 18) return SHIFTS[2];
-  return null; // sau 18h không còn ca tiếp trong ngày
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  if (minutes < 6 * 60 + 30) return SHIFTS[0];
+  if (minutes < 12 * 60 + 30) return SHIFTS[1];
+  return null; // sau 12:30 không còn ca tiếp trong ngày
 }
 
 /**
@@ -244,7 +238,7 @@ export default function CheckInOutCard() {
 
     // Thời điểm bắt đầu ca tiếp theo (hôm nay)
     const target = new Date(now);
-    target.setHours(nextShift.startHour, 0, 0, 0);
+    target.setHours(nextShift.startHour, nextShift.startMin ?? 0, 0, 0);
 
     // Nếu giờ bắt đầu đã qua → ca tiếp theo là NGÀY MAI
     if (target.getTime() <= now.getTime()) {

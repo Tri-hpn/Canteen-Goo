@@ -1842,8 +1842,11 @@ function todayStr() {
   return getLocalDateStr();
 }
 
-const SHIFT_START_HOUR = { "Ca sáng": 6, "Ca chiều": 12, "Ca tối": 18 };
-const SHIFT_END_HOUR   = { "Ca sáng": 12, "Ca chiều": 18, "Ca tối": 22 };
+// ✅ 2 ca: 06:30-12:30, 12:30-18:30
+const SHIFT_START_HOUR = { "Ca sáng": 6, "Ca chiều": 12 };
+const SHIFT_START_MIN  = { "Ca sáng": 30, "Ca chiều": 30 };
+const SHIFT_END_HOUR   = { "Ca sáng": 12, "Ca chiều": 18 };
+const SHIFT_END_MIN    = { "Ca sáng": 30, "Ca chiều": 30 };
 
 app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
   try {
@@ -1858,9 +1861,9 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
     const { shift: bodyShift } = req.body || {};
     let shift = bodyShift || "";
     if (!shift) {
-      if (hour >= 6 && hour < 12) shift = "Ca sáng";
-      else if (hour >= 12 && hour < 18) shift = "Ca chiều";
-      else if (hour >= 18 && hour < 22) shift = "Ca tối";
+      const hhmm = hour * 60 + minute;
+      if (hhmm >= 6 * 60 + 30 && hhmm < 12 * 60 + 30) shift = "Ca sáng";
+      else if (hhmm >= 12 * 60 + 30 && hhmm < 18 * 60 + 30) shift = "Ca chiều";
       else shift = "Ngoài giờ";
     }
 
@@ -1874,8 +1877,11 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
       return res.status(400).json({ message: "Bạn đã check-in " + shift + " hôm nay rồi" });
     }
 
-    const startHour = SHIFT_START_HOUR[shift] || 8;
-    const late = hour > startHour || (hour === startHour && minute > 15);
+    const startHour = SHIFT_START_HOUR[shift] ?? 6;
+    const startMin = SHIFT_START_MIN[shift] ?? 30;
+    const shiftStartMinutes = startHour * 60 + startMin;
+    const nowMinutes = hour * 60 + minute;
+    const late = nowMinutes > shiftStartMinutes + 15;
 
     const status = late ? "Đi muộn" : "Đúng giờ";
     const id = Math.max(0, ...db.attendances.map(a => a.id)) + 1;
@@ -1909,11 +1915,9 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
     const { shift: bodyShift } = req.body || {};
     let shift = bodyShift || "";
     if (!shift) {
-      // ✅ FIX TIMEZONE
       const hour = getVNHour(now);
       if (hour >= 6 && hour < 12) shift = "Ca sáng";
       else if (hour >= 12 && hour < 18) shift = "Ca chiều";
-      else if (hour >= 18 && hour < 22) shift = "Ca tối";
       else shift = "Ngoài giờ";
     }
 
@@ -1930,7 +1934,6 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
     att.hours = Math.round(((now - new Date(att.checkIn)) / 3600000) * 100) / 100;
 
     const endHour = SHIFT_END_HOUR[shift];
-    // ✅ FIX TIMEZONE
     if (endHour !== undefined && getVNHour(now) < endHour && att.status === "Đúng giờ") {
       att.status = "Về sớm";
     }
