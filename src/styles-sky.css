@@ -28,6 +28,45 @@
        #f59e0b (warning), #8b5cf6 (purple), #ec4899 (pink)
        → giữ nguyên ngữ nghĩa
    ============================================================ */
+/* ============================================================
+   ✅ FIX FONT TIẾNG VIỆT — Thêm vào đầu file styles.css
+   ============================================================ */
+
+/* Đảm bảo font family có fallback đầy đủ cho tiếng Việt */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", "Noto Sans", "Noto Sans Vietnamese",
+               "Arial Unicode MS", Arial, Tahoma, Verdana, sans-serif;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+               "Courier New", Consolas, monospace;
+}
+
+/* Force font-family cho toàn bộ app */
+html, body, button, input, textarea, select {
+  font-family: var(--font-sans) !important;
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Fix cho badge status cụ thể */
+.status,
+.status-badge,
+.att-badge,
+.inv-badge,
+button,
+td,
+th {
+  font-family: var(--font-sans) !important;
+}
+
+/* Fix ký tự đặc biệt */
+* {
+  font-variant-ligatures: normal;
+  font-variant-numeric: normal;
+  font-variant-east-asian: normal;
+}
 
 /* ============================================================
    1. SKY VARIABLES
