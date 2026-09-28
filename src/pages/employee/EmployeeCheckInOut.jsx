@@ -582,53 +582,347 @@ export default function EmployeeCheckInOut() {
         </div>
 
         {/* ----- Cột phải: check-in/out ----- */}
-        <div>
-          <div
-            style={{
-              fontSize: 12,
-              color: "var(--text-muted, #64748b)",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: 1,
-              marginBottom: 12,
-            }}
-          >
-            Hôm nay
-          </div>
+<div>
+  <div
+    style={{
+      fontSize: 12,
+      color: "var(--text-muted, #64748b)",
+      fontWeight: 600,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginBottom: 12,
+    }}
+  >
+    Hôm nay
+  </div>
 
+  {/* ✅ FIX: Nếu chưa có ca approved → hiện empty state giống Tổng quan */}
+  {!approvedLoading && approvedShifts.length === 0 ? (
+    <div
+      style={{
+        padding: "24px 20px",
+        background: "rgba(245, 158, 11, 0.08)",
+        border: "1px dashed rgba(245, 158, 11, 0.5)",
+        borderRadius: 12,
+        textAlign: "center",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <AlertTriangle
+        size={28}
+        style={{ color: "#f59e0b", opacity: 0.8 }}
+      />
+      <b
+        style={{
+          fontSize: 14,
+          color: "#92400e",
+          display: "block",
+        }}
+      >
+        Chưa có ca được duyệt hôm nay
+      </b>
+      <span
+        style={{
+          fontSize: 12.5,
+          color: "#78350f",
+          lineHeight: 1.5,
+          maxWidth: 280,
+        }}
+      >
+        Vui lòng liên hệ admin để được phân ca trước khi check-in.
+      </span>
+      <span
+        style={{
+          fontSize: 11,
+          color: "#92400e",
+          opacity: 0.8,
+          marginTop: 4,
+          fontStyle: "italic",
+        }}
+      >
+        Chỉ check-in được ca admin đã duyệt. Đi muộn sau 15 phút.
+      </span>
+    </div>
+  ) : (
+    <>
+      {/* Trạng thái hôm nay */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          marginBottom: 16,
+        }}
+      >
+        <Row label="Check-in" value={fmt(today?.checkIn)} />
+        <Row label="Check-out" value={fmt(today?.checkOut)} />
+        <Row
+          label="Giờ làm"
+          value={today?.hours ? today.hours + "h" : "—"}
+        />
+        <Row label="Ca làm" value={today?.shift || "—"} />
+        {today?.status && (
           <div
             style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              marginBottom: 16,
+              display: "inline-flex",
+              alignSelf: "flex-start",
+              padding: "4px 12px",
+              borderRadius: 20,
+              fontSize: 11,
+              fontWeight: 700,
+              background: statusColor(today.status).bg,
+              color: statusColor(today.status).color,
+              marginTop: 4,
             }}
           >
-            <Row label="Check-in" value={fmt(today?.checkIn)} />
-            <Row label="Check-out" value={fmt(today?.checkOut)} />
-            <Row
-              label="Giờ làm"
-              value={today?.hours ? today.hours + "h" : "—"}
-            />
-            <Row label="Ca làm" value={today?.shift || "—"} />
-            {today?.status && (
-              <div
+            {today.status}
+          </div>
+        )}
+      </div>
+
+      {/* KHU VỰC CHỌN CA — CHỈ HIỆN CA APPROVED */}
+      {!today?.checkIn && (
+        <div style={{ marginBottom: 12 }}>
+          <label
+            style={{
+              display: "block",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "var(--text-muted, #475569)",
+              marginBottom: 6,
+            }}
+          >
+            Chọn ca làm (đã được duyệt hôm nay)
+          </label>
+
+          {approvedLoading && (
+            <div
+              style={{
+                padding: 20,
+                textAlign: "center",
+                color: "var(--text-light, #8993a3)",
+                fontSize: 13,
+                background: "var(--bg-tertiary, #f5f7fb)",
+                borderRadius: 10,
+              }}
+            >
+              <Loader2
+                size={20}
                 style={{
-                  display: "inline-flex",
-                  alignSelf: "flex-start",
-                  padding: "4px 12px",
-                  borderRadius: 20,
+                  animation: "spin 1s linear infinite",
+                  marginBottom: 6,
+                }}
+              />
+              <div>Đang tải ca...</div>
+            </div>
+          )}
+
+          {!approvedLoading && approvedError && (
+            <div
+              style={{
+                padding: "10px 14px",
+                background: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.2)",
+                borderRadius: 8,
+                fontSize: 12,
+                color: "#ef4444",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <AlertCircle size={14} style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1 }}>{approvedError}</span>
+              <button
+                onClick={loadApprovedShifts}
+                style={{
+                  padding: "4px 10px",
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: 0,
+                  borderRadius: 5,
+                  cursor: "pointer",
                   fontSize: 11,
-                  fontWeight: 700,
-                  background: statusColor(today.status).bg,
-                  color: statusColor(today.status).color,
-                  marginTop: 4,
+                  fontWeight: 600,
                 }}
               >
-                {today.status}
+                Thử lại
+              </button>
+            </div>
+          )}
+
+          {!approvedLoading &&
+            !approvedError &&
+            approvedShifts.length > 0 && (
+              <div className="checkin-shift-picker">
+                {approvedShifts.map((s) => {
+                  const shift = SHIFTS.find((x) => x.id === s.shift);
+                  if (!shift) return null;
+                  const Icon = shift.icon;
+                  const active = selectedShift === s.shift;
+
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSelectedShift(s.shift)}
+                      disabled={checkingIn || checkingOut}
+                      style={{
+                        padding: "10px 8px",
+                        background: active
+                          ? shift.color + "20"
+                          : "var(--card-bg, #fff)",
+                        border: active
+                          ? "2px solid " + shift.color
+                          : "2px solid var(--border-color, #e5e9ef)",
+                        borderRadius: 10,
+                        cursor:
+                          checkingIn || checkingOut
+                            ? "not-allowed"
+                            : "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <Icon
+                        size={18}
+                        style={{
+                          color: active
+                            ? shift.color
+                            : "var(--text-light, #94a3b8)",
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: active
+                            ? shift.color
+                            : "var(--text-muted, #475569)",
+                        }}
+                      >
+                        {shift.label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          color: "var(--text-light, #94a3b8)",
+                        }}
+                      >
+                        {shift.time}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
-          </div>
+        </div>
+      )}
+
+      {/* Nút Check-in / Check-out */}
+      <div className="checkin-action-grid">
+        <button
+          disabled={
+            !!today?.checkIn ||
+            checkingIn ||
+            checkingOut ||
+            approvedShifts.length === 0
+          }
+          onClick={handleCheckIn}
+          style={{
+            padding: 12,
+            background:
+              today?.checkIn || approvedShifts.length === 0
+                ? "#94a3b8"
+                : "#18a967",
+            color: "#fff",
+            border: 0,
+            borderRadius: 10,
+            fontWeight: 700,
+            cursor:
+              today?.checkIn ||
+              checkingIn ||
+              checkingOut ||
+              approvedShifts.length === 0
+                ? "not-allowed"
+                : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            fontSize: 13,
+            opacity: checkingIn ? 0.7 : 1,
+          }}
+        >
+          <LogIn size={16} />
+          {today?.checkIn
+            ? "Đã check-in"
+            : checkingIn
+            ? "Đang xử lý..."
+            : approvedShifts.length === 0
+            ? "Chưa có ca"
+            : "Check-in"}
+        </button>
+        <button
+          disabled={
+            !today?.checkIn ||
+            !!today?.checkOut ||
+            checkingIn ||
+            checkingOut
+          }
+          onClick={handleCheckOut}
+          style={{
+            padding: 12,
+            background:
+              !today?.checkIn || today?.checkOut ? "#94a3b8" : "#f59e0b",
+            color: "#fff",
+            border: 0,
+            borderRadius: 10,
+            fontWeight: 700,
+            cursor:
+              !today?.checkIn ||
+              today?.checkOut ||
+              checkingIn ||
+              checkingOut
+                ? "not-allowed"
+                : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            fontSize: 13,
+            opacity: checkingOut ? 0.7 : 1,
+          }}
+        >
+          <LogOut size={16} />
+          {today?.checkOut
+            ? "Đã check-out"
+            : checkingOut
+            ? "Đang xử lý..."
+            : "Check-out"}
+        </button>
+      </div>
+
+      <p
+        style={{
+          fontSize: 11,
+          color: "var(--text-light, #8993a3)",
+          marginTop: 10,
+          marginBottom: 0,
+          textAlign: "center",
+        }}
+      >
+        Ca sáng: 06:30 - 12:30 · Ca chiều: 12:30 - 18:30 · Đi muộn sau 15
+        phút.
+      </p>
+    </>
+  )}
+</div>
 
           {/* ✅ KHU VỰC CHỌN CA — CHỈ HIỆN CA APPROVED */}
           {!today?.checkIn && (
