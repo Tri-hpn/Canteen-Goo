@@ -1112,71 +1112,76 @@ html.dark-mode .app-stat-delta.down { color: #F87171 !important; }
   box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.12) !important;
 }
 /* ============================================================
-   ✅ FIX LỖI VIỀN KÉP (DOUBLE BORDER) TRÊN INPUT WRAPPER
+   ✅ FIX TOÀN CỤC — LOẠI BỎ VIỀN KÉP (DOUBLE BORDER)
    ------------------------------------------------------------
-   Nguyên nhân: input bên trong wrapper (.v8-input-wrap,
-   .input-icon, .form-input-wrap...) có border riêng do CSS
-   global `input:focus { border: ... }` → tạo viền kép.
-
-   Fix: Reset hoàn toàn border/box-shadow của input con khi
-   nằm trong wrapper. Chỉ wrapper giữ viền ngoài.
+   Áp dụng cho MỌI ô input nằm trong wrapper:
+     - .global-search-input  (thanh tìm kiếm topbar)
+     - .v8-input-wrap        (trang login)
+     - .input-icon           (form khác)
+     - .cart-item-grid input (nếu có)
+   Nguyên tắc:
+     - Wrapper giữ border + focus ring
+     - Input con bên trong: border: 0, box-shadow: 0
    ============================================================ */
 
-/* ---------- Reset mọi input con trong wrapper ---------- */
+/* ---------- 1. RESET MỌI INPUT NẰM TRONG WRAPPER ---------- */
+.global-search-input input,
+.global-search-input input:hover,
+.global-search-input input:focus,
+.global-search-input input:active,
 .v8-input-wrap input,
 .v8-input-wrap input:hover,
 .v8-input-wrap input:focus,
-.v8-input-wrap input:active {
-  border: 0 !important;
-  outline: 0 !important;
-  box-shadow: none !important;
-  background: transparent !important;
-  -webkit-appearance: none !important;
-  appearance: none !important;
-}
-
+.v8-input-wrap input:active,
 .input-icon input,
 .input-icon input:hover,
 .input-icon input:focus,
-.input-icon input:active {
+.input-icon input:active,
+[class*="input-wrap"] input,
+[class*="input-wrap"] input:hover,
+[class*="input-wrap"] input:focus,
+[class*="input-wrap"] input:active {
   border: 0 !important;
+  border-color: transparent !important;
   outline: 0 !important;
+  outline-offset: 0 !important;
   box-shadow: none !important;
   background: transparent !important;
   -webkit-appearance: none !important;
   appearance: none !important;
+  -webkit-box-shadow: none !important;
 }
 
-/* Fallback: bất kỳ input nào nằm trong div có class chứa "wrap" */
-[class*="input-wrap"] input,
-[class*="input-wrap"] input:focus,
-[class*="input-wrap"] input:hover {
-  border: 0 !important;
-  outline: 0 !important;
-  box-shadow: none !important;
-  background: transparent !important;
+/* ---------- 2. GLOBAL: INPUT ĐỨNG MỘT MÌNH (không trong wrapper) ---------- */
+/* Chỉ apply border cho input KHÔNG nằm trong wrapper nào */
+.form-input:focus,
+textarea:focus,
+select:focus {
+  border-color: #2634d5 !important;
+  box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.12) !important;
 }
 
-/* ---------- Wrapper giữ viền, focus ring nằm ở wrapper ---------- */
-.v8-input-wrap,
-.input-icon {
-  position: relative;
+/* ---------- 3. FOCUS RING NẰM Ở WRAPPER ---------- */
+.global-search-input:focus-within {
+  background: var(--card-bg, #fff) !important;
+  border-color: #2634d5 !important;
+  box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.1) !important;
 }
 
-.v8-input-wrap:focus-within,
-.input-icon:focus-within {
-  border-color: #1f2937 !important;    /* Đổi màu viền khi focus */
+.v8-input-wrap:focus-within {
+  border-color: #1f2937 !important;
   box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.08) !important;
 }
 
-/* Đảm bảo form-input không có viền kép khi trong wrapper */
-.v8-input-wrap .form-input,
-.input-icon .form-input {
-  border: 0 !important;
-  box-shadow: none !important;
+.input-icon:focus-within {
+  border-color: #2634d5 !important;
+  box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.12) !important;
 }
 
-/* ---------- Autofill fix (tránh nền vàng) ---------- */
+/* ---------- 4. AUTOFILL FIX (tránh nền vàng + viền kép) ---------- */
+.global-search-input input:-webkit-autofill,
+.global-search-input input:-webkit-autofill:hover,
+.global-search-input input:-webkit-autofill:focus,
 .v8-input-wrap input:-webkit-autofill,
 .v8-input-wrap input:-webkit-autofill:hover,
 .v8-input-wrap input:-webkit-autofill:focus,
@@ -1189,23 +1194,49 @@ html.dark-mode .app-stat-delta.down { color: #F87171 !important; }
   border: 0 !important;
 }
 
-/* ---------- Fix cho ô input thường (không nằm trong wrapper) ---------- */
-input:not([type="checkbox"]):not([type="radio"]):not(.form-input):not([class*="search"]):focus,
+/* ---------- 5. SPECIAL: BROWSER DEFAULT FOCUS OUTLINE ---------- */
+input:not([type="checkbox"]):not([type="radio"]):focus,
 textarea:focus,
 select:focus {
   outline: 0 !important;
 }
 
-/* ---------- Fix đặc biệt cho trang Login (v8) ---------- */
-.v8-login-page input,
-.v8-login-page input:focus,
-.v8-login-page input:hover {
+/* ---------- 6. FIX CHO DARK MODE ---------- */
+html.dark-mode .global-search-input:focus-within {
+  background: #0B1220 !important;
+  border-color: var(--sky-500, #0EA5E9) !important;
+}
+
+html.dark-mode .v8-input-wrap:focus-within {
+  border-color: #f1f5f9 !important;
+  box-shadow: 0 0 0 3px rgba(241, 245, 249, 0.1) !important;
+}
+
+html.dark-mode .global-search-input input:focus,
+html.dark-mode .v8-input-wrap input:focus,
+html.dark-mode .input-icon input:focus {
   border: 0 !important;
-  outline: 0 !important;
   box-shadow: none !important;
 }
 
-.v8-login-page .v8-input-wrap:focus-within {
-  border-color: #1f2937 !important;
-  box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.08) !important;
+/* ---------- 7. INPUT ĐỨNG RIÊNG (không wrapper) vẫn có viền ---------- */
+input.form-input,
+textarea.form-input,
+select.form-input,
+input:not([class*="wrap"]):not(.form-input):not([class*="search-input"]),
+textarea:not(.form-input),
+select:not(.form-input) {
+  /* Giữ border mặc định từ styles.css */
+}
+
+/* ---------- 8. ĐẶC BIỆT: CART, CHECKOUT, PROFILE — viền input ---------- */
+/* Những nơi dùng inputWrapStyle inline (React inline style) */
+/* → Không thể CSS override inline, cần sửa JSX. Nhưng thêm rule dưới 
+   để đảm bảo không bị conflict nếu có class */
+.customer-cart input,
+.checkout-form input,
+.profile-form input {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
 }
