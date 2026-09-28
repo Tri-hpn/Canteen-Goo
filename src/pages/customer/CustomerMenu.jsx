@@ -1,23 +1,37 @@
 ﻿// ============================================================
 // CUSTOMERMENU.JSX — Thực đơn khách hàng
 // ============================================================
-// FIX v3:
-//   - Bỏ inline style → dùng className (.food-card-info, .food-card-name...)
-//   - Đảm bảo card đều nhau: category 16px + name 40px + rating 22px = 78px
+// Tính năng:
+//   - Grid món ăn, filter theo category (chip ngang)
+//   - Category sync 2 chiều với URL (?category=...)
+//   - Nhận search từ topbar qua URL param ?q= (GlobalSearch)
+//   - Click món → mở FoodDetailModal (mode "cart" | "buy")
+//   - Badge Hết hàng / Sắp hết trên card
+//
+// FIX v4:
+//   - Dùng className (food-card-info, food-card-category, food-card-name...)
+//   - Bỏ hết inline style gây conflict với CSS
+//   - Card đồng nhất: category 20px + name 38px + rating 20px
+//   - Badge trạng thái kho (Hết hàng / Sắp hết)
 // ============================================================
 
 import { SkeletonCard } from "../../components/Skeleton";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Star, ShoppingCart, Zap, AlertCircle, RefreshCw, X,
+  Star, ShoppingCart, Zap, AlertCircle, RefreshCw, X, Ban, Clock,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import FoodDetailModal from "../../components/FoodDetailModal";
 import ChatBotWidget from "../../components/ChatBotWidget";
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
 const ALL_CATEGORY = "Tất cả";
+const LOW_STOCK_THRESHOLD = 5;
 
 const FALLBACK_IMG =
   "data:image/svg+xml;utf8," +
@@ -28,7 +42,12 @@ const FALLBACK_IMG =
     </svg>`
   );
 
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
+
 export default function CustomerMenu({ cart, setCart, user }) {
+  // ---------- State ----------
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +58,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
   const [mode, setMode] = useState("cart");
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // ---------- Load data ----------
   const load = useCallback(async (silent = false) => {
     setError("");
     try {
@@ -56,23 +76,31 @@ export default function CustomerMenu({ cart, setCart, user }) {
     }
   }, []);
 
-  useEffect(() => { load(false); }, [load]);
+  useEffect(() => {
+    load(false);
+  }, [load]);
 
+  // ---------- Sync URL params ----------
   const searchParamsStr = searchParams.toString();
+
   useEffect(() => {
     setCategory(searchParams.get("category") || ALL_CATEGORY);
     setSearch(searchParams.get("q") || "");
-  }, [searchParamsStr]); // eslint-disable-line
+  }, [searchParamsStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ---------- Listen global search event ----------
   useEffect(() => {
     const handler = (e) => setSearch(e.detail || "");
     window.addEventListener("globalsearch", handler);
     return () => window.removeEventListener("globalsearch", handler);
   }, []);
 
+  // ---------- Category chips ----------
   const categoryChips = useMemo(() => {
     const fromApi = categories.map((cat) => ({
-      id: cat.name, label: cat.name, icon: cat.icon,
+      id: cat.name,
+      label: cat.name,
+      icon: cat.icon,
     }));
     return [{ id: ALL_CATEGORY, label: ALL_CATEGORY }, ...fromApi];
   }, [categories]);
@@ -82,11 +110,14 @@ export default function CustomerMenu({ cart, setCart, user }) {
     [categoryChips]
   );
 
+  // ---------- Filtered list ----------
   const filtered = useMemo(() => {
     let list = items;
+
     if (category !== ALL_CATEGORY && validCategoryIds.has(category)) {
       list = list.filter((m) => m.category === category);
     }
+
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       list = list.filter((m) => {
@@ -95,9 +126,11 @@ export default function CustomerMenu({ cart, setCart, user }) {
         return name.includes(q) || cat.includes(q);
       });
     }
+
     return list;
   }, [items, category, search, validCategoryIds]);
 
+  // ---------- Handlers ----------
   const selectCategory = (id) => {
     setCategory(id);
     const params = {};
@@ -119,8 +152,13 @@ export default function CustomerMenu({ cart, setCart, user }) {
 
   const hasFilter = category !== ALL_CATEGORY || search.trim();
 
+  // ============================================================
+  // RENDER
+  // ============================================================
+
   return (
     <div>
+      {/* ============ ERROR BANNER ============ */}
       {error && (
         <div
           style={{
@@ -159,6 +197,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         </div>
       )}
 
+      {/* ============ TOOLBAR — Category chips ============ */}
       <div
         style={{
           display: "flex",
@@ -188,6 +227,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         </div>
       </div>
 
+      {/* ============ SUMMARY LINE ============ */}
       <div
         style={{
           fontSize: 13,
@@ -226,6 +266,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         )}
       </div>
 
+      {/* ============ LOADING ============ */}
       {loading && (
         <div className="menu-food-grid">
           {Array.from({ length: 10 }).map((_, i) => (
@@ -234,6 +275,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         </div>
       )}
 
+      {/* ============ EMPTY STATE ============ */}
       {!loading && filtered.length === 0 && (
         <div
           style={{
@@ -273,16 +315,23 @@ export default function CustomerMenu({ cart, setCart, user }) {
         </div>
       )}
 
+      {/* ============ GRID ============ */}
       {!loading && filtered.length > 0 && (
         <div className="menu-food-grid">
           {filtered.map((m) => {
             const id = m._id || m.id;
+            const isOutOfStock = m.stock === 0;
+            const isLowStock =
+              typeof m.stock === "number" &&
+              m.stock > 0 &&
+              m.stock <= LOW_STOCK_THRESHOLD;
+
             return (
               <div key={id} className="food-card-clickable">
                 {/* Ảnh + info (clickable) */}
                 <div
                   onClick={() => openWithMode(m, "cart")}
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: "pointer", position: "relative" }}
                 >
                   <img
                     src={m.image || FALLBACK_IMG}
@@ -293,6 +342,19 @@ export default function CustomerMenu({ cart, setCart, user }) {
                       e.target.src = FALLBACK_IMG;
                     }}
                   />
+
+                  {/* Badge trạng thái kho */}
+                  {isOutOfStock && (
+                    <div className="food-card-badge food-card-badge--out">
+                      <Ban size={11} /> Hết hàng
+                    </div>
+                  )}
+                  {isLowStock && !isOutOfStock && (
+                    <div className="food-card-badge food-card-badge--low">
+                      <Clock size={11} /> Sắp hết
+                    </div>
+                  )}
+
                   <div className="food-card-info">
                     <span className="food-card-category">
                       {m.category}
@@ -328,6 +390,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
                       onClick={() => openWithMode(m, "cart")}
                       title="Thêm vào giỏ"
                       className="food-card-btn-add"
+                      disabled={isOutOfStock}
                     >
                       <ShoppingCart size={14} />
                       Thêm
@@ -335,9 +398,10 @@ export default function CustomerMenu({ cart, setCart, user }) {
                     <button
                       onClick={() => openWithMode(m, "buy")}
                       className="food-card-btn-buy"
+                      disabled={isOutOfStock}
                     >
                       <Zap size={14} />
-                      Mua ngay
+                      {isOutOfStock ? "Hết hàng" : "Mua ngay"}
                     </button>
                   </div>
                 </div>
@@ -347,6 +411,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         </div>
       )}
 
+      {/* ============ FOOD DETAIL MODAL ============ */}
       {selected && (
         <FoodDetailModal
           item={selected}
@@ -358,6 +423,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         />
       )}
 
+      {/* ============ CHATBOT WIDGET ============ */}
       <ChatBotWidget cart={cart} setCart={setCart} user={user} />
     </div>
   );
