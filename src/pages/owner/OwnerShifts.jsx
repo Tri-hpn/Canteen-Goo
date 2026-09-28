@@ -2,34 +2,40 @@
 // OWNERSHIFTS.JSX — Quản lý ca làm việc (Admin)
 // ============================================================
 // 4 tabs:
-//   1. Hôm nay   — ai đang làm ca nào hôm nay
-//   2. Theo tuần — lịch phân ca dạng bảng tuần
-//   3. Phân ca   — danh sách ca đã phân, filter, bulk assign
+//   1. Hôm nay   — ai đang làm ca nào hôm nay (CHỈ ca APPROVED)
+//   2. Theo tuần — lịch phân ca dạng bảng tuần (CHỈ ca APPROVED)
+//   3. Phân ca   — danh sách ca (CẢ pending + approved), có nút Duyệt/Từ chối
 //   4. Lịch sử   — chấm công theo tháng
 //
-// Lưu ý:
-//   - Fix bug timezone: dùng local date thay vì toISOString()
-//   - ESC đóng modal, disable khi save
-//   - Không dùng alert() — dùng toast
+// Fixes (v2 — workflow đăng ký ca):
+//   - 🔴 load() fetch include_pending=1 → thấy được ca chờ duyệt
+//   - 🔴 Tab "Hôm nay" + bảng tuần CHỈ hiển thị ca approved
+//   - 🔴 Thêm UI Duyệt / Từ chối ca pending trong tab "Phân ca"
+//   - 🔴 Badge status (Chờ duyệt / Đã duyệt) cho mỗi ca
+//   - 🔴 AssignModal dùng full employees list (không filter theo search)
+//   - 🟡 Auto-refresh 30s khi tab visible
+//   - 🟡 Bỏ dead code openNew({date, shift})
+//   - 🟡 Fix bug timezone: dùng local date thay vì toISOString()
+//   - 🟡 ESC đóng modal, disable khi save
 // ============================================================
 import { Skeleton, SkeletonStats } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   Calendar, Clock, Users, CheckCircle2, AlertTriangle, UserX,
-  Plus, Trash2, Sun, Sunrise, Save, X, Search,
+  Plus, Trash2, Sun, Sunrise, Save, X, Search, Check,
   ChevronLeft, ChevronRight, CalendarDays, Edit, Loader2,
-  AlertCircle, Check,
+  AlertCircle, Bell,
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
-// HELPERS — Bổ sung Batch 5C
+// HELPERS
 // ============================================================
 
 /**
- * ✅ #11.1: Bỏ dấu tiếng Việt + lowercase để search chính xác.
+ * Bỏ dấu tiếng Việt + lowercase để search chính xác.
  * "Trần Văn Trí" → "tran van tri"
  */
 function normalize(s) {
@@ -39,6 +45,16 @@ function normalize(s) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d")
     .trim();
+}
+
+/** Check ca có phải approved không (default = approved nếu không có status). */
+function isApproved(shift) {
+  return !shift.status || shift.status === "approved";
+}
+
+/** Check ca có phải pending không. */
+function isPending(shift) {
+  return shift.status === "pending";
 }
 
 // ============================================================
@@ -58,9 +74,10 @@ const TABS = [
 ];
 
 const MODAL_Z = 2147483600;
+const REFRESH_MS = 30000;
 
 // ============================================================
-// HELPERS
+// HELPERS (date)
 // ============================================================
 
 /**
@@ -103,6 +120,7 @@ function shiftCode(shiftId) {
   if (shiftId === "Ca chiều") return "C";
   return "?";
 }
+
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
@@ -123,24 +141,42 @@ export default function OwnerShifts() {
   const [historyMonth, setHistoryMonth] = useState(getToday().slice(0, 7));
   const [search, setSearch] = useState("");
   const [historyFilter, setHistoryFilter] = useState("nextWeek");
+
+  // ✅ Processing per-shift (approve/reject)
+  const [processingId, setProcessingId] = useState(null);
+
   // ✅ Confirm dialog
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+
   // Race-safe
   const reqIdRef = useRef(0);
 
+  // Tab visible (pause auto-refresh)
+  const [tabVisible, setTabVisible] = useState(
+    typeof document === "undefined" || !document.hidden
+  );
+
+  // ---------- Track tab visibility ----------
+  useEffect(() => {
+    const handler = () => setTabVisible(!document.hidden);
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []);
+
   // ---------- Load all data ----------
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     const myReqId = ++reqIdRef.current;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError("");
 
     try {
       const [empsRes, attsRes, shiftsRes] = await Promise.all([
         api.users.list("EMPLOYEE").catch(() => []),
         api.attendance.all({ month: historyMonth }).catch(() => []),
-        api.shifts.all().catch(() => []),
+        // ✅ FIX #3: Lấy CẢ ca pending để admin duyệt
+        api.shifts.all({ include_pending: 1 }).catch(() => []),
       ]);
 
       if (myReqId !== reqIdRef.current) return;
@@ -158,8 +194,15 @@ export default function OwnerShifts() {
   }, [historyMonth]);
 
   useEffect(() => {
-    load();
+    load(false);
   }, [load]);
+
+  // ✅ Auto-refresh 30s khi tab visible
+  useEffect(() => {
+    if (!tabVisible) return;
+    const timer = setInterval(() => load(true), REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [load, tabVisible]);
 
   // ---------- Computed ----------
 
@@ -174,12 +217,26 @@ export default function OwnerShifts() {
     };
   }, [employees, attendances]);
 
+  // ✅ FIX #1: Chỉ hiển thị ca APPROVED trong tab "Hôm nay"
   const todayShifts = useMemo(() => {
     const today = getToday();
     return SHIFTS.map((s) => ({
       ...s,
-      employees: shifts.filter((x) => x.date === today && x.shift === s.id),
+      employees: shifts.filter(
+        (x) =>
+          x.date === today &&
+          x.shift === s.id &&
+          isApproved(x) // ✅ CHỈ ca approved
+      ),
     }));
+  }, [shifts]);
+
+  // Đếm ca pending hôm nay (để hiện cảnh báo)
+  const pendingTodayCount = useMemo(() => {
+    const today = getToday();
+    return shifts.filter(
+      (s) => s.date === today && isPending(s)
+    ).length;
   }, [shifts]);
 
   // Week days (Mon-Sun) của tuần chứa weekDate
@@ -263,11 +320,8 @@ export default function OwnerShifts() {
       });
     }
     if (search.trim()) {
-      // ✅ #11.2: Search không dấu — "Tran" match "Trần"
       const q = normalize(search);
-      list = list.filter((s) =>
-        normalize(s.employee_name).includes(q)
-      );
+      list = list.filter((s) => normalize(s.employee_name).includes(q));
     }
     return list;
   }, [shifts, historyFilter, search]);
@@ -308,11 +362,8 @@ export default function OwnerShifts() {
 
   const filteredEmployees = useMemo(() => {
     if (!search.trim()) return employees;
-    // ✅ #11.3: Search không dấu
     const q = normalize(search);
-    return employees.filter((e) =>
-      normalize(e.name).includes(q)
-    );
+    return employees.filter((e) => normalize(e.name).includes(q));
   }, [employees, search]);
 
   // ---------- Actions ----------
@@ -327,6 +378,59 @@ export default function OwnerShifts() {
   };
 
   const goToThisWeek = () => setWeekDate(getToday());
+
+  // ✅ NEW: Approve ca pending
+  const approveShift = useCallback(
+    async (shift) => {
+      if (processingId !== null) return;
+
+      setProcessingId(shift.id);
+      try {
+        await api.shifts.approve(shift.id);
+        toast(
+          `Đã duyệt ${shift.shift} của ${shift.employee_name}`,
+          "success"
+        );
+        await load(true);
+      } catch (e) {
+        toast(e.message || "Không duyệt được", "error");
+      } finally {
+        setProcessingId(null);
+      }
+    },
+    [load, processingId]
+  );
+
+  // ✅ NEW: Reject ca pending (mở ConfirmDialog)
+  const rejectShift = useCallback(
+    (shift) => {
+      if (processingId !== null) return;
+
+      setConfirm({
+        title: `Từ chối ${shift.shift} của "${shift.employee_name}"?`,
+        message:
+          `Ca ngày ${fmtDate(shift.date)} sẽ bị xóa khỏi lịch của nhân viên. ` +
+          "Hành động này không thể hoàn tác.",
+        confirmText: "Từ chối",
+        cancelText: "Giữ lại",
+        danger: true,
+        onConfirm: async () => {
+          setProcessingId(shift.id);
+          try {
+            await api.shifts.reject(shift.id);
+            toast("Đã từ chối ca", "success");
+            setConfirm(null);
+            await load(true);
+          } catch (e) {
+            toast(e.message || "Không từ chối được", "error");
+          } finally {
+            setProcessingId(null);
+          }
+        },
+      });
+    },
+    [load, processingId]
+  );
 
   const saveAssignment = async (formData, isEdit) => {
     try {
@@ -361,15 +465,12 @@ export default function OwnerShifts() {
         );
       }
       setAssignModal(null);
-      load();
+      load(false);
     } catch (e) {
       toast(e.message || "Không lưu được", "error");
     }
   };
 
-    /**
-   * ✅ Mở confirm dialog thay vì confirm() native.
-   */
   const removeAssignment = (id) => {
     setConfirm({
       title: "Xóa phân ca này?",
@@ -384,7 +485,7 @@ export default function OwnerShifts() {
           await api.shifts.remove(id);
           toast("Đã xóa", "success");
           setConfirm(null);
-          load();
+          load(false);
         } catch (e) {
           toast(e.message || "Không xóa được", "error");
         }
@@ -408,8 +509,9 @@ export default function OwnerShifts() {
   };
 
   const openEdit = (s) => setAssignModal({ ...s, _isEdit: true });
-  const openNew = () =>
-    setAssignModal({ _isNew: true, date: getToday(), shift: "Ca sáng" });
+
+  // ✅ FIX: Bỏ dead code date/shift (AssignModal không dùng)
+  const openNew = () => setAssignModal({ _isNew: true });
 
   // ============================================================
   // RENDER
@@ -456,8 +558,7 @@ export default function OwnerShifts() {
           <div style={{ flex: 1, minWidth: 200 }}>
             <b
               style={{
-                color:
-                  sundayReminder === "urgent" ? "#991b1b" : "#92400e",
+                color: sundayReminder === "urgent" ? "#991b1b" : "#92400e",
                 fontSize: 15,
                 display: "block",
                 marginBottom: 2,
@@ -469,8 +570,7 @@ export default function OwnerShifts() {
             </b>
             <span
               style={{
-                color:
-                  sundayReminder === "urgent" ? "#7f1d1d" : "#78350f",
+                color: sundayReminder === "urgent" ? "#7f1d1d" : "#78350f",
                 fontSize: 13,
               }}
             >
@@ -499,9 +599,76 @@ export default function OwnerShifts() {
       )}
 
       {/* ============================================================
+          ✅ CẢNH BÁO CA PENDING HÔM NAY
+          ============================================================ */}
+      {pendingTodayCount > 0 && !loading && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "14px 18px",
+            background:
+              "linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(239, 68, 68, 0.08))",
+            border: "2px solid #f59e0b",
+            borderRadius: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: "50%",
+              background: "#f59e0b",
+              color: "#fff",
+              display: "grid",
+              placeItems: "center",
+              flexShrink: 0,
+              animation: "pulse 1.5s ease-in-out infinite",
+            }}
+          >
+            <Bell size={22} />
+          </div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <b
+              style={{
+                color: "#92400e",
+                fontSize: 15,
+                display: "block",
+                marginBottom: 2,
+              }}
+            >
+              🔔 Có {pendingTodayCount} ca chờ duyệt hôm nay
+            </b>
+            <span style={{ color: "#78350f", fontSize: 13 }}>
+              Vào tab "Phân ca" để duyệt hoặc từ chối.
+            </span>
+          </div>
+          <button
+            onClick={() => setTab("assign")}
+            style={{
+              padding: "10px 16px",
+              background: "#f59e0b",
+              color: "#fff",
+              border: 0,
+              borderRadius: 8,
+              fontWeight: 700,
+              cursor: "pointer",
+              fontSize: 13,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Xử lý ngay
+          </button>
+        </div>
+      )}
+
+      {/* ============================================================
           STATS
           ============================================================ */}
-            <div
+      <div
         className="shifts-stats-grid"
         style={{
           display: "grid",
@@ -519,7 +686,7 @@ export default function OwnerShifts() {
       {/* ============================================================
           TABS
           ============================================================ */}
-            <div
+      <div
         className="shifts-tabs"
         style={{
           display: "flex",
@@ -555,17 +722,14 @@ export default function OwnerShifts() {
       {/* ============================================================
           LOADING
           ============================================================ */}
-        {loading && (
+      {loading && (
         <>
-          {/* Skeleton stats */}
           <div style={{ marginBottom: 20 }}>
             <SkeletonStats
               count={4}
               columns="repeat(auto-fit, minmax(180px, 1fr))"
             />
           </div>
-
-          {/* Skeleton tabs */}
           <div
             aria-hidden="true"
             style={{
@@ -582,8 +746,6 @@ export default function OwnerShifts() {
               <Skeleton key={i} width={90} height={36} radius={8} />
             ))}
           </div>
-
-          {/* Skeleton content */}
           <div
             aria-hidden="true"
             style={{
@@ -640,7 +802,7 @@ export default function OwnerShifts() {
             {error}
           </div>
           <button
-            onClick={load}
+            onClick={() => load(false)}
             style={{
               padding: "8px 16px",
               background: "#ef4444",
@@ -658,7 +820,7 @@ export default function OwnerShifts() {
       )}
 
       {/* ============================================================
-          TAB: HÔM NAY
+          TAB: HÔM NAY (chỉ approved)
           ============================================================ */}
       {!loading && !error && tab === "today" && (
         <div
@@ -793,9 +955,7 @@ export default function OwnerShifts() {
                                 : "Chưa chấm công"}
                             </span>
                           </div>
-                          {att && (
-                            <AttendanceBadge status={att.status} />
-                          )}
+                          {att && <AttendanceBadge status={att.status} />}
                           <button
                             onClick={() => openEdit(emp)}
                             title="Sửa ca"
@@ -824,7 +984,7 @@ export default function OwnerShifts() {
       )}
 
       {/* ============================================================
-          TAB: THEO TUẦN
+          TAB: THEO TUẦN (chỉ approved)
           ============================================================ */}
       {!loading && !error && tab === "week" && (
         <div style={cardStyle}>
@@ -918,10 +1078,12 @@ export default function OwnerShifts() {
                       <b>{emp.name}</b>
                     </td>
                     {weekDays.map((d) => {
+                      // ✅ FIX #2: Chỉ hiển thị ca APPROVED
                       const empShifts = shifts.filter(
                         (s) =>
                           String(s.employee_id) === String(emp.id) &&
-                          s.date === d
+                          s.date === d &&
+                          isApproved(s)
                       );
                       return (
                         <td key={d} style={{ padding: 6, textAlign: "center" }}>
@@ -1031,7 +1193,7 @@ export default function OwnerShifts() {
       )}
 
       {/* ============================================================
-          TAB: PHÂN CA
+          TAB: PHÂN CA (cả pending + approved + nút duyệt)
           ============================================================ */}
       {!loading && !error && tab === "assign" && (
         <div>
@@ -1156,8 +1318,13 @@ export default function OwnerShifts() {
             }}
           >
             <SummaryCard label="Tổng ca" value={filteredShifts.length} color="#2634d5" />
+            <SummaryCard
+              label="Chờ duyệt"
+              value={filteredShifts.filter(isPending).length}
+              color="#f59e0b"
+            />
             <SummaryCard label="Số ngày" value={groupedShifts.length} color="#18a967" />
-            <SummaryCard label="Nhân viên" value={uniqueEmployees} color="#f59e0b" />
+            <SummaryCard label="Nhân viên" value={uniqueEmployees} color="#8b5cf6" />
           </div>
 
           {/* Danh sách ca */}
@@ -1254,83 +1421,228 @@ export default function OwnerShifts() {
 
                   {/* List ca trong ngày */}
                   <div>
-                    {group.shifts.map((s, i) => (
-                      <div
-                        key={s.id}
-                        style={{
-                          padding: "10px 18px",
-                          borderBottom:
-                            i < group.shifts.length - 1
-                              ? "1px solid var(--border-color, #f5f7fb)"
-                              : "none",
-                          display: "grid",
-                          gridTemplateColumns: "1fr auto auto",
-                          gap: 12,
-                          alignItems: "center",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                          <div
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: "50%",
-                              background: "linear-gradient(135deg, #2634d5, #20c779)",
-                              color: "#fff",
-                              display: "grid",
-                              placeItems: "center",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {(s.employee_name || "?").slice(0, 2).toUpperCase()}
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <b
-                              style={{
-                                fontSize: 13,
-                                color: "var(--text-primary, #172033)",
-                                display: "block",
-                              }}
-                            >
-                              {s.employee_name}
-                            </b>
-                            {s.note && (
-                              <span style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}>
-                                {s.note}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <span
+                    {group.shifts.map((s, i) => {
+                      const isPendingShift = isPending(s);
+                      const isProcessing = processingId === s.id;
+
+                      return (
+                        <div
+                          key={s.id}
                           style={{
-                            padding: "4px 12px",
-                            borderRadius: 20,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            background: shiftColor(s.shift) + "20",
-                            color: shiftColor(s.shift),
-                            whiteSpace: "nowrap",
+                            padding: "12px 18px",
+                            borderBottom:
+                              i < group.shifts.length - 1
+                                ? "1px solid var(--border-color, #f5f7fb)"
+                                : "none",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            flexWrap: "wrap",
+                            background: isPendingShift
+                              ? "rgba(245, 158, 11, 0.04)"
+                              : "transparent",
+                            opacity: isProcessing ? 0.6 : 1,
                           }}
                         >
-                          {s.shift}
-                        </span>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button onClick={() => openEdit(s)} title="Sửa" aria-label="Sửa" style={iconBtnSmall}>
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => removeAssignment(s.id)}
-                            title="Xóa"
-                            aria-label="Xóa"
-                            style={{ ...iconBtnSmall, color: "#ef4444" }}
+                          {/* Avatar + name */}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              minWidth: 0,
+                              flex: 1,
+                            }}
                           >
-                            <Trash2 size={14} />
-                          </button>
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: "50%",
+                                background:
+                                  "linear-gradient(135deg, #2634d5, #20c779)",
+                                color: "#fff",
+                                display: "grid",
+                                placeItems: "center",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {(s.employee_name || "?").slice(0, 2).toUpperCase()}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <b
+                                  style={{
+                                    fontSize: 13,
+                                    color: "var(--text-primary, #172033)",
+                                  }}
+                                >
+                                  {s.employee_name}
+                                </b>
+
+                                {/* ✅ Badge status */}
+                                <span
+                                  style={{
+                                    padding: "2px 8px",
+                                    borderRadius: 10,
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    background: isPendingShift
+                                      ? "#fef3c7"
+                                      : "#d1fae5",
+                                    color: isPendingShift
+                                      ? "#92400e"
+                                      : "#065f46",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {isPendingShift ? "Chờ duyệt" : "Đã duyệt"}
+                                </span>
+
+                                {/* Badge shift */}
+                                <span
+                                  style={{
+                                    padding: "2px 10px",
+                                    borderRadius: 20,
+                                    fontSize: 10.5,
+                                    fontWeight: 700,
+                                    background: shiftColor(s.shift) + "20",
+                                    color: shiftColor(s.shift),
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {s.shift}
+                                </span>
+                              </div>
+
+                              {s.note && (
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: "var(--text-light, #8993a3)",
+                                    display: "block",
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  {s.note}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                            {/* ✅ Nút DUYỆT cho ca pending */}
+                            {isPendingShift && (
+                              <>
+                                <button
+                                  onClick={() => approveShift(s)}
+                                  disabled={processingId !== null}
+                                  title="Duyệt ca"
+                                  aria-label="Duyệt ca"
+                                  type="button"
+                                  style={{
+                                    padding: "7px 12px",
+                                    background:
+                                      processingId !== null
+                                        ? "#94a3b8"
+                                        : "#18a967",
+                                    color: "#fff",
+                                    border: 0,
+                                    borderRadius: 7,
+                                    cursor:
+                                      processingId !== null
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    fontSize: 11.5,
+                                    fontWeight: 700,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {isProcessing ? (
+                                    <>
+                                      <Loader2
+                                        size={12}
+                                        style={{
+                                          animation:
+                                            "spin 1s linear infinite",
+                                        }}
+                                      />
+                                      Đang xử lý...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check size={12} /> Duyệt
+                                    </>
+                                  )}
+                                </button>
+
+                                <button
+                                  onClick={() => rejectShift(s)}
+                                  disabled={processingId !== null}
+                                  title="Từ chối"
+                                  aria-label="Từ chối"
+                                  type="button"
+                                  style={{
+                                    padding: "7px 12px",
+                                    background: "var(--card-bg, #fff)",
+                                    color: "#ef4444",
+                                    border: "1px solid #ef4444",
+                                    borderRadius: 7,
+                                    cursor:
+                                      processingId !== null
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    fontSize: 11.5,
+                                    fontWeight: 700,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    opacity:
+                                      processingId !== null ? 0.5 : 1,
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  <X size={12} /> Từ chối
+                                </button>
+                              </>
+                            )}
+
+                            {/* Nút Sửa / Xóa (chỉ cho approved hoặc pending đều được) */}
+                            <button
+                              onClick={() => openEdit(s)}
+                              title="Sửa"
+                              aria-label="Sửa"
+                              type="button"
+                              style={iconBtnSmall}
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={() => removeAssignment(s.id)}
+                              title="Xóa"
+                              aria-label="Xóa"
+                              type="button"
+                              style={{ ...iconBtnSmall, color: "#ef4444" }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -1440,10 +1752,11 @@ export default function OwnerShifts() {
       {/* ============================================================
           ASSIGN MODAL
           ============================================================ */}
-            {assignModal && (
+      {assignModal && (
         <AssignModal
           modal={assignModal}
-          employees={filteredEmployees}
+          // ✅ FIX #6: dùng FULL employees (không filter theo search)
+          employees={employees}
           weekDays={weekDays}
           shifts={shifts}
           onSave={saveAssignment}
@@ -1471,6 +1784,10 @@ export default function OwnerShifts() {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
         }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50%      { transform: scale(1.08); }
+        }
       `}</style>
     </div>
   );
@@ -1483,7 +1800,6 @@ export default function OwnerShifts() {
 function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose }) {
   const isEdit = modal._isEdit === true;
 
-  // Modal tự chứa state form + saving
   const [saving, setSaving] = useState(false);
 
   // Tính ngày tuần sau — memo 1 lần
@@ -1708,6 +2024,24 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
           </div>
         )}
 
+        {isEdit && (
+          <div
+            style={{
+              marginBottom: 14,
+              padding: "8px 12px",
+              background: "rgba(245, 158, 11, 0.1)",
+              border: "1px solid rgba(245, 158, 11, 0.3)",
+              borderRadius: 8,
+              fontSize: 12,
+              color: "#92400e",
+              fontWeight: 600,
+            }}
+          >
+            ✏️ Đang sửa ca ngày {modal.date} — chỉ đổi được ca, không đổi nhân
+            viên
+          </div>
+        )}
+
         <form onSubmit={submit} autoComplete="off">
           {/* Nhân viên */}
           <label style={labelStyle}>Nhân viên *</label>
@@ -1816,8 +2150,8 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                 <button
                   key={d}
                   type="button"
-                  onClick={() => setActiveDate(d)}
-                  disabled={saving}
+                  onClick={() => !isEdit && setActiveDate(d)}
+                  disabled={saving || isEdit}
                   title={isAssigned ? "Đã có ca — bấm để chọn thêm ca" : "Bấm để chọn ngày"}
                   style={{
                     padding: "8px 4px",
@@ -1825,12 +2159,13 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                     background: bg,
                     color: color,
                     border: border,
-                    cursor: saving ? "not-allowed" : "pointer",
+                    cursor: saving || isEdit ? "not-allowed" : "pointer",
                     display: "flex",
                     flexDirection: "column",
                     gap: 2,
                     position: "relative",
                     transition: "all 0.15s",
+                    opacity: isEdit && !isActive ? 0.5 : 1,
                   }}
                 >
                   {isAssigned && (
@@ -2017,6 +2352,7 @@ function AttendanceBadge({ status }) {
     "Đúng giờ": { bg: "#d1fae5", fg: "#065f46" },
     "Đi muộn": { bg: "#fef3c7", fg: "#92400e" },
     "Về sớm": { bg: "#dbeafe", fg: "#1e40af" },
+    "Đi muộn · Về sớm": { bg: "#fee2e2", fg: "#991b1b" },
   };
   const c = map[status] || { bg: "#e2e8f0", fg: "#475569" };
   return (
