@@ -295,25 +295,36 @@ export default function CustomerHome({ user, cart, setCart }) {
             {m.name}
           </h4>
 
-          {m.rating && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 3,
-                marginBottom: 6,
-                fontSize: 11,
-              }}
-            >
-              <Star size={11} fill="#f59e0b" color="#f59e0b" />
-              <b style={{ color: "var(--text-primary, #172033)" }}>
-                {m.rating}
-              </b>
-              <span style={{ color: "var(--text-light, #8993a3)" }}>
-                ({m.review_count || 0})
-              </span>
-            </div>
-          )}
+          {/* Rating row — luôn render để đồng nhất chiều cao */}
+<div
+  className="food-rating-row"
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    marginBottom: 6,
+    fontSize: 11,
+    minHeight: 20,
+  }}
+>
+  {m.rating ? (
+    <>
+      <Star size={11} fill="#f59e0b" color="#f59e0b" />
+      <b style={{ color: "var(--text-primary, #172033)" }}>
+        {m.rating}
+      </b>
+      <span style={{ color: "var(--text-light, #8993a3)" }}>
+        ({m.review_count || 0})
+      </span>
+    </>
+  ) : (
+    // Placeholder để giữ chiều cao
+    <span style={{ color: "var(--text-light, #cbd5e1)", fontSize: 10 }}>
+      Chưa có đánh giá
+    </span>
+  )}
+</div>
 
           <b
             style={{
