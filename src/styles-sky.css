@@ -12,15 +12,18 @@
      4.  Topbar
      5.  Cards & Panels
      6.  Buttons (primary / outline / small)
-     7.  Forms (input / select / textarea)
+     7.  Forms (input / select / textarea)  ← bao gồm fix viền kép
      8.  Table
      9.  Status badges (pending / info)
      10. Menu categories scroll
-     11. Header nav (customer desktop)
+     11. Header nav (customer desktop)      ← bao gồm fix responsive
      12. Topbar layout balance
      13. Focus ring toàn cục
      14. Dark mode overrides
      R1-R12. Refinement layer (khớp ref design)
+     FIX-A. Font tiếng Việt (fallback đầy đủ)
+     FIX-B. Loại bỏ viền kép (double border) trên mọi input wrapper
+     FIX-C. Responsive HeaderNav / BottomNav
 
    NGUYÊN TẮC:
      - CHỈ override các class đã tồn tại trong styles.css
@@ -28,45 +31,6 @@
        #f59e0b (warning), #8b5cf6 (purple), #ec4899 (pink)
        → giữ nguyên ngữ nghĩa
    ============================================================ */
-/* ============================================================
-   ✅ FIX FONT TIẾNG VIỆT — Thêm vào đầu file styles.css
-   ============================================================ */
-
-/* Đảm bảo font family có fallback đầy đủ cho tiếng Việt */
-:root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-               "Helvetica Neue", "Noto Sans", "Noto Sans Vietnamese",
-               "Arial Unicode MS", Arial, Tahoma, Verdana, sans-serif;
-  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
-               "Courier New", Consolas, monospace;
-}
-
-/* Force font-family cho toàn bộ app */
-html, body, button, input, textarea, select {
-  font-family: var(--font-sans) !important;
-  font-feature-settings: "kern" 1, "liga" 1;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
-
-/* Fix cho badge status cụ thể */
-.status,
-.status-badge,
-.att-badge,
-.inv-badge,
-button,
-td,
-th {
-  font-family: var(--font-sans) !important;
-}
-
-/* Fix ký tự đặc biệt */
-* {
-  font-variant-ligatures: normal;
-  font-variant-numeric: normal;
-  font-variant-east-asian: normal;
-}
 
 /* ============================================================
    1. SKY VARIABLES
@@ -119,7 +83,7 @@ body {
    ------------------------------------------------------------
    Blob trang trí nằm LUÔN trong background (radial-gradient)
    → không bị overflow-y: auto cắt như pseudo-element.
-   ✅ FIX: circle có size CỐ ĐỊNH (45px) để không phủ toàn sidebar.
+   circle có size CỐ ĐỊNH (45px) để không phủ toàn sidebar.
    ============================================================ */
 
 .sidebar, aside {
@@ -164,12 +128,16 @@ body {
 aside > div:first-child {
   color: var(--sky-ink-900) !important;
 }
+
+.brand-text small {
+  color: var(--sky-500) !important;
+}
+
 /* ============================================================
    FIX: <aside> trong Chat layout bị selector "aside" trong
    styles.css đè (position: fixed, width: 250px, bg đen)
    ============================================================ */
 
-/* Reset cột trái chat về static */
 .chat-layout > aside {
   position: static !important;
   width: auto !important;
@@ -187,21 +155,15 @@ aside > div:first-child {
   overflow: hidden !important;
 }
 
-/* Kill blob sky nếu bị apply lên chat aside */
 .chat-layout > aside::before,
 .chat-layout > aside::after {
   content: none !important;
   display: none !important;
 }
 
-/* Trong dark mode, giữ đúng nền card */
 html.dark-mode .chat-layout > aside {
   background: #111A2B !important;
   border-right: 0 !important;
-}
-
-.brand-text small {
-  color: var(--sky-500) !important;
 }
 
 /* --- Role chip --- */
@@ -335,13 +297,19 @@ header[style*="sticky"] {
 
 /* ============================================================
    7. FORMS
+   ------------------------------------------------------------
+   LƯU Ý: Focus ring cho input đứng riêng (không wrapper).
+   Xem FIX-B ở cuối file để biết cách xử lý input trong wrapper.
    ============================================================ */
 
 .form-input:focus,
-.input-icon:focus-within,
-input:focus,
 textarea:focus,
 select:focus {
+  border-color: var(--sky-500) !important;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12) !important;
+}
+
+.input-icon:focus-within {
   border-color: var(--sky-500) !important;
   box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12) !important;
 }
@@ -627,7 +595,6 @@ html.dark-mode select:focus-visible {
   padding: 26px 20px !important;
 }
 
-/* Brand block */
 .sidebar .brand,
 aside > div:first-child {
   padding: 8px 6px 24px !important;
@@ -653,7 +620,6 @@ aside > div:first-child {
   margin-top: 3px !important;
 }
 
-/* Role chip */
 .role-chip {
   padding: 6px 14px !important;
   font-size: 11.5px !important;
@@ -663,7 +629,6 @@ aside > div:first-child {
   border-radius: 20px !important;
 }
 
-/* Nav items — roomier, gap lớn hơn */
 .sidebar nav,
 aside nav {
   gap: 4px !important;
@@ -689,7 +654,6 @@ aside nav a svg,
   flex-shrink: 0;
 }
 
-/* Active pill — gradient sky + shadow đậm hơn cho khớp ref */
 .sidebar nav a.active,
 aside nav a.active,
 .nav-link.active {
@@ -698,7 +662,6 @@ aside nav a.active,
     0 2px 4px rgba(14, 165, 233, 0.15) !important;
 }
 
-/* Logout btn dưới cùng */
 .logout-btn,
 aside button.logout-btn {
   margin-top: 12px !important;
@@ -735,7 +698,6 @@ header[style*="sticky"] {
   letter-spacing: 2.5px !important;
 }
 
-/* Search bar — pill, cao hơn */
 .global-search {
   max-width: 560px !important;
 }
@@ -752,7 +714,6 @@ header[style*="sticky"] {
   font-size: 14px !important;
 }
 
-/* Profile button + avatar to hơn */
 .topbar-profile-btn {
   padding: 4px 14px 4px 4px !important;
   gap: 10px !important;
@@ -774,7 +735,6 @@ header[style*="sticky"] {
   font-size: 11px !important;
 }
 
-/* Icon buttons — to hơn chút */
 .topbar-icon-btn,
 .cart-topbar-icon {
   width: 42px !important;
@@ -872,7 +832,6 @@ label {
   margin-bottom: 6px !important;
 }
 
-/* Select trong filter bar */
 .page-content select {
   padding: 10px 14px !important;
   border-radius: 10px !important;
@@ -911,12 +870,6 @@ table td {
 
 /* ============================================================
    R9. KPI STAT CARD (utility class — optional adopt)
-   ------------------------------------------------------------
-   <div className="app-stat-card">
-     <div className="app-stat-label">Total Revenue</div>
-     <div className="app-stat-value">$12,560</div>
-     <div className="app-stat-delta up">↑ 12%</div>
-   </div>
    ============================================================ */
 
 .app-stat-card {
@@ -1092,39 +1045,81 @@ html.dark-mode .app-stat-delta.down { color: #F87171 !important; }
     padding: 10px 12px !important;
   }
 }
-/* ============ MODAL FORM — Padding bottom đủ thoáng ============ */
+
+/* ============================================================
+   MODAL FORM — Padding bottom đủ thoáng
+   ============================================================ */
+
 [role="dialog"] > div,
 .modal,
 .food-detail-content {
   padding-bottom: 32px !important;
 }
 
-/* Form trong modal: nút cuối cách biên 24px */
 [role="dialog"] form {
   padding-bottom: 8px;
 }
 
-/* Modal body scroll cuối cùng không dính đáy */
 [role="dialog"] > div:last-child {
   margin-bottom: 0;
-}input:focus, textarea:focus, select:focus {
-  border-color: #2634d5 !important;
-  box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.12) !important;
 }
+
 /* ============================================================
-   ✅ FIX TOÀN CỤC — LOẠI BỎ VIỀN KÉP (DOUBLE BORDER)
+   FIX-A. FONT TIẾNG VIỆT — Fallback đầy đủ
+   ------------------------------------------------------------
+   Đảm bảo font family có fallback cho tiếng Việt trên mọi
+   hệ điều hành (Windows, macOS, Linux, Android, iOS).
+   ============================================================ */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", "Noto Sans", "Noto Sans Vietnamese",
+               "Arial Unicode MS", Arial, Tahoma, Verdana, sans-serif;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+               "Courier New", Consolas, monospace;
+}
+
+/* Force font-family cho toàn bộ app */
+html, body, button, input, textarea, select {
+  font-family: var(--font-sans) !important;
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Badge status cụ thể */
+.status,
+.status-badge,
+.att-badge,
+.inv-badge,
+button,
+td,
+th {
+  font-family: var(--font-sans) !important;
+}
+
+/* Font variants */
+* {
+  font-variant-ligatures: normal;
+  font-variant-numeric: normal;
+  font-variant-east-asian: normal;
+}
+
+/* ============================================================
+   FIX-B. LOẠI BỎ VIỀN KÉP (DOUBLE BORDER) TRÊN INPUT WRAPPER
    ------------------------------------------------------------
    Áp dụng cho MỌI ô input nằm trong wrapper:
      - .global-search-input  (thanh tìm kiếm topbar)
      - .v8-input-wrap        (trang login)
      - .input-icon           (form khác)
-     - .cart-item-grid input (nếu có)
+     - [class*="input-wrap"] (mọi wrapper khác)
    Nguyên tắc:
      - Wrapper giữ border + focus ring
      - Input con bên trong: border: 0, box-shadow: 0
    ============================================================ */
 
-/* ---------- 1. RESET MỌI INPUT NẰM TRONG WRAPPER ---------- */
+/* ---------- B1. Reset mọi input nằm trong wrapper ---------- */
 .global-search-input input,
 .global-search-input input:hover,
 .global-search-input input:focus,
@@ -1152,16 +1147,7 @@ html.dark-mode .app-stat-delta.down { color: #F87171 !important; }
   -webkit-box-shadow: none !important;
 }
 
-/* ---------- 2. GLOBAL: INPUT ĐỨNG MỘT MÌNH (không trong wrapper) ---------- */
-/* Chỉ apply border cho input KHÔNG nằm trong wrapper nào */
-.form-input:focus,
-textarea:focus,
-select:focus {
-  border-color: #2634d5 !important;
-  box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.12) !important;
-}
-
-/* ---------- 3. FOCUS RING NẰM Ở WRAPPER ---------- */
+/* ---------- B2. Focus ring nằm ở wrapper ---------- */
 .global-search-input:focus-within {
   background: var(--card-bg, #fff) !important;
   border-color: #2634d5 !important;
@@ -1178,7 +1164,7 @@ select:focus {
   box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.12) !important;
 }
 
-/* ---------- 4. AUTOFILL FIX (tránh nền vàng + viền kép) ---------- */
+/* ---------- B3. Autofill fix (tránh nền vàng + viền kép) ---------- */
 .global-search-input input:-webkit-autofill,
 .global-search-input input:-webkit-autofill:hover,
 .global-search-input input:-webkit-autofill:focus,
@@ -1194,14 +1180,14 @@ select:focus {
   border: 0 !important;
 }
 
-/* ---------- 5. SPECIAL: BROWSER DEFAULT FOCUS OUTLINE ---------- */
+/* ---------- B4. Browser default focus outline ---------- */
 input:not([type="checkbox"]):not([type="radio"]):focus,
 textarea:focus,
 select:focus {
   outline: 0 !important;
 }
 
-/* ---------- 6. FIX CHO DARK MODE ---------- */
+/* ---------- B5. Dark mode fix ---------- */
 html.dark-mode .global-search-input:focus-within {
   background: #0B1220 !important;
   border-color: var(--sky-500, #0EA5E9) !important;
@@ -1219,48 +1205,35 @@ html.dark-mode .input-icon input:focus {
   box-shadow: none !important;
 }
 
-/* ---------- 7. INPUT ĐỨNG RIÊNG (không wrapper) vẫn có viền ---------- */
-input.form-input,
-textarea.form-input,
-select.form-input,
-input:not([class*="wrap"]):not(.form-input):not([class*="search-input"]),
-textarea:not(.form-input),
-select:not(.form-input) {
-  /* Giữ border mặc định từ styles.css */
-}
-
-/* ---------- 8. ĐẶC BIỆT: CART, CHECKOUT, PROFILE — viền input ---------- */
-/* Những nơi dùng inputWrapStyle inline (React inline style) */
-/* → Không thể CSS override inline, cần sửa JSX. Nhưng thêm rule dưới 
-   để đảm bảo không bị conflict nếu có class */
-.customer-cart input,
-.checkout-form input,
-.profile-form input {
-  border: 0 !important;
-  outline: 0 !important;
-  box-shadow: none !important;
-}/* ============================================================
-   RESPONSIVE — HeaderNav ẩn ở tablet/mobile
+/* ============================================================
+   FIX-C. RESPONSIVE — HeaderNav / BottomNav
    ------------------------------------------------------------
    Desktop (>= 901px): hiện HeaderNav, ẩn BottomNav
    Tablet/Mobile (<= 900px): ẩn HeaderNav, hiện BottomNav
    ============================================================ */
 
-/* Mặc định (desktop): hiện HeaderNav, ẩn BottomNav */
+/* Desktop: hiện HeaderNav, ẩn BottomNav */
 .header-nav {
   display: block !important;
 }
+
 .bottom-nav {
   display: none !important;
 }
 
-/* Tablet và mobile: ẩn HeaderNav, hiện BottomNav */
+/* Tablet + Mobile: ẩn HeaderNav, hiện BottomNav */
 @media (max-width: 900px) {
   .header-nav {
     display: none !important;
   }
+
   .bottom-nav {
     display: flex !important;
+  }
+
+  /* Space cho BottomNav */
+  body.has-bottom-nav .page-content {
+    padding-bottom: 90px !important;
   }
 }
 
@@ -1269,7 +1242,63 @@ select:not(.form-input) {
   .header-nav {
     display: none !important;
   }
+
   .bottom-nav {
     display: flex !important;
   }
 }
+
+/* Đảm bảo header-nav-inner không bị xuống dòng */
+.header-nav-inner {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 4px !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.header-nav-inner::-webkit-scrollbar {
+  display: none !important;
+}
+
+.header-nav-item {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+}
+
+/* Giảm padding khi cửa sổ hẹp để đủ 6 tab */
+@media (max-width: 1400px) {
+  .header-nav-item {
+    padding: 14px 12px !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  .header-nav-item {
+    padding: 14px 10px !important;
+    font-size: 12.5px !important;
+    gap: 6px !important;
+  }
+
+  .header-nav-item svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .header-nav-item {
+    padding: 14px 8px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* ============================================================
+   KẾT THÚC FILE
+   ============================================================ */
