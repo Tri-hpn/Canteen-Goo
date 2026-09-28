@@ -1,11 +1,13 @@
 ﻿/* ============================================================
-   CANTEEN VWA — STYLES.CSS (CLEAN & ORGANIZED)
+   CANTEEN VWA — STYLES.CSS (CLEAN & ORGANIZED v2)
    ============================================================
    File này đã được:
    - Loại bỏ toàn bộ Node.js scripts bị lẫn vào
    - Gộp các rule trùng lặp (giữ bản cuối cùng)
+   - Xóa toast rules trùng lặp (chỉ giữ toast căn giữa)
+   - Xóa rule input:focus global (đã có ở styles-sky FIX-B)
+   - Xóa .page-heading display:none (đã có ở styles-sky)
    - Sắp xếp theo thứ tự logic
-   - Thêm ghi chú cho từng phần
    ============================================================ */
 
 /* ============================================================
@@ -22,7 +24,7 @@
   --text-muted: #64748b;
   --text-light: #8993a3;
 
-  /* ✅ Batch 6D.1: Font vars — chuẩn hóa toàn app */
+  /* Font vars — chuẩn hóa toàn app */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
 
@@ -35,7 +37,8 @@
   --danger: #ef4444;
   --warning: #f59e0b;
   --purple: #8b5cf6;
-  /* ✅ Batch 6D.2: Button semantic colors */
+
+  /* Button semantic colors */
   --btn-primary: #2634d5;
   --btn-primary-hover: #1c28b0;
   --btn-success: #18a967;
@@ -73,7 +76,7 @@ html {
   scrollbar-gutter: stable;
 }
 
-body { 
+body {
   font-family: var(--font-sans);
   background: #f5f7fb;
   color: #172033;
@@ -246,7 +249,7 @@ main, .main {
 }
 .logout-btn:hover { background: #2b0f0f; color: #ef4444; }
 
-/* ✅ Nút X đã bị xóa khỏi Sidebar.jsx → ẩn vĩnh viễn nếu còn sót */
+/* Nút X đã bị xóa khỏi Sidebar.jsx → ẩn vĩnh viễn nếu còn sót */
 .close-sidebar { display: none !important; }
 .mobile-overlay { display: none; }
 
@@ -774,6 +777,9 @@ button, .primary-btn, .outline-btn, .small-btn,
 
 /* ============================================================
    PHẦN 8: FORMS
+   ------------------------------------------------------------
+   LƯU Ý: Rule `input:focus` global đã bị XÓA vì gây viền kép.
+   Focus ring cho input được định nghĩa trong styles-sky.css FIX-B.
    ============================================================ */
 
 .form-input {
@@ -831,11 +837,6 @@ label {
   color: #8993a3;
   cursor: pointer;
   padding: 0;
-}
-
-input:focus, textarea:focus, select:focus {
-  border-color: #2634d5 !important;
-  box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.12) !important;
 }
 
 /* ============================================================
@@ -1852,15 +1853,13 @@ html.dark-mode .inv-badge--out {
 
 /* ============================================================
    PHẦN 18: CHATBOT WIDGET
-   ------------------------------------------------------------
-   ✅ FIX: FAB không đè BottomNav trên mobile
    ============================================================ */
 
 .chatbot-fab {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 45;   /* Dưới BottomNav (50) */
+  z-index: 45;
 }
 
 .chatbot-panel {
@@ -1870,7 +1869,6 @@ html.dark-mode .inv-badge--out {
   z-index: 100;
 }
 
-/* Desktop: FAB nhỏ gọn góc dưới phải */
 @media (min-width: 769px) {
   .chatbot-fab {
     width: 52px !important;
@@ -1882,21 +1880,19 @@ html.dark-mode .inv-badge--out {
   .chatbot-fab svg { width: 22px !important; height: 22px !important; }
 }
 
-/* Mobile có bottom nav: FAB nhảy lên trên bottom nav */
 @media (max-width: 768px) {
   body.has-bottom-nav .chatbot-fab {
     bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
     right: 12px !important;
     width: 48px !important;
     height: 48px !important;
-    z-index: 49 !important;   /* Dưới bottom nav (50) */
+    z-index: 49 !important;
   }
   body.has-bottom-nav .chatbot-fab svg {
     width: 20px !important;
     height: 20px !important;
   }
 
-  /* Panel mở: full screen mobile */
   .chatbot-panel {
     bottom: 0 !important;
     right: 0 !important;
@@ -1910,7 +1906,6 @@ html.dark-mode .inv-badge--out {
   }
 }
 
-/* Landscape phone: panel thấp hơn */
 @media (max-width: 900px) and (orientation: landscape) {
   .chatbot-panel {
     height: calc(100vh - 20px) !important;
@@ -2057,221 +2052,136 @@ html.dark-mode .inv-badge--out {
 
 /* ============================================================
    PHẦN 20: TOAST
+   ------------------------------------------------------------
+   Toast căn giữa màn hình. Các rule cũ (góc phải trên) đã xóa.
    ============================================================ */
 
 .toast-container {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 10px;
-  z-index: 2147483600;
-  pointer-events: none;
-  max-width: calc(100vw - 32px);
-  width: max-content;
-}
-
-@media (max-width: 768px) {
-  body.has-bottom-nav .toast-container {
-    bottom: calc(90px + env(safe-area-inset-bottom, 0px));
-  }
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  z-index: 2147483600 !important;
+  pointer-events: none !important;
+  width: auto !important;
+  max-width: calc(100vw - 32px) !important;
 }
 
 .toast {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #fff;
-  min-width: 260px;
-  max-width: 460px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25),
-              0 2px 10px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  pointer-events: auto;
-  animation: toastSlideIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  min-width: 340px !important;
+  max-width: 500px !important;
+  padding: 18px 24px !important;
+  border-radius: 14px !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  color: #fff !important;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.35),
+    0 8px 20px rgba(0, 0, 0, 0.2) !important;
+  pointer-events: auto !important;
+  animation: toastCenterPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
   will-change: transform, opacity;
 }
 
 .toast.toast-exit {
-  animation: toastSlideOut 0.2s ease forwards;
+  animation: toastCenterFadeOut 0.25s ease forwards !important;
 }
 
 .toast__icon {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
+  width: 24px !important;
+  height: 24px !important;
+  flex-shrink: 0 !important;
+  display: grid !important;
+  place-items: center !important;
 }
 
 .toast__icon svg {
-  width: 100%;
-  height: 100%;
-  stroke-width: 2.5;
+  width: 100% !important;
+  height: 100% !important;
+  stroke-width: 2.5 !important;
 }
 
 .toast__message {
-  flex: 1;
-  min-width: 0;
-  line-height: 1.4;
-  word-break: break-word;
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  text-align: center !important;
+  line-height: 1.4 !important;
+  word-break: break-word !important;
 }
 
 .toast__close {
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.18);
-  border: 0;
-  border-radius: 50%;
-  color: inherit;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  opacity: 0.85;
-  transition: all 0.15s;
-}
-
-.toast__close:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.3);
-  transform: scale(1.05);
-}
-
-.toast__close svg {
-  width: 12px;
-  height: 12px;
-  stroke-width: 2.5;
-}
-
-/* ============ TOAST — Góc phải trên ============ */
-.toast-container {
-  position: fixed !important;
-  top: 80px !important;
-  right: 24px !important;
-  bottom: auto !important;
-  left: auto !important;
-  transform: none !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
-  z-index: 2147483600 !important;
-  pointer-events: none !important;
-  max-width: calc(100vw - 32px) !important;
-  width: auto !important;
-  align-items: flex-end !important;
-}
-
-.toast {
-  min-width: 300px !important;
-  max-width: 420px !important;
-  padding: 14px 16px !important;
-  border-radius: 12px !important;
-  font-size: 14px !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18),
-              0 4px 8px rgba(0, 0, 0, 0.08) !important;
-  animation: toastSlideInRight 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-}
-
-.toast.toast-exit {
-  animation: toastSlideOutRight 0.2s ease forwards !important;
-}
-
-.toast__close {
-  width: 28px !important;
-  height: 28px !important;
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  width: 26px !important;
+  height: 26px !important;
   background: rgba(255, 255, 255, 0.22) !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  color: inherit !important;
+  cursor: pointer !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  opacity: 0.85 !important;
+  transition: all 0.15s !important;
 }
 
 .toast__close:hover {
+  opacity: 1 !important;
   background: rgba(255, 255, 255, 0.4) !important;
+  transform: scale(1.05);
 }
 
 .toast__close svg {
   width: 14px !important;
   height: 14px !important;
+  stroke-width: 2.5 !important;
 }
 
-@keyframes toastSlideInRight {
-  from { opacity: 0; transform: translateX(40px) scale(0.95); }
-  to   { opacity: 1; transform: translateX(0) scale(1); }
+/* Type variants */
+.toast--success { background: linear-gradient(135deg, #18a967, #158a54) !important; }
+.toast--error   { background: linear-gradient(135deg, #ef4444, #dc2626) !important; }
+.toast--warning { background: linear-gradient(135deg, #f59e0b, #d97706) !important; }
+.toast--info    { background: linear-gradient(135deg, #2634d5, #1c28b0) !important; }
+
+/* Animations */
+@keyframes toastCenterPop {
+  0%   { opacity: 0; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
-@keyframes toastSlideOutRight {
-  from { opacity: 1; transform: translateX(0) scale(1); }
-  to   { opacity: 0; transform: translateX(40px) scale(0.9); }
+@keyframes toastCenterFadeOut {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9); }
 }
 
-@media (max-width: 768px) {
-  .toast-container {
-    top: 64px !important;      /* ✅ FIX: 56px topbar + 8px gap */
-    right: 12px !important;
-    left: 12px !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-  }
-  .toast {
-    min-width: 0 !important;
-    width: 100% !important;
-    padding: 12px 14px !important;
-    font-size: 13px !important;
-  }
-}
-
+/* Mobile: co lại cho vừa */
 @media (max-width: 480px) {
   .toast-container {
-    top: 60px !important;      /* ✅ FIX: 54px topbar + 6px gap */
-    right: 8px !important;
-    left: 8px !important;
+    left: 16px !important;
+    right: 16px !important;
+    transform: translateY(-50%) !important;
   }
   .toast {
     min-width: 0 !important;
-    width: 100% !important;
-    padding: 10px 12px !important;
-    font-size: 12.5px !important;
+    max-width: calc(100vw - 32px) !important;
+    padding: 16px 20px !important;
+    font-size: 14px !important;
   }
-  .toast__close {
-    width: 24px !important;
-    height: 24px !important;
-  }
-}
-
-/* ============ TYPE VARIANTS ============ */
-
-.toast--success {
-  background: linear-gradient(135deg, #18a967, #158a54);
-}
-
-.toast--error {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-}
-
-.toast--warning {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-}
-
-.toast--info {
-  background: linear-gradient(135deg, #2634d5, #1c28b0);
-}
-
-/* ============ ANIMATIONS ============ */
-
-@keyframes toastSlideIn {
-  from { opacity: 0; transform: translateY(20px) scale(0.95); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes toastSlideOut {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to   { opacity: 0; transform: translateY(20px) scale(0.9); }
 }
 
 /* ============================================================
@@ -2642,7 +2552,6 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
 
   .topbar-right::before { display: none; }
 
-  /* ✅ Auto-fit sidebar — clamp theo viewport, chống wrap text */
   .sidebar, aside {
     width: clamp(190px, 52vw, 240px) !important;
     padding: 14px 10px !important;
@@ -2696,7 +2605,6 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
     gap: 10px !important;
   }
 
-  /* ✅ Nút X đã xóa — ẩn nếu có render sót */
   .sidebar.mobile-open .close-sidebar,
   aside.mobile-open .close-sidebar,
   body.sidebar-open .sidebar .close-sidebar,
@@ -2729,7 +2637,6 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   .footer-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
   .app-footer { padding: 16px !important; border-radius: 12px !important; }
 
-  /* Mobile: home grid ảnh tròn 90px */
   .home-food-grid-5 .food-card-clickable > img,
   .home-food-grid-5 .food-card-clickable > div:first-child > img,
   .home-food-grid-4 .food-card-clickable > img,
@@ -2738,7 +2645,6 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
     height: 90px !important;
     margin-top: 10px !important;
   }
-  /* Menu grid ảnh chữ nhật 140px */
   .menu-food-grid .food-card-clickable > img,
   .menu-food-grid .food-card-clickable > div:first-child > img {
     height: 140px !important;
@@ -2971,7 +2877,6 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   }
   .home-cat-grid { grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important; }
 
-  /* Mobile nhỏ: home ảnh tròn 80px */
   .home-food-grid-5 .food-card-clickable > img,
   .home-food-grid-5 .food-card-clickable > div:first-child > img,
   .home-food-grid-4 .food-card-clickable > img,
@@ -2979,7 +2884,6 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
     width: 80px !important;
     height: 80px !important;
   }
-  /* Menu ảnh chữ nhật 120px */
   .menu-food-grid .food-card-clickable > img,
   .menu-food-grid .food-card-clickable > div:first-child > img {
     height: 120px !important;
@@ -3060,6 +2964,7 @@ html.dark-mode ::selection { background: rgba(96, 165, 250, 0.35); }
   * { overflow-wrap: break-word; }
   pre, code { white-space: pre-wrap; word-break: break-word; }
 }
+
 /* ============================================================
    PHẦN 26: UX POLISH & ANIMATIONS
    ============================================================ */
@@ -3149,7 +3054,7 @@ button svg, .primary-btn svg, .outline-btn svg, .small-btn svg {
 }
 
 /* ============================================================
-   PHẦN 28: KEYFRAME ANIMATIONS (tổng hợp)
+   PHẦN 28: KEYFRAME ANIMATIONS
    ============================================================ */
 
 @keyframes fadeIn {
@@ -3951,13 +3856,6 @@ html.dark-mode .payment-card .pm-body > span { color: #94a3b8; }
 
 /* ============================================================
    PHẦN 35: FOOD CARD FIX — Ảnh tròn CHỈ trên grid trang chủ
-   ------------------------------------------------------------
-   ✅ FIX: Chỉ ép ảnh tròn trong .home-food-grid-5 / .home-food-grid-4
-      (trang chủ + signature), để .menu-food-grid (trang menu) giữ
-      ảnh chữ nhật 160px.
-
-   Trước đây: ép tất cả food-card-clickable > img thành 110px tròn
-   → trang menu cũng bị ép, conflict với JSX.
    ============================================================ */
 
 .home-food-grid-5 .food-card-clickable > img,
@@ -4544,7 +4442,6 @@ html.dark-mode .v8-demo { background: #1e293b; border-color: #334155; }
 html.dark-mode .v8-demo-item { background: #0f172a; border-color: #334155; }
 html.dark-mode .v8-label { color: #cbd5e1; }
 
-/* Tablet ngang (768-1024px): chia 40/60 thay vì 50/50 */
 @media (max-width: 1024px) and (min-width: 769px) {
   .v8-login-page {
     grid-template-columns: 0.8fr 1.2fr !important;
@@ -4558,7 +4455,6 @@ html.dark-mode .v8-label { color: #cbd5e1; }
   .v8-form-title { font-size: 26px !important; }
 }
 
-/* Mobile: 1 cột */
 @media (max-width: 900px) {
   .v8-login-page {
     grid-template-columns: 1fr !important;
@@ -4708,19 +4604,12 @@ html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !
 
 /* ============================================================
    PHẦN 39: SIDEBAR PUSH/AUTO-FIT (bulletproof)
-   ============================================================
-   Dùng body.sidebar-open → đảm bảo match DOM dù React Fragment.
-   Fix z-index: sidebar phải > topbar (100) khi mở trên mobile.
-   ✅ PATCH: Mobile sidebar dùng clamp() để auto-fit mọi màn hình.
-   ✅ PATCH: Bỏ nút X (đã xóa khỏi JSX) — chỉ đóng qua overlay.
    ============================================================ */
 
-/* Main có transition mượt */
 .main {
   transition: margin-left 0.3s ease, width 0.3s ease;
 }
 
-/* ===== TABLET (769-1024px): PUSH content sang phải ===== */
 @media (max-width: 1024px) and (min-width: 769px) {
   body.sidebar-open .main {
     margin-left: 260px !important;
@@ -4731,9 +4620,7 @@ html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !
   }
 }
 
-/* ===== MOBILE (≤768px): SIDEBAR AUTO-FIT ===== */
 @media (max-width: 768px) {
-  /* 1. Sidebar auto-fit theo viewport */
   body.sidebar-open .sidebar,
   body.sidebar-open aside {
     width: clamp(190px, 52vw, 240px) !important;
@@ -4742,109 +4629,22 @@ html.dark-mode .v8-tab.active { background: #f1f5f9 !important; color: #0f172a !
     border-right: 0 !important;
   }
 
-  /* 2. Content không push */
   body.sidebar-open .main {
     margin-left: 0 !important;
     width: 100% !important;
   }
 
-  /* 3. Overlay đen mờ phần còn lại */
   body.sidebar-open .mobile-overlay.active {
     display: block !important;
     z-index: 9998 !important;
   }
 
-  /* 4. Không còn nút X */
   body.sidebar-open .sidebar .close-sidebar,
   body.sidebar-open aside .close-sidebar {
     display: none !important;
   }
 }
-/* ============================================================
-   FIX: TẤT CẢ toast căn giữa màn hình
-   ------------------------------------------------------------
-   Override toàn bộ rule cũ (góc phải trên).
-   Không cần sửa Effects.jsx hay App.jsx.
-   ============================================================ */
 
-.toast-container {
-  top: 50% !important;
-  left: 50% !important;
-  right: auto !important;
-  bottom: auto !important;
-  transform: translate(-50%, -50%) !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 12px !important;
-}
-
-.toast {
-  min-width: 340px !important;
-  max-width: 500px !important;
-  padding: 18px 24px !important;
-  font-size: 15px !important;
-  font-weight: 700 !important;
-  text-align: center !important;
-  border-radius: 14px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35),
-              0 8px 20px rgba(0, 0, 0, 0.2) !important;
-  animation: toastCenterPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-  justify-content: center !important;
-}
-
-.toast.toast-exit {
-  animation: toastCenterFadeOut 0.25s ease forwards !important;
-}
-
-.toast__message {
-  text-align: center !important;
-  flex: 0 1 auto !important;
-}
-
-.toast__icon {
-  width: 24px !important;
-  height: 24px !important;
-}
-
-.toast__close {
-  position: absolute !important;
-  top: 8px !important;
-  right: 8px !important;
-  width: 26px !important;
-  height: 26px !important;
-}
-
-.toast {
-  position: relative !important;  /* cho .toast__close absolute */
-}
-
-@keyframes toastCenterPop {
-  0%   { opacity: 0; transform: scale(0.85); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes toastCenterFadeOut {
-  0%   { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(0.9); }
-}
-
-/* Mobile: co lại cho vừa */
-@media (max-width: 480px) {
-  .toast {
-    min-width: 0 !important;
-    max-width: calc(100vw - 32px) !important;
-    padding: 16px 20px !important;
-    font-size: 14px !important;
-  }
-  .toast-container {
-    left: 16px !important;
-    right: 16px !important;
-    transform: translateY(-50%) !important;
-  }
-}
 /* ============================================================
    KẾT THÚC FILE
    ============================================================ */
-/* ✅ Ẩn tất cả page-heading toàn app */
-.page-heading { display: none !important; }
-
