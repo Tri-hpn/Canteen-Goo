@@ -1,0 +1,773 @@
+// ============================================================
+// STAFFPROFILE.JSX — Hồ sơ cá nhân cho Nhân viên / Admin
+// ============================================================
+// Props:
+//   user         — object user hiện tại (từ App state)
+//   setUser      — hàm cập nhật user (từ App state)
+//   canEditEmail — true nếu được sửa email (Admin: true, NV: false)
+//
+// Có 2 mode:
+//   - View  : hiển thị info read-only
+//   - Edit  : form cho phép chỉnh sửa
+//
+// Ngoài ra có:
+//   - Upload avatar (đọc file → base64)
+//   - Modal đổi mật khẩu (riêng biệt, tách component)
+// ============================================================
+
+import { useState, useEffect } from "react";
+import {
+  User, Mail, Phone, MapPin, Save, Shield, Camera,
+  Pencil, X, Check, Lock, KeyRound, Eye, EyeOff,
+} from "lucide-react";
+import { api } from "../api";
+import { toast } from "../components/Effects";
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
+
+export default function StaffProfile({ user, setUser, canEditEmail = false }) {
+  // ---------- View / Edit state ----------
+  const [editing, setEditing] = useState(false);
+
+  // Form data — khởi tạo từ user
+  const [form, setForm] = useState(() => buildFormFromUser(user));
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  // Password modal state
+  const [showPwdModal, setShowPwdModal] = useState(false);
+
+  // ---------- Helpers ----------
+
+  /**
+   * Tạo object form từ user
+   * (dùng cho cả khởi tạo và reset)
+   */
+  function buildFormFromUser(u) {
+    return {
+      name: u?.name || "",
+      email: u?.email || "",
+      phone: u?.phone || "",
+      address: u?.address || "",
+      avatar: u?.avatar || "",
+    };
+  }
+
+  // ---------- Effects ----------
+
+  /**
+   * Auto-sync form khi user prop thay đổi (VD: sau khi parent refresh user)
+   * NHƯNG chỉ sync khi KHÔNG đang edit — để không mất dữ liệu user đang gõ
+   */
+  useEffect(() => {
+    if (!editing) {
+      setForm(buildFormFromUser(user));
+    }
+  }, [user, editing]);
+
+  // ---------- Handlers ----------
+
+  const startEdit = () => {
+    setForm(buildFormFromUser(user));
+    setErrors({});
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setForm(buildFormFromUser(user));
+    setErrors({});
+    setEditing(false);
+  };
+
+  const update = (key) => (e) => {
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+    if (errors[key]) setErrors((er) => ({ ...er, [key]: "" }));
+  };
+
+  // ---------- Upload avatar ----------
+
+  const handleAvatar = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Giới hạn 2MB
+    if (file.size > 2 * 1024 * 1024) {
+      toast("Ảnh vượt quá 2MB", "error");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm((f) => ({ ...f, avatar: reader.result }));
+      toast("Đã chọn ảnh mới", "success");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ---------- Validate ----------
+
+  const validate = () => {
+    const errs = {};
+    if (!form.name.trim()) errs.name = "Vui lòng nhập họ tên";
+
+    if (canEditEmail) {
+      if (!form.email.trim()) {
+        errs.email = "Vui lòng nhập email";
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+        errs.email = "Email không hợp lệ";
+      }
+    }
+
+    if (form.phone && !/^[0-9]{10,11}$/.test(form.phone.trim())) {
+      errs.phone = "SĐT phải 10-11 số";
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  // ---------- Save profile ----------
+
+  const save = async () => {
+    if (!validate()) {
+      toast("Kiểm tra lại thông tin", "error");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        address: form.address.trim(),
+        avatar: form.avatar,
+      };
+      if (canEditEmail) payload.email = form.email.trim().toLowerCase();
+
+      const updated = await api.updateProfile(payload);
+
+      // Cập nhật user state ở parent
+      if (setUser) setUser((u) => ({ ...u, ...updated }));
+
+      // Báo các component khác refresh
+      window.dispatchEvent(new CustomEvent("refresh-user"));
+
+      toast("Đã lưu thay đổi!", "success");
+      setEditing(false);
+    } catch (err) {
+      toast(err.message || "Không lưu được", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------- Render helpers ----------
+
+  const roleLabel =
+    user?.role === "ADMIN" ? "Quản trị viên" : "Nhân viên";
+
+  const displayName = editing ? form.name : user?.name || "";
+  const initials = (displayName || "VWA")
+    .trim()
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  const avatarSrc = editing ? form.avatar : user?.avatar;
+
+  return (
+    <div className="profile-grid" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 20 }}>
+
+      {/* ============================================================
+          LEFT CARD — Avatar + Role + Nút đổi mật khẩu
+          ============================================================ */}
+      <div className="profile-card-left" style={cardStyle}>
+
+        {/* Avatar + nút camera (chỉ hiện khi edit) */}
+        <div className="profile-avatar-wrap" style={{ position: "relative", width: 100, height: 100, margin: "0 auto 14px" }}>
+          <div
+            className="profile-avatar"
+            style={{
+              width: 100,
+              height: 100,
+              borderRadius: "50%",
+              background: avatarSrc
+                ? `url(${avatarSrc}) center/cover`
+                : "linear-gradient(135deg, #2634d5, #20c779)",
+              color: "#fff",
+              display: "grid",
+              placeItems: "center",
+              fontWeight: 800,
+              fontSize: 36,
+              border: "3px solid var(--border-color, #e5e9ef)",
+              overflow: "hidden",
+            }}
+          >
+            {!avatarSrc && initials}
+          </div>
+
+          {editing && (
+            <label
+              title="Đổi ảnh"
+              style={{
+                position: "absolute",
+                bottom: 0,
+                right: 0,
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                background: "#2634d5",
+                color: "#fff",
+                display: "grid",
+                placeItems: "center",
+                cursor: "pointer",
+                border: "2px solid #fff",
+              }}
+            >
+              <Camera size={16} />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatar}
+                style={{ display: "none" }}
+              />
+            </label>
+          )}
+        </div>
+
+        <h3 style={{ margin: "0 0 4px", color: "var(--text-primary, #172033)", textAlign: "center" }}>
+          {user?.name}
+        </h3>
+        <p style={{ margin: 0, color: "var(--text-light, #8993a3)", fontSize: 13, textAlign: "center" }}>
+          {user?.email}
+        </p>
+
+        {/* Badge role */}
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 12px",
+              borderRadius: 20,
+              background: user?.role === "ADMIN" ? "#fef3c7" : "#eef2ff",
+              color: user?.role === "ADMIN" ? "#92400e" : "#2634d5",
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            <Shield size={12} /> {roleLabel}
+          </div>
+        </div>
+
+        {/* Nút đổi mật khẩu */}
+        <button
+          onClick={() => setShowPwdModal(true)}
+          className="btn-change-pwd"
+          style={{
+            width: "100%",
+            marginTop: 20,
+            padding: 12,
+            background: "var(--bg-tertiary, #f5f7fb)",
+            color: "var(--text-primary, #172033)",
+            border: "1px solid var(--border-color, #e5e9ef)",
+            borderRadius: 10,
+            fontWeight: 600,
+            cursor: "pointer",
+            fontSize: 13,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          <KeyRound size={15} /> Đổi mật khẩu
+        </button>
+      </div>
+
+      {/* ============================================================
+          RIGHT CARD — Thông tin / Form chỉnh sửa
+          ============================================================ */}
+      <div className="profile-card-right" style={cardStyle}>
+
+        {/* Header với nút Sửa / Lưu / Hủy */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <h3 style={{ margin: 0, color: "var(--text-primary, #172033)" }}>
+              Hồ sơ cá nhân
+            </h3>
+            <p style={{ margin: "4px 0 0", color: "var(--text-light, #8993a3)", fontSize: 13 }}>
+              {editing ? "Chỉnh sửa thông tin bên dưới" : "Thông tin tài khoản của bạn"}
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {!editing ? (
+              <button onClick={startEdit} style={btnEdit}>
+                <Pencil size={14} /> Sửa
+              </button>
+            ) : (
+              <>
+                <button onClick={cancelEdit} disabled={loading} className="btn-cancel" style={btnCancel}>
+                  <X size={14} /> Hủy
+                </button>
+                <button onClick={save} disabled={loading} className="btn-save" style={btnSave}>
+                  <Save size={14} /> {loading ? "Đang lưu..." : "Lưu"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ---------- VIEW MODE ---------- */}
+        {!editing && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <InfoRow icon={<User size={16} />} label="Họ và tên" value={user?.name} />
+            <InfoRow
+              icon={<Mail size={16} />}
+              label="Email"
+              value={user?.email}
+              note={!canEditEmail ? "Do admin quản lý" : null}
+            />
+            <InfoRow icon={<Phone size={16} />} label="Số điện thoại" value={user?.phone || "—"} />
+            <InfoRow icon={<MapPin size={16} />} label="Địa chỉ" value={user?.address || "—"} />
+          </div>
+        )}
+
+        {/* ---------- EDIT MODE ---------- */}
+        {editing && (
+          <div>
+            {/* Họ tên */}
+            <label style={labelStyle}>Họ và tên *</label>
+            <div style={inputWrapStyle(errors.name)}>
+              <User size={16} style={iconStyle} />
+              <input
+                value={form.name}
+                onChange={update("name")}
+                style={inputInnerStyle}
+                placeholder="Nguyễn Văn A"
+              />
+            </div>
+            {errors.name && <div style={errStyle}>{errors.name}</div>}
+
+            {/* Email */}
+            <label style={labelStyle}>
+              Email {canEditEmail ? "*" : "(không được sửa)"}
+            </label>
+            <div style={{ ...inputWrapStyle(errors.email), opacity: canEditEmail ? 1 : 0.6 }}>
+              <Mail size={16} style={iconStyle} />
+              <input
+                type="email"
+                value={form.email}
+                onChange={update("email")}
+                style={inputInnerStyle}
+                disabled={!canEditEmail}
+              />
+            </div>
+            {errors.email && <div style={errStyle}>{errors.email}</div>}
+
+            {/* SĐT */}
+            <label style={labelStyle}>Số điện thoại</label>
+            <div style={inputWrapStyle(errors.phone)}>
+              <Phone size={16} style={iconStyle} />
+              <input
+                value={form.phone}
+                onChange={update("phone")}
+                style={inputInnerStyle}
+                placeholder="0901234567"
+              />
+            </div>
+            {errors.phone && <div style={errStyle}>{errors.phone}</div>}
+
+            {/* Địa chỉ */}
+            <label style={labelStyle}>Địa chỉ</label>
+            <div style={inputWrapStyle()}>
+              <MapPin size={16} style={iconStyle} />
+              <input
+                value={form.address}
+                onChange={update("address")}
+                style={inputInnerStyle}
+                placeholder="Ký túc xá VWA"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ============================================================
+          MODAL ĐỔI MẬT KHẨU
+          ============================================================ */}
+      {showPwdModal && (
+        <PasswordModal onClose={() => setShowPwdModal(false)} />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// SUB-COMPONENT: PasswordModal
+// ============================================================
+// Tách riêng để code chính gọn hơn.
+// Tự quản lý state form + API call, parent chỉ cần truyền onClose.
+// ============================================================
+
+function PasswordModal({ onClose }) {
+  const [form, setForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const update = (key) => (e) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  // Đóng modal khi nhấn ESC
+  useEffect(() => {
+    const handler = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const submit = async () => {
+    setError("");
+
+    if (!form.currentPassword || !form.newPassword) {
+      setError("Nhập đầy đủ thông tin");
+      return;
+    }
+    if (form.newPassword.length < 6) {
+      setError("Mật khẩu mới phải từ 6 ký tự");
+      return;
+    }
+    if (form.newPassword !== form.confirmPassword) {
+      setError("Xác nhận mật khẩu không khớp");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.changePassword({
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+      });
+      toast("Đổi mật khẩu thành công!", "success");
+      window.dispatchEvent(new CustomEvent("refresh-user"));
+      onClose();
+    } catch (e) {
+      setError(e.message || "Lỗi đổi mật khẩu");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Đổi mật khẩu"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        display: "grid",
+        placeItems: "center",
+        zIndex: 100,
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--card-bg, #fff)",
+          borderRadius: 14,
+          padding: 24,
+          width: "100%",
+          maxWidth: 460,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ margin: 0, color: "var(--text-primary, #172033)", display: "flex", alignItems: "center", gap: 8 }}>
+            <Lock size={20} /> Đổi mật khẩu
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: 0,
+              fontSize: 24,
+              color: "var(--text-light, #8993a3)",
+              cursor: "pointer",
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Error box */}
+        {error && (
+          <div
+            style={{
+              background: "#fde8e8",
+              color: "#ef4444",
+              padding: 10,
+              borderRadius: 8,
+              fontSize: 12,
+              marginBottom: 14,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* Current password */}
+        <label style={labelStyle}>Mật khẩu hiện tại</label>
+        <div style={inputWrapStyle()}>
+          <Lock size={16} style={iconStyle} />
+          <input
+            type={showPwd ? "text" : "password"}
+            value={form.currentPassword}
+            onChange={update("currentPassword")}
+            style={inputInnerStyle}
+            placeholder="Nhập mật khẩu hiện tại"
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={() => setShowPwd(!showPwd)}
+            style={{
+              background: "transparent",
+              border: 0,
+              cursor: "pointer",
+              color: "var(--text-light, #8993a3)",
+            }}
+          >
+            {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
+
+        {/* New password */}
+        <label style={labelStyle}>Mật khẩu mới</label>
+        <div style={inputWrapStyle()}>
+          <KeyRound size={16} style={iconStyle} />
+          <input
+            type={showPwd ? "text" : "password"}
+            value={form.newPassword}
+            onChange={update("newPassword")}
+            style={inputInnerStyle}
+            placeholder="Tối thiểu 6 ký tự"
+          />
+        </div>
+
+        {/* Confirm password */}
+        <label style={labelStyle}>Xác nhận mật khẩu mới</label>
+        <div style={inputWrapStyle()}>
+          <Check size={16} style={iconStyle} />
+          <input
+            type={showPwd ? "text" : "password"}
+            value={form.confirmPassword}
+            onChange={update("confirmPassword")}
+            style={inputInnerStyle}
+            placeholder="Nhập lại mật khẩu mới"
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+          />
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1,
+              padding: 12,
+              border: "1px solid var(--border-color, #e5e9ef)",
+              borderRadius: 8,
+              background: "var(--card-bg, #fff)",
+              cursor: "pointer",
+              color: "var(--text-primary, #172033)",
+              fontWeight: 600,
+            }}
+          >
+            Hủy
+          </button>
+          <button
+            onClick={submit}
+            disabled={loading}
+            style={{
+              flex: 1,
+              padding: 12,
+              background: loading ? "#94a3b8" : "#2634d5",
+              color: "#fff",
+              border: 0,
+              borderRadius: 8,
+              fontWeight: 700,
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+          >
+            {loading ? "Đang xử lý..." : "Đổi mật khẩu"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// SUB-COMPONENT: InfoRow
+// ============================================================
+// Hiển thị 1 dòng thông tin (icon + label + value)
+// ============================================================
+
+function InfoRow({ icon, label, value, note }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: 14,
+        background: "var(--bg-tertiary, #f8fafc)",
+        borderRadius: 10,
+      }}
+    >
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          background: "#eef2ff",
+          color: "#2634d5",
+          display: "grid",
+          placeItems: "center",
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--text-light, #8993a3)",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+            marginBottom: 2,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          {label}
+          {note && (
+            <span style={{ fontSize: 10, color: "#f59e0b", fontWeight: 600 }}>
+              ({note})
+            </span>
+          )}
+        </div>
+        <div
+          style={{
+            fontSize: 14,
+            color: "var(--text-primary, #172033)",
+            fontWeight: 600,
+            wordBreak: "break-word",
+          }}
+        >
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// STYLE CONSTANTS
+// ============================================================
+
+const cardStyle = {
+  background: "var(--card-bg, #fff)",
+  border: "1px solid var(--border-color, #e7ebf0)",
+  borderRadius: 12,
+  padding: 24,
+};
+
+const btnEdit = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "8px 16px",
+  background: "#2634d5",
+  color: "#fff",
+  border: 0,
+  borderRadius: 8,
+  fontWeight: 600,
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+const btnCancel = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "8px 14px",
+  background: "var(--card-bg, #fff)",
+  color: "var(--text-primary, #475569)",
+  border: "1px solid var(--border-color, #e5e9ef)",
+  borderRadius: 8,
+  fontWeight: 600,
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+const btnSave = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "8px 16px",
+  background: "#18a967",
+  color: "#fff",
+  border: 0,
+  borderRadius: 8,
+  fontWeight: 600,
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+const labelStyle = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 600,
+  marginBottom: 4,
+  color: "var(--text-muted, #475569)",
+  marginTop: 14,
+};
+
+const iconStyle = { color: "var(--text-light, #8993a3)" };
+
+const inputInnerStyle = {
+  flex: 1,
+  border: 0,
+  outline: "none",
+  background: "transparent",
+  color: "var(--text-primary, #172033)",
+  fontSize: 13,
+};
+
+const inputWrapStyle = (err) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  border: err ? "2px solid #ef4444" : "1px solid var(--border-color, #e5e9ef)",
+  borderRadius: 8,
+  padding: "8px 12px",
+  background: "var(--bg-secondary, #fff)",
+});
+
+const errStyle = { color: "#ef4444", fontSize: 12, marginTop: 4 };
