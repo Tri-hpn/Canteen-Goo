@@ -99,6 +99,7 @@ export const translations = {
     "nav.process": "Chấm công",
     "nav.chat_staff": "Chat khách",
     "nav.notifications": "Thông báo",
+    "nav.more": "Thêm",
 
     // ---------- Roles (vai trò) ----------
     "role.admin": "Quản trị viên",
@@ -428,6 +429,7 @@ export const translations = {
     "nav.process": "Attendance",
     "nav.chat_staff": "Customer Chat",
     "nav.notifications": "Notifications",
+    "nav.more": "More",
 
     // ---------- Roles ----------
     "role.admin": "Administrator",
