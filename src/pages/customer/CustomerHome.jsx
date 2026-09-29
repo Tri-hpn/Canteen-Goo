@@ -1,8 +1,6 @@
 ﻿// ============================================================
 // CUSTOMERHOME.JSX — Trang chủ khách hàng
 // ============================================================
-<<<<<<< HEAD
-=======
 // Gồm:
 //   - Banner carousel (data từ ../../bannerSlides)
 //   - Flash marquee (chạy chữ khuyến mãi)
@@ -16,7 +14,6 @@
 //   - Áp dụng i18n cho tất cả text
 //   - DEFAULT_FLASH_ITEMS và TESTIMONIALS dùng key i18n
 // ============================================================
->>>>>>> origin/main
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -43,23 +40,10 @@ const FLASH_PROMOS_LIMIT = 4;
 const FLASH_VOUCHERS_LIMIT = 2;
 const SKELETON_COUNT = 5;
 
-<<<<<<< HEAD
 const TESTIMONIAL_DATA = [
   { name: "Nguyễn Minh Anh", roleKey: "testimonial.1.role", rating: 5, textKey: "testimonial.1.text" },
   { name: "Trần Quốc Bảo",   roleKey: "testimonial.2.role", rating: 5, textKey: "testimonial.2.text" },
   { name: "Lê Thu Hà",       roleKey: "testimonial.3.role", rating: 4, textKey: "testimonial.3.text" },
-=======
-const DEFAULT_FLASH_ITEMS = [
-  { key: "home.flash1" },
-  { key: "home.flash2" },
-  { key: "home.flash3" },
-];
-
-const TESTIMONIALS = [
-  { name: "Nguyễn Minh Anh", roleKey: "home.role1", rating: 5, textKey: "home.testi1" },
-  { name: "Trần Quốc Bảo",   roleKey: "home.role2", rating: 5, textKey: "home.testi2" },
-  { name: "Lê Thu Hà",       roleKey: "home.role3", rating: 4, textKey: "home.testi3" },
->>>>>>> origin/main
 ];
 
 // ============================================================
@@ -171,7 +155,6 @@ export default function CustomerHome({ user, cart, setCart }) {
               .replace("{price}", fmtNumber(m.price || 0)),
           });
         });
-<<<<<<< HEAD
         setFlashItems(flash.length > 0 ? flash : []);
       } catch (e) {
         if (!silent) setError(e.message || t("customer.loadError"));
@@ -183,23 +166,6 @@ export default function CustomerHome({ user, cart, setCart }) {
     },
     [t]
   );
-=======
-      });
-      setFlashItems(
-        flash.length > 0
-          ? flash.map((f) => ({ text: f.text }))
-          : DEFAULT_FLASH_ITEMS
-      );
-    } catch (e) {
-      if (!silent) setError(e.message || t("home.errorLoad"));
-    } finally {
-      setLoading(false);
-      if (!silent) setRefreshing(false);
-      inFlightRef.current = false;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
->>>>>>> origin/main
 
   useEffect(() => {
     load(false);
@@ -246,24 +212,12 @@ export default function CustomerHome({ user, cart, setCart }) {
     if (!effectiveFlashItems.length) return [];
     const out = [];
     for (let round = 0; round < 3; round++) {
-<<<<<<< HEAD
       effectiveFlashItems.forEach((item, i) => {
         out.push({ ...item, _key: `${round}-${i}` });
       });
     }
     return out;
   }, [effectiveFlashItems]);
-=======
-      flashItems.forEach((item, i) => {
-        // Nếu item có `key` → dịch; nếu có `text` → dùng luôn
-        const text = item.key ? t(item.key) : item.text;
-        out.push({ ...item, text, _key: `${round}-${i}` });
-      });
-    }
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flashItems, lang]);
->>>>>>> origin/main
 
   // ============================================================
   // RENDER FOOD CARD
@@ -288,7 +242,6 @@ export default function CustomerHome({ user, cart, setCart }) {
           <div className="grab-food-card__image-wrap">
             <img src={m.image} alt={m.name} loading="lazy" />
 
-<<<<<<< HEAD
             {isOutOfStock ? (
               <span className="grab-food-card__badge grab-food-card__badge--out">
                 {t("customer.badgeOutOfStock")}
@@ -298,17 +251,6 @@ export default function CustomerHome({ user, cart, setCart }) {
                 <Flame size={10} /> {t("customer.badgeBestSeller")}
               </span>
             ) : null}
-=======
-          {isOutOfStock ? (
-            <span className="grab-food-card__badge grab-food-card__badge--out">
-              {t("menu.outOfStock")}
-            </span>
-          ) : isHot ? (
-            <span className="grab-food-card__badge grab-food-card__badge--hot">
-              <Flame size={10} /> {t("menu.bestSeller")}
-            </span>
-          ) : null}
->>>>>>> origin/main
 
             {!isOutOfStock && (
               <button
@@ -333,17 +275,10 @@ export default function CustomerHome({ user, cart, setCart }) {
             </div>
           </div>
         </div>
-<<<<<<< HEAD
       );
     },
     [t]
   );
-=======
-      </div>
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
->>>>>>> origin/main
 
   // ============================================================
   // RENDER
@@ -385,11 +320,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               gap: 4,
             }}
           >
-<<<<<<< HEAD
             <RefreshCw size={12} /> {t("customer.retry")}
-=======
-            <RefreshCw size={12} /> {t("home.retry")}
->>>>>>> origin/main
           </button>
         </div>
       )}
@@ -608,11 +539,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             ))}
           </div>
           <span className="flash-label">
-<<<<<<< HEAD
             <Sparkles size={12} /> {t("customer.flashLabel")}
-=======
-            <Sparkles size={12} /> {t("nav.promotions")}
->>>>>>> origin/main
           </span>
         </Link>
       )}
@@ -638,11 +565,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 gap: 8,
               }}
             >
-<<<<<<< HEAD
               <span style={{ fontSize: 22 }}>⚡</span> {t("customer.flashTitle")}
-=======
-              <span style={{ fontSize: 22 }}>⚡</span> {t("home.flashSale")}
->>>>>>> origin/main
               <span
                 style={{
                   background: "linear-gradient(135deg, #ef4444, #f59e0b)",
@@ -653,11 +576,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   fontWeight: 800,
                 }}
               >
-<<<<<<< HEAD
                 {t("customer.flashHot")}
-=======
-                {t("home.hot")}
->>>>>>> origin/main
               </span>
             </h3>
 
@@ -670,11 +589,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
-<<<<<<< HEAD
               {t("customer.viewAll")} →
-=======
-              {t("home.seeAll")} →
->>>>>>> origin/main
             </Link>
           </div>
 
@@ -705,19 +620,11 @@ export default function CustomerHome({ user, cart, setCart }) {
                       className="grab-food-card__name"
                       style={{ textAlign: "center" }}
                     >
-<<<<<<< HEAD
                       {t("customer.voucherDiscount")} {fmtNumber(v.value || 0)}đ
                     </h4>
                     <div className="voucher-card__code">{v.code}</div>
                     <div className="voucher-card__cta">
                       {t("customer.claimNow")}
-=======
-                      {t("promo.discountOff")} {fmtNumber(v.value || 0)}đ
-                    </h4>
-                    <div className="voucher-card__code">{v.code}</div>
-                    <div className="voucher-card__cta">
-                      {t("promo.claimNow")}
->>>>>>> origin/main
                     </div>
                   </div>
                 </Link>
@@ -811,17 +718,10 @@ export default function CustomerHome({ user, cart, setCart }) {
           >
             <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-<<<<<<< HEAD
               {t("customer.noBestSellerTitle")}
             </div>
             <div style={{ fontSize: 12 }}>
               {t("customer.noBestSellerDesc")}
-=======
-              {t("home.noBestSeller")}
-            </div>
-            <div style={{ fontSize: 12 }}>
-              {t("home.noBestSellerDesc")}
->>>>>>> origin/main
             </div>
             <Link
               to="/customer/menu"
@@ -839,11 +739,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontSize: 13,
               }}
             >
-<<<<<<< HEAD
               <Utensils size={15} /> {t("customer.exploreMenu")}
-=======
-              <Utensils size={15} /> {t("home.exploreMenu")}
->>>>>>> origin/main
             </Link>
           </div>
         )}
@@ -869,11 +765,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 color: "var(--text-primary, #172033)",
               }}
             >
-<<<<<<< HEAD
               ✨ {t("customer.newArrivalsTitle")}
-=======
-              ✨ {t("home.newDishes")}
->>>>>>> origin/main
             </h3>
             <Link
               to="/customer/menu"
@@ -884,11 +776,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
-<<<<<<< HEAD
               {t("customer.viewAll")} →
-=======
-              {t("home.seeAll")} →
->>>>>>> origin/main
             </Link>
           </div>
           <div className="home-food-grid-5">
@@ -906,11 +794,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             color: "var(--text-primary, #172033)",
           }}
         >
-<<<<<<< HEAD
           ⭐ {t("customer.testimonialsTitle")}
-=======
-          ⭐ {t("home.testimonialsTitle")}
->>>>>>> origin/main
         </h3>
         <div className="home-testi-grid">
           {TESTIMONIAL_DATA.map((tm, i) => (
@@ -1056,11 +940,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontWeight: 800,
             }}
           >
-<<<<<<< HEAD
             📱 {t("customer.qrTitle")}
-=======
-            📱 {t("home.qrTitle")}
->>>>>>> origin/main
           </h3>
           <p
             style={{
@@ -1070,11 +950,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               color: "var(--text-muted, #64748b)",
             }}
           >
-<<<<<<< HEAD
             {t("customer.qrDesc")}
-=======
-            {t("home.qrDesc")}
->>>>>>> origin/main
           </p>
           <Link
             to="/customer/menu"
@@ -1091,11 +967,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontSize: 13,
             }}
           >
-<<<<<<< HEAD
             {t("customer.qrOrClick")}
-=======
-            {t("home.qrButton")} →
->>>>>>> origin/main
           </Link>
         </div>
       </div>

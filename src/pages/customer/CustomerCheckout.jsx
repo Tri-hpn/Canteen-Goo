@@ -1,18 +1,6 @@
 ﻿// ============================================================
 // CUSTOMERCHECKOUT.JSX — Trang thanh toán
 // ============================================================
-<<<<<<< HEAD
-=======
-// Flow:
-//   1. Nhập thông tin người đặt (tên, SĐT, giờ nhận, ghi chú)
-//   2. Áp voucher (nhập tay / chọn từ ví / đổi điểm ngay)
-//   3. Xem tóm tắt → mở PaymentModal → confirmPayment tạo đơn
-//   4. Navigate → /customer/success (hiển thị mã đơn + tổng tiền)
-//
-// FIX v9:
-//   - Áp dụng i18n cho tất cả text
-// ============================================================
->>>>>>> origin/main
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -94,10 +82,6 @@ export default function CustomerCheckout({ cart, setCart, user }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
-<<<<<<< HEAD
-=======
-  // ---------- Form ----------
->>>>>>> origin/main
   const [name, setName] = useState(() => user?.name || "");
   const [phone, setPhone] = useState(() => user?.phone || "");
   const [pickupTime, setPickupTime] = useState("");
@@ -124,20 +108,10 @@ export default function CustomerCheckout({ cart, setCart, user }) {
   const lines = useMemo(() => {
     const selectedKeys = readSelectedKeys();
 
-<<<<<<< HEAD
     if (!selectedKeys.length) {
       return Object.entries(cart).map(([key, item]) => ({ ...item, _key: key }));
     }
 
-=======
-  const lines = useMemo(() => {
-    const selectedKeys = readSelectedKeys();
-
-    if (!selectedKeys.length) {
-      return Object.entries(cart).map(([key, item]) => ({ ...item, _key: key }));
-    }
-
->>>>>>> origin/main
     const selectedSet = new Set(selectedKeys);
     return Object.entries(cart)
       .filter(([key]) => selectedSet.has(key))
@@ -242,12 +216,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
         if (myReqId === voucherReqIdRef.current) setApplyingVoucher(false);
       }
     },
-<<<<<<< HEAD
     [voucherCode, t]
-=======
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [voucherCode]
->>>>>>> origin/main
   );
 
   const clearVoucher = () => {
@@ -267,14 +236,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
   // ---------- Redeem points ----------
   const redeemPoints = async () => {
     if (points < MIN_REDEEM_POINTS) {
-<<<<<<< HEAD
-      toast(
-        t("checkout.redeemNeedMsg"),
-        "error"
-      );
-=======
       toast(t("checkout.redeemNeedMsg"), "error");
->>>>>>> origin/main
       return;
     }
     if (redeemLoading) return;
@@ -342,10 +304,6 @@ export default function CustomerCheckout({ cart, setCart, user }) {
   };
 
   // ---------- Confirm payment ----------
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/main
   const confirmPayment = async (paymentMethod) => {
     if (submittingRef.current) return;
     submittingRef.current = true;
@@ -374,11 +332,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
       const remainCart = removeOrderedItems(cart, selectedKeys);
       setCart(remainCart);
       toast(
-<<<<<<< HEAD
         `${t("checkout.orderSuccessMsg")} ${t("orders.code")}: ${order.code}`,
-=======
-        `${t("checkout.orderSuccessMsg")} ${order.code}`,
->>>>>>> origin/main
         "success"
       );
       setPaymentOrder(null);
@@ -425,11 +379,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
           <h3 style={h3Style}>{t("checkout.recipient")}</h3>
 
           <FormField
-<<<<<<< HEAD
             label={`${t("checkout.nameLabel")} *`}
-=======
-            label={t("checkout.nameLabel")}
->>>>>>> origin/main
             icon={<User size={16} />}
             error={errors.name}
           >
@@ -445,11 +395,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
           </FormField>
 
           <FormField
-<<<<<<< HEAD
             label={`${t("checkout.phoneLabel")} *`}
-=======
-            label={t("checkout.phoneLabel")}
->>>>>>> origin/main
             icon={<Phone size={16} />}
             error={errors.phone}
           >
@@ -467,11 +413,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
           </FormField>
 
           <FormField
-<<<<<<< HEAD
             label={`${t("checkout.pickupLabel")} *`}
-=======
-            label={t("checkout.pickupLabel")}
->>>>>>> origin/main
             icon={<Clock size={16} />}
             error={errors.pickupTime}
           >
@@ -776,13 +718,8 @@ export default function CustomerCheckout({ cart, setCart, user }) {
                   ) : (
                     <>
                       <Gift size={14} /> {t("checkout.redeemBtnPrefix")}{" "}
-<<<<<<< HEAD
                       {MIN_REDEEM_POINTS} {t("checkout.usePointsSuffix")} →{" "}
                       {t("checkout.voucher")} {money(REDEEM_VALUE)}
-=======
-                      {MIN_REDEEM_POINTS} {t("checkout.redeemBtnMiddle")}{" "}
-                      {money(REDEEM_VALUE)}
->>>>>>> origin/main
                     </>
                   )}
                 </button>
@@ -816,11 +753,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
                     to="/customer/promotions"
                     style={{ color: "#2634d5", fontWeight: 600 }}
                   >
-<<<<<<< HEAD
                     {t("checkout.viewPoints")} →
-=======
-                    {t("checkout.viewPoints")}
->>>>>>> origin/main
                   </Link>
                 </span>
               </div>

@@ -1,19 +1,6 @@
 ﻿// ============================================================
 // CUSTOMERCART.JSX — Giỏ hàng khách hàng
 // ============================================================
-<<<<<<< HEAD
-=======
-// Tính năng:
-//   - Chọn/bỏ chọn từng món để đặt (persist vào localStorage)
-//   - Tăng/giảm qty (giới hạn theo stock)
-//   - Sửa món (mở FoodDetailModal) — đổi size/topping
-//   - Xoá món (có confirm)
-//   - Cột summary: sticky, tính tổng theo món đã chọn
-//
-// FIX v8:
-//   - Áp dụng i18n cho tất cả text
-// ============================================================
->>>>>>> origin/main
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -74,10 +61,6 @@ export default function CustomerCart({ cart, setCart }) {
   const [selectedKeys, setSelectedKeys] = useState(() =>
     readSavedSelection(Object.keys(cart))
   );
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/main
   const [confirmRemove, setConfirmRemove] = useState(null);
 
   const prevKeysRef = useRef(cartKeys);
@@ -158,11 +141,7 @@ export default function CustomerCart({ cart, setCart }) {
 
     if (delta > 0 && currentQty >= maxQty) {
       toast(
-<<<<<<< HEAD
         `${t("cart.onlyLeftPrefix")} ${maxQty} ${t("cart.onlyLeftSuffix")}`,
-=======
-        `${t("cart.stockLimitPrefix")} ${maxQty} ${t("cart.stockLimitSuffix")}`,
->>>>>>> origin/main
         "error"
       );
       return;
@@ -300,11 +279,7 @@ export default function CustomerCart({ cart, setCart }) {
               <span
                 role="checkbox"
                 aria-checked={allSelected}
-<<<<<<< HEAD
                 aria-label={t("cart.selectAllAria")}
-=======
-                aria-label={t("cart.selectAll")}
->>>>>>> origin/main
                 tabIndex={0}
                 onClick={toggleAll}
                 onKeyDown={(e) =>
@@ -374,11 +349,7 @@ export default function CustomerCart({ cart, setCart }) {
                   <span
                     role="checkbox"
                     aria-checked={checked}
-<<<<<<< HEAD
                     aria-label={`${t("cart.selectItemPrefix")} ${m.name}`}
-=======
-                    aria-label={`${t("cart.selectAll")} ${m.name}`}
->>>>>>> origin/main
                     tabIndex={0}
                     onClick={() => toggleItem(m._key)}
                     onKeyDown={(e) =>
@@ -450,11 +421,7 @@ export default function CustomerCart({ cart, setCart }) {
                             color: m.stock === 0 ? "#ef4444" : undefined,
                           }}
                         >
-<<<<<<< HEAD
                           {t("cart.remaining")}: {m.stock}
-=======
-                          {t("cart.inStock")}: {m.stock}
->>>>>>> origin/main
                         </span>
                       )}
                     </div>
@@ -474,11 +441,7 @@ export default function CustomerCart({ cart, setCart }) {
                     <button
                       onClick={() => updateQty(m._key, -1)}
                       disabled={atMin}
-<<<<<<< HEAD
                       aria-label={t("cart.decreaseQty")}
-=======
-                      aria-label={t("common.quantity")}
->>>>>>> origin/main
                       style={{
                         width: 28,
                         height: 28,
@@ -510,11 +473,7 @@ export default function CustomerCart({ cart, setCart }) {
                     <button
                       onClick={() => updateQty(m._key, 1)}
                       disabled={atMax}
-<<<<<<< HEAD
                       aria-label={t("cart.increaseQty")}
-=======
-                      aria-label={t("common.quantity")}
->>>>>>> origin/main
                       style={{
                         width: 28,
                         height: 28,
@@ -551,13 +510,8 @@ export default function CustomerCart({ cart, setCart }) {
                   {/* Sửa */}
                   <button
                     onClick={() => setEditingItem({ key: m._key, item: m })}
-<<<<<<< HEAD
                     title={t("cart.editTitle")}
                     aria-label={`${t("cart.editItemPrefix")} ${m.name}`}
-=======
-                    title={t("cart.editItem")}
-                    aria-label={`${t("cart.editItem")} ${m.name}`}
->>>>>>> origin/main
                     style={{
                       width: 32,
                       height: 32,
@@ -577,13 +531,8 @@ export default function CustomerCart({ cart, setCart }) {
                   {/* Xoá */}
                   <button
                     onClick={() => removeItem(m._key)}
-<<<<<<< HEAD
                     title={t("cart.removeTitleBtn")}
                     aria-label={`${t("cart.removeItemPrefix")} ${m.name} ${t("cart.removeItemSuffix")}`}
-=======
-                    title={t("cart.removeItem")}
-                    aria-label={`${t("cart.removeItem")} ${m.name}`}
->>>>>>> origin/main
                     style={{
                       width: 32,
                       height: 32,
@@ -651,21 +600,11 @@ export default function CustomerCart({ cart, setCart }) {
                 marginBottom: 4,
               }}
             >
-<<<<<<< HEAD
               {t("cart.selectedLabel")}
             </div>
             {selectedLines.length === 0 ? (
               <div style={{ fontSize: 13, color: "#ef4444", fontWeight: 600 }}>
                 {t("cart.noItemSelected")}
-=======
-              {t("cart.selectedCount").toUpperCase()}
-            </div>
-            {selectedLines.length === 0 ? (
-              <div
-                style={{ fontSize: 13, color: "#ef4444", fontWeight: 600 }}
-              >
-                {t("cart.notSelected")}
->>>>>>> origin/main
               </div>
             ) : (
               <div
@@ -674,11 +613,7 @@ export default function CustomerCart({ cart, setCart }) {
                 <b style={{ color: "#2634d5" }}>{selectedLines.length}</b>{" "}
                 {t("cart.items")} ·{" "}
                 <b style={{ color: "#2634d5" }}>{totalQty}</b>{" "}
-<<<<<<< HEAD
                 {t("cart.parts")}
-=======
-                {t("cart.portions")}
->>>>>>> origin/main
               </div>
             )}
           </div>
@@ -810,19 +745,11 @@ export default function CustomerCart({ cart, setCart }) {
         title={t("cart.removeTitle")}
         message={
           confirmRemove
-<<<<<<< HEAD
             ? `"${confirmRemove.name}" ${t("cart.removeMsgSuffix")}`
             : ""
         }
         confirmText={t("cart.removeConfirm")}
         cancelText={t("cart.removeCancel")}
-=======
-            ? `"${confirmRemove.name}" ${t("cart.removeMsg")}`
-            : ""
-        }
-        confirmText={t("cart.removeBtn")}
-        cancelText={t("cart.keepBtn")}
->>>>>>> origin/main
         danger
         onConfirm={executeRemove}
         onClose={() => setConfirmRemove(null)}
