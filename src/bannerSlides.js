@@ -23,7 +23,7 @@ export const bannerSlides = [
     id: "signature",
     title: "Món Signature",
     description: "Khám phá những món ăn đặc trưng được yêu thích tại Canteen VWA.",
-    image: "/banners/slide2.png",
+    image: "/banners/slide2.jpg",
     overlay: DEFAULT_BANNER_OVERLAY,
     badge: "⭐ Đặc sản Canteen",
     chips: [
