@@ -7,18 +7,8 @@
 //   3. Xem tóm tắt → mở PaymentModal → confirmPayment tạo đơn
 //   4. Navigate → /customer/success (hiển thị mã đơn + tổng tiền)
 //
-// Fixes (so với bản gốc):
-//   - Bỏ setTimeout hack trong redeemPoints
-//   - Race-safe applyVoucher (reqIdRef)
-//   - Guard double-submit confirmPayment (submittingRef)
-//   - Extract cleanup cart to helper
-//   - Memo lines/subtotal/total
-//   - Loading state cho init fetch
-//   - Validate giờ nhận hàng không ở quá khứ
-//   - Loading state khi apply voucher
-//   - Voucher buttons disable khi đang apply
-//   - ✅ FIX: navigate sang /customer/success (không phải /orders)
-//   - Xoá dead ref redeemTimerRef (không còn dùng setTimeout)
+// FIX v9:
+//   - Áp dụng i18n cho tất cả text
 // ============================================================
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
@@ -30,6 +20,7 @@ import {
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
+import { useTranslation } from "../../i18n";
 import PaymentModal from "../../components/PaymentModal";
 
 // ============================================================
@@ -55,10 +46,6 @@ const REDEEM_VALUE = 10000; // 100 điểm = 10.000đ
 // HELPERS
 // ============================================================
 
-/**
- * Loại các item đã đặt khỏi cart và persist lại localStorage.
- * Trả về cart mới (đã loại).
- */
 function removeOrderedItems(cart, selectedKeys) {
   const remain = {};
   for (const [k, v] of Object.entries(cart || {})) {
@@ -73,7 +60,6 @@ function removeOrderedItems(cart, selectedKeys) {
   return remain;
 }
 
-/** Đọc selectedKeys đã lưu trong localStorage (an toàn). */
 function readSelectedKeys() {
   try {
     const raw = localStorage.getItem(SELECTED_CART_KEY);
@@ -84,13 +70,9 @@ function readSelectedKeys() {
   }
 }
 
-/**
- * Check giờ nhận hàng không nằm ở quá khứ.
- * Slot format: "HH:MM - HH:MM"
- */
 function isSlotInPast(slot) {
   if (!slot) return false;
-  const startTime = slot.split(" - ")[0]; // "HH:MM"
+  const startTime = slot.split(" - ")[0];
   const [h, m] = startTime.split(":").map(Number);
   if (isNaN(h) || isNaN(m)) return false;
 
@@ -107,11 +89,9 @@ function isSlotInPast(slot) {
 
 export default function CustomerCheckout({ cart, setCart, user }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   // ---------- Form ----------
-  // ✅ Tự điền sẵn tên + SĐT từ tài khoản đang đăng nhập
-  // → user có thể xoá và sửa bình thường
-  // → nếu user.phone trống → để trống, coi như chưa điền
   const [name, setName] = useState(() => user?.name || "");
   const [phone, setPhone] = useState(() => user?.phone || "");
   const [pickupTime, setPickupTime] = useState("");
@@ -141,23 +121,19 @@ export default function CustomerCheckout({ cart, setCart, user }) {
 
   // ---------- Derived (memo) ----------
 
- // ✅ FIX: Chỉ lấy các món user đã CHỌN trong Cart page
-//    (đọc từ localStorage canteen_cart_selected)
-const lines = useMemo(() => {
-  const selectedKeys = readSelectedKeys();
+  const lines = useMemo(() => {
+    const selectedKeys = readSelectedKeys();
 
-  // Nếu không có selectedKeys (VD: user F5 trực tiếp vào /checkout)
-  // → fallback: lấy TẤT CẢ (tránh trang trắng)
-  if (!selectedKeys.length) {
-    return Object.entries(cart).map(([key, item]) => ({ ...item, _key: key }));
-  }
+    if (!selectedKeys.length) {
+      return Object.entries(cart).map(([key, item]) => ({ ...item, _key: key }));
+    }
 
-  // Chỉ lấy các item có key trong selectedKeys
-  const selectedSet = new Set(selectedKeys);
-  return Object.entries(cart)
-    .filter(([key]) => selectedSet.has(key))
-    .map(([key, item]) => ({ ...item, _key: key }));
-}, [cart]);
+    const selectedSet = new Set(selectedKeys);
+    return Object.entries(cart)
+      .filter(([key]) => selectedSet.has(key))
+      .map(([key, item]) => ({ ...item, _key: key }));
+  }, [cart]);
+
   const subtotal = useMemo(
     () =>
       lines.reduce(
@@ -202,7 +178,6 @@ const lines = useMemo(() => {
   }, []);
 
   // ---------- Sync form khi user thay đổi ----------
-  // Chỉ điền nếu field đang trống → tránh ghi đè khi user đang gõ
   useEffect(() => {
     if (user?.name) {
       setName((cur) => (cur ? cur : user.name));
@@ -234,7 +209,7 @@ const lines = useMemo(() => {
       const useCode = (code || voucherCode || "").trim().toUpperCase();
 
       if (!useCode) {
-        toast("Vui lòng nhập mã voucher", "error");
+        toast(t("checkout.voucherRequired"), "error");
         return;
       }
 
@@ -244,25 +219,27 @@ const lines = useMemo(() => {
       try {
         const res = await api.vouchers.validate(useCode);
 
-        // Bỏ qua nếu có request mới hơn
         if (myReqId !== voucherReqIdRef.current) return;
 
         setDiscount(res.value);
         setVoucherCode(res.code);
         setAppliedVoucher({ code: res.code, value: res.value });
-        toast(`Áp dụng voucher: -${money(res.value)}`, "success");
+        toast(
+          `${t("checkout.voucherAppliedMsg")}: -${money(res.value)}`,
+          "success"
+        );
       } catch (e) {
         if (myReqId !== voucherReqIdRef.current) return;
-        toast(e.message || "Không áp dụng được voucher", "error");
+        toast(e.message || t("checkout.voucherError"), "error");
       } finally {
         if (myReqId === voucherReqIdRef.current) setApplyingVoucher(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [voucherCode]
   );
 
   const clearVoucher = () => {
-    // Invalidate mọi request đang chờ
     voucherReqIdRef.current++;
     setApplyingVoucher(false);
     setVoucherCode("");
@@ -280,10 +257,7 @@ const lines = useMemo(() => {
 
   const redeemPoints = async () => {
     if (points < MIN_REDEEM_POINTS) {
-      toast(
-        `Cần ít nhất ${MIN_REDEEM_POINTS} điểm để đổi voucher`,
-        "error"
-      );
+      toast(t("checkout.redeemNeedMsg"), "error");
       return;
     }
     if (redeemLoading) return;
@@ -292,17 +266,14 @@ const lines = useMemo(() => {
     try {
       const voucher = await api.points.redeem({ points: MIN_REDEEM_POINTS });
       toast(
-        `Đổi thành công ${voucher.code} — Giảm ${money(voucher.value)}`,
+        `${t("checkout.redeemSuccessMsg")} ${voucher.code} — ${money(voucher.value)}`,
         "success"
       );
 
-      // Reload ví voucher + điểm
       await reloadVouchersAndPoints();
-
-      // Áp dụng luôn voucher vừa đổi
       await applyVoucher(voucher.code);
     } catch (e) {
-      toast(e.message || "Không đổi được voucher", "error");
+      toast(e.message || t("checkout.redeemErrorMsg"), "error");
     } finally {
       setRedeemLoading(false);
     }
@@ -313,18 +284,18 @@ const lines = useMemo(() => {
   const validate = () => {
     const errs = {};
 
-    if (!name.trim()) errs.name = "Vui lòng nhập tên người đặt";
+    if (!name.trim()) errs.name = t("checkout.nameRequired");
 
     if (!phone.trim()) {
-      errs.phone = "Vui lòng nhập số điện thoại";
+      errs.phone = t("checkout.phoneRequired");
     } else if (!/^[0-9]{10,11}$/.test(phone.trim())) {
-      errs.phone = "Số điện thoại phải 10-11 chữ số";
+      errs.phone = t("checkout.phoneInvalid");
     }
 
     if (!pickupTime.trim()) {
-      errs.pickupTime = "Vui lòng chọn giờ nhận hàng";
+      errs.pickupTime = t("checkout.timeRequired");
     } else if (isSlotInPast(pickupTime)) {
-      errs.pickupTime = "Giờ nhận hàng không được ở quá khứ";
+      errs.pickupTime = t("checkout.timePastErr");
     }
 
     setErrors(errs);
@@ -335,11 +306,11 @@ const lines = useMemo(() => {
 
   const openPayment = () => {
     if (!lines.length) {
-      toast("Giỏ hàng đang trống", "error");
+      toast(t("checkout.cartEmpty"), "error");
       return;
     }
     if (!validate()) {
-      toast("Vui lòng kiểm tra lại thông tin", "error");
+      toast(t("checkout.checkInfo"), "error");
       return;
     }
 
@@ -355,10 +326,9 @@ const lines = useMemo(() => {
     });
   };
 
-  // ---------- Confirm payment (tạo đơn) ----------
+  // ---------- Confirm payment ----------
 
   const confirmPayment = async (paymentMethod) => {
-    // Guard double-submit
     if (submittingRef.current) return;
     submittingRef.current = true;
     setSubmittingOrder(true);
@@ -371,7 +341,8 @@ const lines = useMemo(() => {
 
       const noteParts = [];
       if (note.trim()) noteParts.push(note.trim());
-      if (pickupTime) noteParts.push(`Nhận lúc ${pickupTime}`);
+      if (pickupTime)
+        noteParts.push(`${t("checkout.notePickupPrefix")} ${pickupTime}`);
 
       const order = await api.orders.create({
         items,
@@ -381,19 +352,18 @@ const lines = useMemo(() => {
         voucherCode: appliedVoucher?.code || "",
       });
 
-      // Loại các món đã đặt khỏi cart (dùng cùng selectedKeys đã filter ở `lines`)
-	const selectedKeys = lines.map((m) => m._key);
-	const remainCart = removeOrderedItems(cart, selectedKeys);
-	setCart(remainCart);
-      toast(`Đặt hàng thành công! Mã: ${order.code}`, "success");
+      const selectedKeys = lines.map((m) => m._key);
+      const remainCart = removeOrderedItems(cart, selectedKeys);
+      setCart(remainCart);
+      toast(
+        `${t("checkout.orderSuccessMsg")} ${order.code}`,
+        "success"
+      );
       setPaymentOrder(null);
 
-      // ✅ FIX: Điều hướng sang /customer/success để hiển thị
-      //    trang xác nhận có mã đơn + tổng tiền. User bấm
-      //    "Theo dõi đơn hàng" từ đó mới sang /customer/orders.
       navigate("/customer/success", { state: { order } });
     } catch (e) {
-      toast(e.message || "Không đặt được hàng", "error");
+      toast(e.message || t("checkout.orderErrorMsg"), "error");
     } finally {
       submittingRef.current = false;
       setSubmittingOrder(false);
@@ -413,13 +383,13 @@ const lines = useMemo(() => {
         }}
       >
         <h3 style={{ color: "var(--text-primary, #172033)" }}>
-          Giỏ hàng đang trống
+          {t("cart.empty")}
         </h3>
         <Link
           to="/customer/menu"
           style={{ color: "#2634d5", fontWeight: 600 }}
         >
-          Khám phá thực đơn
+          {t("cart.exploreMenu")}
         </Link>
       </div>
     );
@@ -435,10 +405,10 @@ const lines = useMemo(() => {
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* ===== Người đặt ===== */}
         <div style={cardStyle}>
-          <h3 style={h3Style}>Người đặt</h3>
+          <h3 style={h3Style}>{t("checkout.recipient")}</h3>
 
           <FormField
-            label="Tên người đặt *"
+            label={t("checkout.nameLabel")}
             icon={<User size={16} />}
             error={errors.name}
           >
@@ -448,13 +418,13 @@ const lines = useMemo(() => {
                 setName(e.target.value);
                 if (errors.name) setErrors((p) => ({ ...p, name: "" }));
               }}
-              placeholder="Nguyễn Văn A"
+              placeholder={t("checkout.namePlaceholder")}
               style={inputInnerStyle}
             />
           </FormField>
 
           <FormField
-            label="Số điện thoại *"
+            label={t("checkout.phoneLabel")}
             icon={<Phone size={16} />}
             error={errors.phone}
           >
@@ -464,7 +434,7 @@ const lines = useMemo(() => {
                 setPhone(e.target.value.replace(/[^0-9]/g, ""));
                 if (errors.phone) setErrors((p) => ({ ...p, phone: "" }));
               }}
-              placeholder="0901234567"
+              placeholder={t("checkout.phonePlaceholder")}
               inputMode="numeric"
               maxLength={11}
               style={inputInnerStyle}
@@ -472,7 +442,7 @@ const lines = useMemo(() => {
           </FormField>
 
           <FormField
-            label="Giờ nhận hàng *"
+            label={t("checkout.pickupLabel")}
             icon={<Clock size={16} />}
             error={errors.pickupTime}
           >
@@ -491,26 +461,26 @@ const lines = useMemo(() => {
                   : "var(--text-light, #8993a3)",
               }}
             >
-              <option value="">-- Chọn khung giờ --</option>
+              <option value="">{t("checkout.selectTime")}</option>
               {TIME_SLOTS.map((slot) => {
                 const past = isSlotInPast(slot);
                 return (
                   <option key={slot} value={slot} disabled={past}>
                     {slot}
-                    {past ? " (đã qua)" : ""}
+                    {past ? ` ${t("checkout.timePast")}` : ""}
                   </option>
                 );
               })}
             </select>
           </FormField>
 
-          <label style={labelStyle}>Ghi chú</label>
+          <label style={labelStyle}>{t("checkout.note")}</label>
           <div style={inputWrapStyle()}>
             <FileText size={16} style={{ ...iconStyle, marginTop: 4 }} />
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Ví dụ: ít cay, không hành..."
+              placeholder={t("checkout.notePlaceholder")}
               maxLength={500}
               style={{
                 ...inputInnerStyle,
@@ -532,7 +502,7 @@ const lines = useMemo(() => {
               gap: 8,
             }}
           >
-            <Tag size={18} /> Mã voucher
+            <Tag size={18} /> {t("checkout.voucher")}
           </h3>
 
           {/* Ô nhập + nút áp dụng */}
@@ -540,7 +510,7 @@ const lines = useMemo(() => {
             <input
               value={voucherCode}
               onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-              placeholder="Nhập mã voucher..."
+              placeholder={t("checkout.voucherPlaceholder")}
               disabled={!!appliedVoucher || applyingVoucher}
               onKeyDown={(e) =>
                 e.key === "Enter" && !appliedVoucher && applyVoucher()
@@ -579,7 +549,7 @@ const lines = useMemo(() => {
                   whiteSpace: "nowrap",
                 }}
               >
-                <X size={14} /> Hủy
+                <X size={14} /> {t("common.cancel")}
               </button>
             ) : (
               <button
@@ -606,10 +576,10 @@ const lines = useMemo(() => {
                       size={14}
                       style={{ animation: "spin 1s linear infinite" }}
                     />
-                    Đang kiểm tra...
+                    {t("checkout.checking")}
                   </>
                 ) : (
-                  "Áp dụng"
+                  t("checkout.apply")
                 )}
               </button>
             )}
@@ -631,8 +601,9 @@ const lines = useMemo(() => {
                 gap: 6,
               }}
             >
-              <CheckCircle2 size={14} /> Đã áp dụng {appliedVoucher.code} —
-              Giảm {money(appliedVoucher.value)}
+              <CheckCircle2 size={14} /> {t("checkout.applied")}{" "}
+              {appliedVoucher.code} — {t("checkout.discount")}{" "}
+              {money(appliedVoucher.value)}
             </div>
           )}
 
@@ -650,7 +621,8 @@ const lines = useMemo(() => {
                   gap: 6,
                 }}
               >
-                <Gift size={14} /> Voucher của bạn ({myVouchers.length})
+                <Gift size={14} /> {t("checkout.yourVouchers")} (
+                {myVouchers.length})
               </div>
               <div
                 style={{
@@ -703,8 +675,8 @@ const lines = useMemo(() => {
                       }}
                     >
                       {v.points_used > 0
-                        ? `Dùng ${v.points_used} điểm`
-                        : "Admin tặng"}
+                        ? `${t("checkout.usePointsPrefix")} ${v.points_used} ${t("checkout.usePointsSuffix")}`
+                        : t("checkout.adminGift")}
                     </div>
                   </button>
                 ))}
@@ -741,8 +713,8 @@ const lines = useMemo(() => {
                       color: "var(--text-primary, #172033)",
                     }}
                   >
-                    Bạn có {points} điểm — Đổi ngay 1 voucher{" "}
-                    {money(REDEEM_VALUE)}
+                    {t("checkout.pointsBannerPrefix")} {points}{" "}
+                    {t("checkout.pointsBannerMiddle")} {money(REDEEM_VALUE)}
                   </b>
                 </div>
                 <button
@@ -770,12 +742,13 @@ const lines = useMemo(() => {
                         size={14}
                         style={{ animation: "spin 1s linear infinite" }}
                       />
-                      Đang đổi...
+                      {t("promo.redeeming")}
                     </>
                   ) : (
                     <>
-                      <Gift size={14} /> Đổi {MIN_REDEEM_POINTS} điểm →
-                      Voucher {money(REDEEM_VALUE)}
+                      <Gift size={14} /> {t("checkout.redeemBtnPrefix")}{" "}
+                      {MIN_REDEEM_POINTS} {t("checkout.redeemBtnMiddle")}{" "}
+                      {money(REDEEM_VALUE)}
                     </>
                   )}
                 </button>
@@ -801,13 +774,15 @@ const lines = useMemo(() => {
               >
                 <Gift size={14} />
                 <span>
-                  Không có voucher khả dụng. Bạn có <b>{points}</b> điểm — cần
-                  thêm <b>{MIN_REDEEM_POINTS - points}</b> điểm để đổi voucher.{" "}
+                  {t("checkout.pointsInfoPrefix")} <b>{points}</b>{" "}
+                  {t("checkout.pointsInfoMiddle")}{" "}
+                  <b>{MIN_REDEEM_POINTS - points}</b>{" "}
+                  {t("checkout.pointsInfoSuffix")}{" "}
                   <Link
                     to="/customer/promotions"
                     style={{ color: "#2634d5", fontWeight: 600 }}
                   >
-                    Xem điểm →
+                    {t("checkout.viewPoints")}
                   </Link>
                 </span>
               </div>
@@ -829,7 +804,7 @@ const lines = useMemo(() => {
                 size={12}
                 style={{ animation: "spin 1s linear infinite" }}
               />
-              Đang tải thông tin...
+              {t("checkout.loadingInfo")}
             </div>
           )}
         </div>
@@ -844,7 +819,7 @@ const lines = useMemo(() => {
           top: 90,
         }}
       >
-        <h3 style={h3Style}>Tóm tắt đơn</h3>
+        <h3 style={h3Style}>{t("checkout.orderSummary")}</h3>
 
         <div
           style={{
@@ -896,7 +871,7 @@ const lines = useMemo(() => {
             color: "var(--text-muted, #64748b)",
           }}
         >
-          <span>Tạm tính</span>
+          <span>{t("checkout.subtotal")}</span>
           <b>{money(subtotal)}</b>
         </div>
 
@@ -910,7 +885,7 @@ const lines = useMemo(() => {
               color: "#18a967",
             }}
           >
-            <span>Giảm giá</span>
+            <span>{t("checkout.discount")}</span>
             <b>-{money(discount)}</b>
           </div>
         )}
@@ -931,7 +906,7 @@ const lines = useMemo(() => {
               color: "var(--text-primary, #172033)",
             }}
           >
-            Tổng cộng
+            {t("cart.total")}
           </span>
           <strong style={{ color: "#2634d5", fontSize: 22 }}>
             {money(total)}
@@ -958,7 +933,7 @@ const lines = useMemo(() => {
             gap: 8,
           }}
         >
-          <CreditCard size={18} /> Đặt hàng
+          <CreditCard size={18} /> {t("checkout.orderBtn")}
         </button>
       </div>
 
