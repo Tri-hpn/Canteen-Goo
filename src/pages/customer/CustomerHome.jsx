@@ -552,30 +552,51 @@ export default function CustomerHome({ user, cart, setCart }) {
       {/* ============ FLASH SALE ============ */}
       {(promotions.length > 0 || publicVouchers.length > 0) && (
         <>
-          <h3
+                    <div
             style={{
-              marginBottom: 14,
-              fontSize: 18,
-              color: "var(--text-primary, #172033)",
               display: "flex",
+              justifyContent: "space-between",
               alignItems: "center",
-              gap: 8,
+              marginBottom: 14,
             }}
           >
-            <span style={{ fontSize: 22 }}>⚡</span> FLASH SALE
-            <span
+            <h3
               style={{
-                background: "linear-gradient(135deg, #ef4444, #f59e0b)",
-                color: "#fff",
-                padding: "3px 10px",
-                borderRadius: 12,
-                fontSize: 10,
-                fontWeight: 800,
+                margin: 0,
+                fontSize: 18,
+                color: "var(--text-primary, #172033)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
               }}
             >
-              HOT
-            </span>
-          </h3>
+              <span style={{ fontSize: 22 }}>⚡</span> FLASH SALE
+              <span
+                style={{
+                  background: "linear-gradient(135deg, #ef4444, #f59e0b)",
+                  color: "#fff",
+                  padding: "3px 10px",
+                  borderRadius: 12,
+                  fontSize: 10,
+                  fontWeight: 800,
+                }}
+              >
+                HOT
+              </span>
+            </h3>
+
+            <Link
+              to="/customer/promotions"
+              style={{
+                color: "#2634d5",
+                fontSize: 13,
+                textDecoration: "none",
+                fontWeight: 600,
+              }}
+            >
+              Xem tất cả →
+            </Link>
+          </div>
 
           <div style={{ marginBottom: 26 }}>
             <div className="home-food-grid-5">
