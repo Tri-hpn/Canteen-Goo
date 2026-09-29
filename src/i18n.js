@@ -36,6 +36,9 @@ import { useEffect, useState } from "react";
 //   employee.*   — Trang nhân viên
 //   chart.*      — Biểu đồ
 //   lang.*       — Chọn ngôn ngữ
+//   promo.*      — Khuyến mãi (legacy)
+//   wallet.*     — Ví Canteen
+//   theme.*      — Chế độ sáng/tối
 // ============================================================
 
 export const translations = {
@@ -214,6 +217,49 @@ export const translations = {
     "checkout.pointsEarn": "Nhận điểm khi đặt hàng",
     "checkout.checkInfo": "Vui lòng kiểm tra lại thông tin",
 
+    // ✅ Bổ sung cho CustomerCheckout
+    "checkout.nameLabel": "Họ và tên",
+    "checkout.namePlaceholder": "Nguyễn Văn A",
+    "checkout.phoneLabel": "Số điện thoại",
+    "checkout.phonePlaceholder": "0901234567",
+    "checkout.pickupLabel": "Giờ nhận hàng",
+    "checkout.selectTime": "-- Chọn khung giờ nhận --",
+    "checkout.timePast": "(đã qua)",
+    "checkout.nameRequired": "Vui lòng nhập họ tên",
+    "checkout.phoneRequired": "Vui lòng nhập số điện thoại",
+    "checkout.phoneInvalid": "SĐT phải 10-11 chữ số",
+    "checkout.timeRequired": "Vui lòng chọn giờ nhận hàng",
+    "checkout.timePastErr": "Khung giờ này đã qua, vui lòng chọn giờ khác",
+    "checkout.cartEmpty": "Giỏ hàng trống, không thể đặt hàng",
+    "checkout.notePickupPrefix": "Nhận lúc",
+    "checkout.orderSuccessMsg": "Đặt hàng thành công!",
+    "checkout.orderErrorMsg": "Không tạo được đơn hàng",
+    "checkout.voucherPlaceholder": "Nhập mã voucher",
+    "checkout.voucherRequired": "Vui lòng nhập mã voucher",
+    "checkout.voucherAppliedMsg": "Áp dụng voucher thành công",
+    "checkout.voucherError": "Mã voucher không hợp lệ",
+    "checkout.checking": "Đang kiểm tra...",
+    "checkout.applied": "Đã áp dụng",
+    "checkout.yourVouchers": "Ví voucher của bạn",
+    "checkout.usePointsPrefix": "Đổi từ",
+    "checkout.usePointsSuffix": "điểm",
+    "checkout.adminGift": "Quà tặng từ admin",
+    "checkout.pointsBannerPrefix": "Bạn có",
+    "checkout.pointsBannerMiddle": "điểm · Đổi ngay voucher",
+    "checkout.redeemBtnPrefix": "Đổi",
+    "checkout.redeemBtnMiddle": "điểm → voucher",
+    "checkout.redeemNeedMsg": "Cần ít nhất 100 điểm để đổi voucher",
+    "checkout.redeemSuccessMsg": "Đổi điểm thành công!",
+    "checkout.redeemErrorMsg": "Không đổi được voucher",
+    "checkout.pointsInfoPrefix": "Bạn có",
+    "checkout.pointsInfoMiddle": "điểm · Cần thêm",
+    "checkout.pointsInfoSuffix": "điểm để đổi voucher",
+    "checkout.viewPoints": "Xem chi tiết",
+    "checkout.loadingInfo": "Đang tải thông tin...",
+    "checkout.orderSummary": "Tóm tắt đơn hàng",
+    "checkout.subtotal": "Tạm tính",
+    "checkout.orderBtn": "Đặt hàng",
+
     // ---------- Menu page (trang thực đơn) ----------
     "menu.title": "Thực đơn",
     "menu.subtitle": "Chọn món yêu thích",
@@ -362,6 +408,25 @@ export const translations = {
     "chart.cancelled": "Đã hủy",
     "chart.soldToday": "Món bán chạy hôm nay",
     "chart.newOrders": "Đơn hàng mới",
+
+    // ---------- Promo (khuyến mãi / voucher) ----------
+    "promo.redeeming": "Đang đổi...",
+    "promo.claiming": "Đang nhận...",
+    "promo.copySuccess": "Đã sao chép mã",
+    "promo.claimSuccess": "Đã nhận voucher!",
+
+    // ---------- Wallet (ví canteen) ----------
+    "wallet.title": "Ví Canteen",
+    "wallet.balance": "Số dư khả dụng",
+    "wallet.deposit": "Nạp tiền",
+    "wallet.withdraw": "Rút tiền",
+    "wallet.linkBank": "Liên kết ngân hàng",
+    "wallet.transactions": "Lịch sử giao dịch",
+    "wallet.noTx": "Chưa có giao dịch nào",
+
+    // ---------- Theme ----------
+    "theme.toLight": "Chế độ sáng",
+    "theme.toDark": "Chế độ tối",
 
     // ---------- Language (ngôn ngữ) ----------
     "lang.vi": "Tiếng Việt",
@@ -544,6 +609,49 @@ export const translations = {
     "checkout.pointsEarn": "Earn points on order",
     "checkout.checkInfo": "Please check your information",
 
+    // ✅ Added for CustomerCheckout
+    "checkout.nameLabel": "Full name",
+    "checkout.namePlaceholder": "John Doe",
+    "checkout.phoneLabel": "Phone number",
+    "checkout.phonePlaceholder": "0901234567",
+    "checkout.pickupLabel": "Pickup time",
+    "checkout.selectTime": "-- Select a pickup time --",
+    "checkout.timePast": "(past)",
+    "checkout.nameRequired": "Please enter your name",
+    "checkout.phoneRequired": "Please enter your phone number",
+    "checkout.phoneInvalid": "Phone must be 10-11 digits",
+    "checkout.timeRequired": "Please select pickup time",
+    "checkout.timePastErr": "This time slot has passed. Please choose another.",
+    "checkout.cartEmpty": "Cart is empty, cannot place order",
+    "checkout.notePickupPrefix": "Pickup at",
+    "checkout.orderSuccessMsg": "Order placed successfully!",
+    "checkout.orderErrorMsg": "Failed to create order",
+    "checkout.voucherPlaceholder": "Enter voucher code",
+    "checkout.voucherRequired": "Please enter voucher code",
+    "checkout.voucherAppliedMsg": "Voucher applied",
+    "checkout.voucherError": "Invalid voucher",
+    "checkout.checking": "Checking...",
+    "checkout.applied": "Applied",
+    "checkout.yourVouchers": "Your vouchers",
+    "checkout.usePointsPrefix": "Redeemed from",
+    "checkout.usePointsSuffix": "points",
+    "checkout.adminGift": "Admin gift",
+    "checkout.pointsBannerPrefix": "You have",
+    "checkout.pointsBannerMiddle": "points · Redeem now",
+    "checkout.redeemBtnPrefix": "Redeem",
+    "checkout.redeemBtnMiddle": "points → voucher",
+    "checkout.redeemNeedMsg": "Need at least 100 points to redeem",
+    "checkout.redeemSuccessMsg": "Redeemed successfully!",
+    "checkout.redeemErrorMsg": "Failed to redeem voucher",
+    "checkout.pointsInfoPrefix": "You have",
+    "checkout.pointsInfoMiddle": "points · Need",
+    "checkout.pointsInfoSuffix": "more to redeem",
+    "checkout.viewPoints": "View details",
+    "checkout.loadingInfo": "Loading info...",
+    "checkout.orderSummary": "Order summary",
+    "checkout.subtotal": "Subtotal",
+    "checkout.orderBtn": "Place order",
+
     // ---------- Menu page ----------
     "menu.title": "Menu",
     "menu.subtitle": "Choose your favorite",
@@ -692,6 +800,25 @@ export const translations = {
     "chart.cancelled": "Cancelled",
     "chart.soldToday": "Top sellers today",
     "chart.newOrders": "New orders",
+
+    // ---------- Promo ----------
+    "promo.redeeming": "Redeeming...",
+    "promo.claiming": "Claiming...",
+    "promo.copySuccess": "Code copied",
+    "promo.claimSuccess": "Voucher claimed!",
+
+    // ---------- Wallet ----------
+    "wallet.title": "Canteen Wallet",
+    "wallet.balance": "Available balance",
+    "wallet.deposit": "Deposit",
+    "wallet.withdraw": "Withdraw",
+    "wallet.linkBank": "Link bank",
+    "wallet.transactions": "Transactions",
+    "wallet.noTx": "No transactions yet",
+
+    // ---------- Theme ----------
+    "theme.toLight": "Light mode",
+    "theme.toDark": "Dark mode",
 
     // ---------- Language ----------
     "lang.vi": "Tiếng Việt",
