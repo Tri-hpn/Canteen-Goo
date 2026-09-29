@@ -105,12 +105,15 @@ function isSlotInPast(slot) {
 // MAIN COMPONENT
 // ============================================================
 
-export default function CustomerCheckout({ cart, setCart }) {
+export default function CustomerCheckout({ cart, setCart, user }) {
   const navigate = useNavigate();
 
   // ---------- Form ----------
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  // ✅ Tự điền sẵn tên + SĐT từ tài khoản đang đăng nhập
+  // → user có thể xoá và sửa bình thường
+  // → nếu user.phone trống → để trống, coi như chưa điền
+  const [name, setName] = useState(() => user?.name || "");
+  const [phone, setPhone] = useState(() => user?.phone || "");
   const [pickupTime, setPickupTime] = useState("");
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState({});
@@ -197,6 +200,17 @@ const lines = useMemo(() => {
       cancelled = true;
     };
   }, []);
+
+  // ---------- Sync form khi user thay đổi ----------
+  // Chỉ điền nếu field đang trống → tránh ghi đè khi user đang gõ
+  useEffect(() => {
+    if (user?.name) {
+      setName((cur) => (cur ? cur : user.name));
+    }
+    if (user?.phone) {
+      setPhone((cur) => (cur ? cur : user.phone));
+    }
+  }, [user]);
 
   // ---------- Reload vouchers + points ----------
 
