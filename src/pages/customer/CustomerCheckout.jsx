@@ -112,6 +112,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
       return Object.entries(cart).map(([key, item]) => ({ ...item, _key: key }));
     }
 
+>>>>>>> origin/main
     const selectedSet = new Set(selectedKeys);
     return Object.entries(cart)
       .filter(([key]) => selectedSet.has(key))
@@ -236,7 +237,14 @@ export default function CustomerCheckout({ cart, setCart, user }) {
   // ---------- Redeem points ----------
   const redeemPoints = async () => {
     if (points < MIN_REDEEM_POINTS) {
+<<<<<<< HEAD
+      toast(
+        t("checkout.redeemNeedMsg"),
+        "error"
+      );
+=======
       toast(t("checkout.redeemNeedMsg"), "error");
+>>>>>>> origin/main
       return;
     }
     if (redeemLoading) return;

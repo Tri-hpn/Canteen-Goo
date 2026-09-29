@@ -1,6 +1,8 @@
 ﻿// ============================================================
 // CUSTOMERHOME.JSX — Trang chủ khách hàng
 // ============================================================
+<<<<<<< HEAD
+=======
 // Gồm:
 //   - Banner carousel (data từ ../../bannerSlides)
 //   - Flash marquee (chạy chữ khuyến mãi)
@@ -14,6 +16,7 @@
 //   - Áp dụng i18n cho tất cả text
 //   - DEFAULT_FLASH_ITEMS và TESTIMONIALS dùng key i18n
 // ============================================================
+>>>>>>> origin/main
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
