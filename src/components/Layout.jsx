@@ -26,15 +26,13 @@
 //   - ✅ Auto page-heading: dùng bảng PAGE_TITLES để lookup theo path
 // ============================================================
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { ChevronDown, Menu, ShoppingCart, LogOut } from "lucide-react";
+import { ChevronDown, Menu, ShoppingCart, LogOut, Globe, Sun, Moon, User as UserIcon } from "lucide-react";
 
 import Sidebar from "./Sidebar";
 import GlobalSearch from "./GlobalSearch";
 import NotificationBell from "./NotificationBell";
-import ThemeToggle from "./ThemeToggle";
-import LanguageToggle from "./LanguageToggle";
 import Footer from "./Footer";
 import HeaderNav from "./HeaderNav";
 import BottomNav from "./BottomNav";
@@ -227,41 +225,254 @@ function CartTopbarIcon() {
 // SUB-COMPONENT: TopbarProfile
 // ============================================================
 
-function TopbarProfile({ user, roleLabel, onOpenProfile }) {
+function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
   const initials = useMemo(() => getInitials(user?.name), [user?.name]);
+  const [open, setOpen] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    if (typeof document === "undefined") return "light";
+    return document.documentElement.classList.contains("dark-mode")
+      ? "dark"
+      : "light";
+  });
+  const dropdownRef = useRef(null);
+  const { t, lang, setLang } = useTranslation();
+
+  // Sync theme từ nơi khác
+  useEffect(() => {
+    const update = () => {
+      setTheme(
+        document.documentElement.classList.contains("dark-mode")
+          ? "dark"
+          : "light"
+      );
+    };
+    window.addEventListener("themechange", update);
+    return () => window.removeEventListener("themechange", update);
+  }, []);
+
+  // Click outside để đóng
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // ESC đóng
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open]);
+
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    const isDark = root.classList.contains("dark-mode");
+    if (isDark) root.classList.remove("dark-mode");
+    else root.classList.add("dark-mode");
+    try { localStorage.setItem("theme", isDark ? "light" : "dark"); } catch {}
+    try {
+      window.dispatchEvent(
+        new CustomEvent("themechange", { detail: isDark ? "light" : "dark" })
+      );
+    } catch {}
+    setTheme(isDark ? "light" : "dark");
+  };
+
+  const toggleLang = () => {
+    setLang(lang === "vi" ? "en" : "vi");
+  };
+
+  const itemStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    padding: "11px 14px",
+    background: "transparent",
+    border: 0,
+    cursor: "pointer",
+    fontSize: 13.5,
+    fontWeight: 600,
+    color: "var(--text-primary, #172033)",
+    textAlign: "left",
+    transition: "background 0.15s",
+  };
 
   return (
-    <button
-      type="button"
-      onClick={onOpenProfile}
-      className="topbar-profile-btn"
-      title="Hồ sơ cá nhân"
-      aria-label="Hồ sơ cá nhân"
-    >
-      {user?.avatar ? (
-        <img
-          src={user.avatar}
-          alt={user.name || "Avatar"}
-          className="profile-avatar-img"
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = FALLBACK_AVATAR;
+    <div ref={dropdownRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        className="topbar-profile-btn"
+        title="Menu tài khoản"
+        aria-label="Menu tài khoản"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        {user?.avatar ? (
+          <img
+            src={user.avatar}
+            alt={user.name || "Avatar"}
+            className="profile-avatar-img"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = FALLBACK_AVATAR;
+            }}
+          />
+        ) : (
+          <span className="profile-avatar-initials">{initials}</span>
+        )}
+
+        <span className="profile-info">
+          <b className="profile-name">{user?.name || "Người dùng"}</b>
+          <small className="profile-role">{roleLabel}</small>
+        </span>
+
+        <ChevronDown
+          size={16}
+          style={{
+            color: "var(--text-light, #94a3b8)",
+            flexShrink: 0,
+            transform: open ? "rotate(180deg)" : "rotate(0)",
+            transition: "transform 0.2s",
           }}
         />
-      ) : (
-        <span className="profile-avatar-initials">{initials}</span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 8px)",
+            right: 0,
+            minWidth: 240,
+            background: "var(--card-bg, #fff)",
+            border: "1px solid var(--border-color, #e5e9ef)",
+            borderRadius: 12,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.15)",
+            overflow: "hidden",
+            zIndex: 2147483600,
+          }}
+        >
+          {/* Hồ sơ */}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onOpenProfile();
+            }}
+            style={itemStyle}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "var(--bg-tertiary, #f5f7fb)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = "transparent")
+            }
+          >
+            <UserIcon size={16} />
+            <span>Hồ sơ cá nhân</span>
+          </button>
+
+          <div
+            style={{
+              height: 1,
+              background: "var(--border-color, #eef2f7)",
+              margin: "4px 0",
+            }}
+          />
+
+          {/* Ngôn ngữ */}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={toggleLang}
+            style={itemStyle}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "var(--bg-tertiary, #f5f7fb)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = "transparent")
+            }
+          >
+            <Globe size={16} />
+            <span style={{ flex: 1, textAlign: "left" }}>Ngôn ngữ</span>
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--text-light, #8993a3)",
+                fontWeight: 600,
+              }}
+            >
+              {lang === "vi" ? "Tiếng Việt" : "English"}
+            </span>
+          </button>
+
+          {/* Theme */}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={toggleTheme}
+            style={itemStyle}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "var(--bg-tertiary, #f5f7fb)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = "transparent")
+            }
+          >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            <span style={{ flex: 1, textAlign: "left" }}>Chế độ</span>
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--text-light, #8993a3)",
+                fontWeight: 600,
+              }}
+            >
+              {theme === "dark" ? "Tối" : "Sáng"}
+            </span>
+          </button>
+
+          <div
+            style={{
+              height: 1,
+              background: "var(--border-color, #eef2f7)",
+              margin: "4px 0",
+            }}
+          />
+
+          {/* Đăng xuất */}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onLogout();
+            }}
+            style={{ ...itemStyle, color: "#ef4444" }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "rgba(239,68,68,0.08)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = "transparent")
+            }
+          >
+            <LogOut size={16} />
+            <span>Đăng xuất</span>
+          </button>
+        </div>
       )}
-
-      <span className="profile-info">
-        <b className="profile-name">{user?.name || "Người dùng"}</b>
-        <small className="profile-role">{roleLabel}</small>
-      </span>
-
-      <ChevronDown
-        size={16}
-        style={{ color: "var(--text-light, #94a3b8)", flexShrink: 0 }}
-      />
-    </button>
+    </div>
   );
 }
 
@@ -379,38 +590,19 @@ export default function Layout({
 
           {/* ----- RIGHT ----- */}
           <div className="topbar-right">
-            {role === "CUSTOMER" && <CartTopbarIcon />}
+  {role === "CUSTOMER" && <CartTopbarIcon />}
 
-            <LanguageToggle />
-            <ThemeToggle />
-            <NotificationBell />
+  <NotificationBell />
 
-            {/* ✅ Nút Logout + Profile — CHỈ hiện cho Customer
-               (Employee + Admin dùng nút trong sidebar) */}
-            {role === "CUSTOMER" && (
-              <>
-                <button
-                  type="button"
-                  onClick={openLogoutConfirm}
-                  className="icon-btn topbar-icon-btn topbar-icon-logout"
-                  title="Đăng xuất"
-                  aria-label="Đăng xuất"
-                  style={{
-                    color: "#ef4444",
-                    background: "rgba(239, 68, 68, 0.08)",
-                  }}
-                >
-                  <LogOut size={18} />
-                </button>
-
-                <TopbarProfile
-                  user={user}
-                  roleLabel={roleLabel}
-                  onOpenProfile={openProfile}
-                />
-              </>
-            )}
-          </div>
+  {role === "CUSTOMER" && (
+    <TopbarProfile
+      user={user}
+      roleLabel={roleLabel}
+      onOpenProfile={openProfile}
+      onLogout={openLogoutConfirm}
+    />
+  )}
+</div>
         </header>
 
         {/* ============ HEADER NAV (customer only) ============ */}
