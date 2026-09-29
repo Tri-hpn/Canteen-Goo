@@ -10,10 +10,9 @@
 //   - Testimonials
 //   - QR truy cập menu (auto-detect origin)
 //
-// FIX v7:
-//   - Voucher card chuyển sang HÌNH VUÔNG (class .voucher-card)
-//   - Badge -% đẩy sang PHẢI (class .grab-food-card__badge--right)
-//   - renderFoodCard dùng .grab-food-card (thống nhất với CustomerMenu)
+// FIX v8:
+//   - Áp dụng i18n cho tất cả text
+//   - DEFAULT_FLASH_ITEMS và TESTIMONIALS dùng key i18n
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -42,30 +41,15 @@ const FLASH_VOUCHERS_LIMIT = 2;
 const SKELETON_COUNT = 5;
 
 const DEFAULT_FLASH_ITEMS = [
-  { text: "🎉 Ưu đãi sinh viên — Giảm 10% khi đặt món qua app" },
-  { text: "⚡ Chuẩn bị món 5-8 phút — Nhận ngay tại quầy" },
-  { text: "💳 Thanh toán VietQR · Ví Canteen · Tiền mặt" },
+  { key: "home.flash1" },
+  { key: "home.flash2" },
+  { key: "home.flash3" },
 ];
 
 const TESTIMONIALS = [
-  {
-    name: "Nguyễn Minh Anh",
-    role: "Sinh viên K20",
-    rating: 5,
-    text: "Món ăn ngon, giá cả hợp lý. Đặt online tiện lợi hơn hẳn so với xếp hàng!",
-  },
-  {
-    name: "Trần Quốc Bảo",
-    role: "Cán bộ VWA",
-    rating: 5,
-    text: "Giao nhanh, nhân viên thân thiện, món ăn luôn nóng hổi. Rất hài lòng.",
-  },
-  {
-    name: "Lê Thu Hà",
-    role: "Sinh viên K19",
-    rating: 4,
-    text: "Canteen sạch sẽ, đồ ăn đa dạng. Đặt món qua app dễ dùng, giao đúng giờ.",
-  },
+  { name: "Nguyễn Minh Anh", roleKey: "home.role1", rating: 5, textKey: "home.testi1" },
+  { name: "Trần Quốc Bảo",   roleKey: "home.role2", rating: 5, textKey: "home.testi2" },
+  { name: "Lê Thu Hà",       roleKey: "home.role3", rating: 4, textKey: "home.testi3" },
 ];
 
 // ============================================================
@@ -102,7 +86,7 @@ function fmtNumber(n) {
 
 export default function CustomerHome({ user, cart, setCart }) {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
 
   const [items, setItems] = useState([]);
   const [newItems, setNewItems] = useState([]);
@@ -167,14 +151,19 @@ export default function CustomerHome({ user, cart, setCart }) {
           text: `🔥 ${m.name} GIẢM ${m.discount_percent}% (còn ${fmtNumber(m.price || 0)}đ)`,
         });
       });
-      setFlashItems(flash.length > 0 ? flash : DEFAULT_FLASH_ITEMS);
+      setFlashItems(
+        flash.length > 0
+          ? flash.map((f) => ({ text: f.text }))
+          : DEFAULT_FLASH_ITEMS
+      );
     } catch (e) {
-      if (!silent) setError(e.message || "Không tải được dữ liệu trang chủ");
+      if (!silent) setError(e.message || t("home.errorLoad"));
     } finally {
       setLoading(false);
       if (!silent) setRefreshing(false);
       inFlightRef.current = false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -221,11 +210,14 @@ export default function CustomerHome({ user, cart, setCart }) {
     const out = [];
     for (let round = 0; round < 3; round++) {
       flashItems.forEach((item, i) => {
-        out.push({ ...item, _key: `${round}-${i}` });
+        // Nếu item có `key` → dịch; nếu có `text` → dùng luôn
+        const text = item.key ? t(item.key) : item.text;
+        out.push({ ...item, text, _key: `${round}-${i}` });
       });
     }
     return out;
-  }, [flashItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flashItems, lang]);
 
   // ============================================================
   // RENDER FOOD CARD — dùng chung class với CustomerMenu
@@ -251,11 +243,11 @@ export default function CustomerHome({ user, cart, setCart }) {
 
           {isOutOfStock ? (
             <span className="grab-food-card__badge grab-food-card__badge--out">
-              Hết hàng
+              {t("menu.outOfStock")}
             </span>
           ) : isHot ? (
             <span className="grab-food-card__badge grab-food-card__badge--hot">
-              <Flame size={10} /> Bán chạy
+              <Flame size={10} /> {t("menu.bestSeller")}
             </span>
           ) : null}
 
@@ -283,7 +275,8 @@ export default function CustomerHome({ user, cart, setCart }) {
         </div>
       </div>
     );
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
 
   // ============================================================
   // RENDER
@@ -325,7 +318,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               gap: 4,
             }}
           >
-            <RefreshCw size={12} /> Thử lại
+            <RefreshCw size={12} /> {t("home.retry")}
           </button>
         </div>
       )}
@@ -544,7 +537,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             ))}
           </div>
           <span className="flash-label">
-            <Sparkles size={12} /> ƯU ĐÃI
+            <Sparkles size={12} /> {t("nav.promotions")}
           </span>
         </Link>
       )}
@@ -552,7 +545,7 @@ export default function CustomerHome({ user, cart, setCart }) {
       {/* ============ FLASH SALE ============ */}
       {(promotions.length > 0 || publicVouchers.length > 0) && (
         <>
-                    <div
+          <div
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -570,7 +563,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 gap: 8,
               }}
             >
-              <span style={{ fontSize: 22 }}>⚡</span> FLASH SALE
+              <span style={{ fontSize: 22 }}>⚡</span> {t("home.flashSale")}
               <span
                 style={{
                   background: "linear-gradient(135deg, #ef4444, #f59e0b)",
@@ -581,7 +574,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   fontWeight: 800,
                 }}
               >
-                HOT
+                {t("home.hot")}
               </span>
             </h3>
 
@@ -594,7 +587,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
-              Xem tất cả →
+              {t("home.seeAll")} →
             </Link>
           </div>
 
@@ -608,7 +601,6 @@ export default function CustomerHome({ user, cart, setCart }) {
                   className="grab-food-card voucher-card"
                   style={{ textDecoration: "none" }}
                 >
-                  {/* Khối vuông giữa card */}
                   <div className="voucher-card__icon">
                     <div className="voucher-card__icon-inner">
                       <span className="voucher-card__emoji">🎟️</span>
@@ -624,10 +616,12 @@ export default function CustomerHome({ user, cart, setCart }) {
                       className="grab-food-card__name"
                       style={{ textAlign: "center" }}
                     >
-                      Giảm {fmtNumber(v.value || 0)}đ
+                      {t("promo.discountOff")} {fmtNumber(v.value || 0)}đ
                     </h4>
                     <div className="voucher-card__code">{v.code}</div>
-                    <div className="voucher-card__cta">Nhận ngay</div>
+                    <div className="voucher-card__cta">
+                      {t("promo.claimNow")}
+                    </div>
                   </div>
                 </Link>
               ))}
@@ -645,7 +639,6 @@ export default function CustomerHome({ user, cart, setCart }) {
                   <div className="grab-food-card__image-wrap">
                     <img src={m.image} alt={m.name} loading="lazy" />
 
-                    {/* Badge -% đẩy sang PHẢI */}
                     <span className="grab-food-card__badge grab-food-card__badge--hot grab-food-card__badge--right">
                       -{m.discount_percent}%
                     </span>
@@ -721,10 +714,10 @@ export default function CustomerHome({ user, cart, setCart }) {
           >
             <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-              Chưa có món bán chạy nào
+              {t("home.noBestSeller")}
             </div>
             <div style={{ fontSize: 12 }}>
-              Khám phá thực đơn để chọn món yêu thích.
+              {t("home.noBestSellerDesc")}
             </div>
             <Link
               to="/customer/menu"
@@ -742,7 +735,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontSize: 13,
               }}
             >
-              <Utensils size={15} /> Xem thực đơn
+              <Utensils size={15} /> {t("home.exploreMenu")}
             </Link>
           </div>
         )}
@@ -768,7 +761,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 color: "var(--text-primary, #172033)",
               }}
             >
-              ✨ Món mới lên kệ
+              ✨ {t("home.newDishes")}
             </h3>
             <Link
               to="/customer/menu"
@@ -779,7 +772,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
-              Xem tất cả →
+              {t("home.seeAll")} →
             </Link>
           </div>
           <div className="home-food-grid-5">
@@ -797,7 +790,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             color: "var(--text-primary, #172033)",
           }}
         >
-          ⭐ Khách hàng nói gì về Canteen VWA
+          ⭐ {t("home.testimonialsTitle")}
         </h3>
         <div className="home-testi-grid">
           {TESTIMONIALS.map((tm, i) => (
@@ -843,7 +836,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   flex: 1,
                 }}
               >
-                "{tm.text}"
+                "{t(tm.textKey)}"
               </p>
               <div
                 style={{
@@ -888,7 +881,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   <span
                     style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}
                   >
-                    {tm.role}
+                    {t(tm.roleKey)}
                   </span>
                 </div>
               </div>
@@ -943,7 +936,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontWeight: 800,
             }}
           >
-            📱 Quét mã QR để xem menu
+            📱 {t("home.qrTitle")}
           </h3>
           <p
             style={{
@@ -953,8 +946,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               color: "var(--text-muted, #64748b)",
             }}
           >
-            Mở camera điện thoại và quét mã để truy cập thực đơn Canteen VWA
-            ngay — không cần tải app.
+            {t("home.qrDesc")}
           </p>
           <Link
             to="/customer/menu"
@@ -971,7 +963,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontSize: 13,
             }}
           >
-            Hoặc bấm vào đây →
+            {t("home.qrButton")} →
           </Link>
         </div>
       </div>
