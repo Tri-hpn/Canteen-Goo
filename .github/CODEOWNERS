@@ -1,0 +1,47 @@
+# ============================================================
+# CODEOWNERS — Canteen VWA Nhóm 07
+# ============================================================
+
+# Mặc định: trưởng nhóm review mọi thay đổi
+* @Tri-hpn
+
+# ---------- Customer ----------
+/src/pages/customer/ @lan464244-design
+/src/components/FoodDetailModal.jsx @lan464244-design
+/src/components/ToppingSelector.jsx @lan464244-design
+/src/components/CustomerOrderDetail.jsx @lan464244-design
+/src/components/PaymentModal.jsx @lan464244-design
+/src/components/PaymentSelector.jsx @lan464244-design
+/src/components/QRCodeCard.jsx @lan464244-design
+
+# ---------- Employee ----------
+/src/pages/employee/ @thiminhhadoan15-hub
+/src/components/CheckInOutCard.jsx @thiminhhadoan15-hub
+/src/components/StaffOrderDetailModal.jsx @thiminhhadoan15-hub
+/src/components/OrderDetailModal.jsx @thiminhhadoan15-hub
+/src/components/PrintReceipt.jsx @thiminhhadoan15-hub
+
+# ---------- Owner (Admin) ----------
+/src/pages/owner/ @bdahong205-max
+/src/components/Pagination.jsx @bdahong205-max
+
+# ---------- Backend + Chatbot ----------
+/server-json.js @tranthanhthu2607-creator
+/src/components/ChatBot.jsx @tranthanhthu2607-creator
+/src/components/ChatBotWidget.jsx @tranthanhthu2607-creator
+/split.mjs @tranthanhthu2607-creator
+/test-fixes.ps1 @tranthanhthu2607-creator
+
+# ---------- Shared (trưởng nhóm) ----------
+/src/api.js @Tri-hpn
+/src/i18n.js @Tri-hpn
+/src/App.jsx @Tri-hpn
+/src/main.jsx @Tri-hpn
+/src/styles.css @Tri-hpn
+/src/styles-sky.css @Tri-hpn
+/src/styles-employee.css @Tri-hpn
+/src/components/Layout.jsx @Tri-hpn
+/src/components/Sidebar.jsx @Tri-hpn
+/src/components/UI.jsx @Tri-hpn
+/package.json @Tri-hpn
+/vite.config.js @Tri-hpn
