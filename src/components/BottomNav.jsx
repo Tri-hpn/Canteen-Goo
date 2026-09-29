@@ -25,6 +25,7 @@ import {
   Wallet, Gift, LogOut, X,
 } from "lucide-react";
 import { api, setToken } from "../api";
+import { useTranslation } from "../i18n";
 import ConfirmDialog, { LogoutIcon } from "./ConfirmDialog";
 
 // ============================================================
@@ -37,26 +38,26 @@ const ORDERS_SEEN_KEY = "orders_last_seen";
 const TABS = [
   {
     key: "home",
-    label: "Trang chủ",
+    labelKey: "nav.home",
     icon: Home,
     path: "/customer",
   },
   {
     key: "menu",
-    label: "Thực đơn",
+    labelKey: "nav.menu",
     icon: UtensilsCrossed,
     path: "/customer/menu",
   },
   {
     key: "cart",
-    label: "Giỏ hàng",
+    labelKey: "nav.cart",
     icon: ShoppingCart,
     path: "/customer/cart",
     badge: "cart",
   },
   {
     key: "orders",
-    label: "Đơn hàng",
+    labelKey: "nav.orders",
     icon: Package,
     path: "/customer/orders",
     badge: "orders",
@@ -64,9 +65,9 @@ const TABS = [
 ];
 
 const MORE_ITEMS = [
-  { key: "wallet",     label: "Ví Canteen", icon: Wallet, path: "/customer/wallet" },
-  { key: "promotions", label: "Khuyến mãi", icon: Gift,   path: "/customer/promotions" },
-  { key: "profile",    label: "Hồ sơ",      icon: User,   path: "/customer/profile" },
+  { key: "wallet",     labelKey: "nav.wallet",     icon: Wallet, path: "/customer/wallet" },
+  { key: "promotions", labelKey: "nav.promotions", icon: Gift,   path: "/customer/promotions" },
+  { key: "profile",    labelKey: "nav.profile",    icon: User,   path: "/customer/profile" },
 ];
 
 // Các status đơn được coi là "đang xử lý" (cần nhắc user)
@@ -114,6 +115,7 @@ export default function BottomNav({ onLogout }) {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
   const [showMore, setShowMore] = useState(false);
+   const { t } = useTranslation();
 
   // ✅ Confirm logout state
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -324,7 +326,7 @@ export default function BottomNav({ onLogout }) {
                   }}
                 >
                   <Icon size={20} />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </button>
               );
             })}
@@ -362,7 +364,7 @@ export default function BottomNav({ onLogout }) {
                 <Icon size={22} />
                 {renderBadge(badge)}
               </div>
-              <span className="bottom-nav-label">{tab.label}</span>
+              <span className="bottom-nav-label">{t(tab.labelKey)}</span>
             </NavLink>
           );
         })}
@@ -381,7 +383,7 @@ export default function BottomNav({ onLogout }) {
           <div className="bottom-nav-icon">
             <Menu size={22} />
           </div>
-          <span className="bottom-nav-label">Thêm</span>
+          <span className="bottom-nav-label">{t("nav.more")}</span>
         </button>
       </nav>
 

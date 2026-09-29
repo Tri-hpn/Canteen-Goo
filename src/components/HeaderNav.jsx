@@ -19,6 +19,7 @@ import {
   Home, UtensilsCrossed, Package, Wallet, Gift,
 } from "lucide-react";
 import { api } from "../api";
+import { useTranslation } from "../i18n";
 
 // ============================================================
 // CONSTANTS
@@ -37,11 +38,11 @@ const ACTIVE_ORDER_STATUSES = [
 
 // 5 tab chính — bỏ "Hồ sơ" (đã có ở topbar) và "Giỏ hàng" (đã có icon topbar)
 const TABS = [
-  { key: "home",       label: "Trang chủ",  icon: Home,            path: "/customer" },
-  { key: "menu",       label: "Thực đơn",   icon: UtensilsCrossed, path: "/customer/menu" },
-  { key: "orders",     label: "Đơn hàng",   icon: Package,         path: "/customer/orders",     badge: "orders" },
-  { key: "wallet",     label: "Ví Canteen", icon: Wallet,          path: "/customer/wallet" },
-  { key: "promotions", label: "Khuyến mãi", icon: Gift,            path: "/customer/promotions" },
+  { key: "home",       labelKey: "nav.home",       icon: Home,            path: "/customer" },
+  { key: "menu",       labelKey: "nav.menu",       icon: UtensilsCrossed, path: "/customer/menu" },
+  { key: "orders",     labelKey: "nav.orders",     icon: Package,         path: "/customer/orders",     badge: "orders" },
+  { key: "wallet",     labelKey: "nav.wallet",     icon: Wallet,          path: "/customer/wallet" },
+  { key: "promotions", labelKey: "nav.promotions", icon: Gift,            path: "/customer/promotions" },
 ];
 
 const BADGE_MAX = 99;
@@ -97,6 +98,7 @@ function useIsWideScreen() {
 export default function HeaderNav() {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
+  const { t } = useTranslation();
 
   // ✅ Check màn hình — không render DOM khi mobile
   const isWide = useIsWideScreen();
@@ -243,7 +245,7 @@ export default function HeaderNav() {
                 <Icon size={16} />
                 {renderBadge(badge)}
               </span>
-              <span>{tab.label}</span>
+              <span>{t(tab.labelKey)}</span>
             </NavLink>
           );
         })}
