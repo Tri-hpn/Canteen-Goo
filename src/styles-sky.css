@@ -1,0 +1,1304 @@
+/* ============================================================
+   STYLES-SKY.CSS — Theme xanh da trời cho Canteen VWA
+   ============================================================
+   Import SAU styles.css trong main.jsx:
+     import "./styles.css";
+     import "./styles-sky.css";
+
+   Mục lục:
+     1.  Sky variables (light + dark)
+     2.  Body & App shell
+     3.  Sidebar (radial-gradient blob — có size CỐ ĐỊNH)
+     4.  Topbar
+     5.  Cards & Panels
+     6.  Buttons (primary / outline / small)
+     7.  Forms (input / select / textarea)  ← bao gồm fix viền kép
+     8.  Table
+     9.  Status badges (pending / info)
+     10. Menu categories scroll
+     11. Header nav (customer desktop)      ← bao gồm fix responsive
+     12. Topbar layout balance
+     13. Focus ring toàn cục
+     14. Dark mode overrides
+     R1-R12. Refinement layer (khớp ref design)
+     FIX-A. Font tiếng Việt (fallback đầy đủ)
+     FIX-B. Loại bỏ viền kép (double border) trên mọi input wrapper
+     FIX-C. Responsive HeaderNav / BottomNav
+
+   NGUYÊN TẮC:
+     - CHỈ override các class đã tồn tại trong styles.css
+     - KHÔNG override: #18a967 (green success), #ef4444 (red),
+       #f59e0b (warning), #8b5cf6 (purple), #ec4899 (pink)
+       → giữ nguyên ngữ nghĩa
+   ============================================================ */
+
+/* ============================================================
+   1. SKY VARIABLES
+   ============================================================ */
+
+:root {
+  /* Sky palette */
+  --sky-50:  #F0F9FF;
+  --sky-100: #E0F2FE;
+  --sky-200: #BAE6FD;
+  --sky-300: #7DD3FC;
+  --sky-400: #38BDF8;
+  --sky-500: #0EA5E9;
+  --sky-600: #0284C7;
+  --sky-700: #0369A1;
+  --sky-800: #075985;
+
+  /* Brand */
+  --brand: #0EA5E9;
+  --brand-dark: #0284C7;
+  --brand-light: #38BDF8;
+
+  /* Page / card */
+  --sky-page-bg:    #FAFCFF;
+  --sky-card-bg:    #FFFFFF;
+  --sky-border:     #E2E8F0;
+  --sky-sidebar-bg: #F5FAFF;
+
+  /* Ink (text) */
+  --sky-ink-900: #0F172A;
+  --sky-ink-700: #334155;
+  --sky-ink-500: #64748B;
+  --sky-ink-300: #94A3B8;
+}
+
+/* ============================================================
+   2. BODY & APP SHELL
+   ============================================================ */
+
+body {
+  background: var(--sky-page-bg) !important;
+}
+
+.app-shell {
+  background: var(--sky-page-bg) !important;
+}
+
+/* ============================================================
+   3. SIDEBAR — LIGHT SKY
+   ------------------------------------------------------------
+   Blob trang trí nằm LUÔN trong background (radial-gradient)
+   → không bị overflow-y: auto cắt như pseudo-element.
+   circle có size CỐ ĐỊNH (45px) để không phủ toàn sidebar.
+   ============================================================ */
+
+.sidebar, aside {
+  background:
+    /* Blob lớn góc trên phải — ellipse có size cố định */
+    radial-gradient(
+      ellipse 200px 160px at 100% -6%,
+      var(--sky-300) 0%,
+      var(--sky-200) 45%,
+      transparent 72%
+    ),
+    /* Blob nhỏ — circle 45px, gọn ở góc trên phải */
+    radial-gradient(
+      circle 45px at 86% 9%,
+      var(--sky-400) 0%,
+      var(--sky-300) 55%,
+      transparent 85%
+    ),
+    /* Nền sidebar */
+    var(--sky-sidebar-bg) !important;
+
+  color: var(--sky-ink-900) !important;
+  border-right: 1px solid var(--sky-border) !important;
+  padding: 22px 16px !important;
+}
+
+/* Kill pseudo-element nếu đã từng dán phiên bản cũ */
+.sidebar::before, aside::before,
+.sidebar::after,  aside::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* --- Brand --- */
+.brand-mark {
+  background: linear-gradient(135deg, var(--sky-400), var(--sky-600)) !important;
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.35) !important;
+}
+
+.brand-text strong,
+.sidebar .brand,
+aside > div:first-child {
+  color: var(--sky-ink-900) !important;
+}
+
+.brand-text small {
+  color: var(--sky-500) !important;
+}
+
+/* ============================================================
+   FIX: <aside> trong Chat layout bị selector "aside" trong
+   styles.css đè (position: fixed, width: 250px, bg đen)
+   ============================================================ */
+
+.chat-layout > aside {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  left: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  z-index: auto !important;
+  transform: none !important;
+  padding: 0 !important;
+  border-right: 0 !important;
+  background: var(--sky-card-bg, #fff) !important;
+  color: var(--sky-ink-900, #0F172A) !important;
+  overflow: hidden !important;
+}
+
+.chat-layout > aside::before,
+.chat-layout > aside::after {
+  content: none !important;
+  display: none !important;
+}
+
+html.dark-mode .chat-layout > aside {
+  background: #111A2B !important;
+  border-right: 0 !important;
+}
+
+/* --- Role chip --- */
+.role-chip {
+  background: var(--sky-100) !important;
+  color: var(--sky-700) !important;
+  border: 1px solid var(--sky-200) !important;
+}
+
+/* --- Nav links --- */
+.sidebar nav a,
+aside nav a,
+.nav-link {
+  color: var(--sky-ink-700) !important;
+  border-radius: 12px !important;
+  padding: 11px 14px !important;
+  font-weight: 600 !important;
+  transition: all 0.18s ease !important;
+}
+
+.sidebar nav a:hover,
+aside nav a:hover,
+.nav-link:hover {
+  background: var(--sky-100) !important;
+  color: var(--sky-700) !important;
+  padding-left: 16px !important;
+}
+
+.sidebar nav a.active,
+aside nav a.active,
+.nav-link.active {
+  background: linear-gradient(135deg, var(--sky-400), var(--sky-600)) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 6px 16px -6px rgba(14, 165, 233, 0.6) !important;
+}
+
+.nav-link.active .nav-badge {
+  background: #FFFFFF !important;
+  color: var(--sky-600) !important;
+}
+
+/* --- Logout --- */
+.logout-btn,
+.sidebar button,
+aside button.logout-btn {
+  color: var(--sky-ink-500) !important;
+  border-radius: 10px !important;
+}
+
+.logout-btn:hover {
+  background: #FEE2E2 !important;
+  color: #DC2626 !important;
+}
+
+/* ============================================================
+   4. TOPBAR
+   ============================================================ */
+
+.topbar,
+header[style*="sticky"] {
+  background: var(--sky-card-bg) !important;
+  border-bottom: 1px solid var(--sky-border) !important;
+}
+
+.topbar-logo-text b {
+  color: var(--sky-ink-900) !important;
+}
+
+.global-search-input {
+  background: var(--sky-50) !important;
+  border-radius: 999px !important;
+}
+
+.global-search-input:focus-within {
+  background: #FFFFFF !important;
+  border-color: var(--sky-500) !important;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12) !important;
+}
+
+.global-search-dropdown {
+  border-color: var(--sky-border) !important;
+}
+
+.dropdown-item:hover {
+  background: var(--sky-50) !important;
+}
+
+/* ============================================================
+   5. CARDS & PANELS
+   ============================================================ */
+
+.panel, .card {
+  background: var(--sky-card-bg) !important;
+  border: 1px solid var(--sky-border) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+}
+
+.panel:hover, .card:hover {
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.08) !important;
+}
+
+.panel-head h3 {
+  color: var(--sky-ink-900) !important;
+}
+
+/* ============================================================
+   6. BUTTONS
+   ============================================================ */
+
+.primary-btn {
+  background: linear-gradient(135deg, var(--sky-400), var(--sky-600)) !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.3) !important;
+  border-radius: 12px !important;
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--sky-500), var(--sky-700)) !important;
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.45) !important;
+}
+
+.outline-btn:hover {
+  border-color: var(--sky-500) !important;
+  color: var(--sky-600) !important;
+}
+
+.small-btn:hover {
+  background: var(--sky-500) !important;
+  border-color: var(--sky-500) !important;
+}
+
+/* ============================================================
+   7. FORMS
+   ------------------------------------------------------------
+   LƯU Ý: Focus ring cho input đứng riêng (không wrapper).
+   Xem FIX-B ở cuối file để biết cách xử lý input trong wrapper.
+   ============================================================ */
+
+.form-input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--sky-500) !important;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12) !important;
+}
+
+.input-icon:focus-within {
+  border-color: var(--sky-500) !important;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12) !important;
+}
+
+.input-icon input {
+  background: transparent !important;
+}
+
+/* ============================================================
+   8. TABLE
+   ============================================================ */
+
+table th {
+  background: var(--sky-50) !important;
+  color: var(--sky-ink-500) !important;
+  border-bottom-color: var(--sky-border) !important;
+}
+
+tbody tr:hover {
+  background: var(--sky-50) !important;
+}
+
+/* ============================================================
+   9. STATUS BADGES (chỉ override 2 loại mang màu brand)
+   ============================================================ */
+
+.status.pending {
+  background: var(--sky-100) !important;
+  color: var(--sky-700) !important;
+}
+
+.status.info {
+  background: #CFFAFE !important;
+  color: #0E7490 !important;
+}
+
+/* .status.success / .warning / .danger / .neutral — giữ nguyên */
+
+/* ============================================================
+   10. MENU CATEGORIES SCROLL
+   ============================================================ */
+
+.menu-cats-scroll {
+  background: var(--sky-50) !important;
+  border-color: var(--sky-border) !important;
+}
+
+.menu-cats-scroll > button.cat-chip:hover {
+  color: var(--sky-600) !important;
+}
+
+.menu-cats-scroll > button.cat-chip.active {
+  background: #FFFFFF !important;
+  color: var(--sky-600) !important;
+}
+
+/* ============================================================
+   11. HEADER NAV (Customer desktop)
+   ============================================================ */
+
+.header-nav-item:hover,
+.header-nav-item.active {
+  color: var(--sky-600) !important;
+}
+
+.header-nav-item.active {
+  border-bottom-color: var(--sky-500) !important;
+}
+
+/* ============================================================
+   12. TOPBAR LAYOUT BALANCE
+   ============================================================ */
+
+.topbar-left  { flex: 1 1 auto !important; min-width: 0 !important; }
+.topbar-right { flex-shrink: 0 !important; margin-left: auto !important; }
+
+/* ============================================================
+   13. FOCUS RING TOÀN CỤC
+   ============================================================ */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--sky-500) !important;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ============================================================
+   14. DARK MODE OVERRIDES
+   ============================================================ */
+
+/* --- Body & shell --- */
+html.dark-mode body,
+html.dark-mode .app-shell {
+  background: #0B1220 !important;
+}
+
+/* --- Sidebar --- */
+html.dark-mode .sidebar,
+html.dark-mode aside {
+  background:
+    radial-gradient(
+      ellipse 200px 160px at 100% -6%,
+      rgba(56, 189, 248, 0.4) 0%,
+      rgba(14, 165, 233, 0.18) 45%,
+      transparent 72%
+    ),
+    radial-gradient(
+      circle 45px at 86% 9%,
+      rgba(56, 189, 248, 0.55) 0%,
+      rgba(14, 165, 233, 0.28) 55%,
+      transparent 85%
+    ),
+    #0D1526 !important;
+
+  border-right-color: #1E293B !important;
+}
+
+html.dark-mode .brand-text strong,
+html.dark-mode .sidebar .brand,
+html.dark-mode aside > div:first-child {
+  color: #F1F5F9 !important;
+}
+
+html.dark-mode .brand-text small {
+  color: var(--sky-400) !important;
+}
+
+html.dark-mode .role-chip {
+  background: rgba(56, 189, 248, 0.15) !important;
+  color: var(--sky-300) !important;
+  border-color: rgba(56, 189, 248, 0.25) !important;
+}
+
+html.dark-mode .sidebar nav a,
+html.dark-mode aside nav a,
+html.dark-mode .nav-link {
+  color: #CBD5E1 !important;
+}
+
+html.dark-mode .sidebar nav a:hover,
+html.dark-mode aside nav a:hover,
+html.dark-mode .nav-link:hover {
+  background: #1E293B !important;
+  color: var(--sky-300) !important;
+}
+
+html.dark-mode .sidebar nav a.active,
+html.dark-mode aside nav a.active,
+html.dark-mode .nav-link.active {
+  background: linear-gradient(135deg, var(--sky-400), var(--sky-600)) !important;
+  color: #FFFFFF !important;
+}
+
+/* --- Topbar --- */
+html.dark-mode .topbar,
+html.dark-mode header[style*="sticky"] {
+  background: #111A2B !important;
+  border-bottom-color: #1E293B !important;
+}
+
+html.dark-mode .topbar-logo-text b {
+  color: #F1F5F9 !important;
+}
+
+html.dark-mode .global-search-input {
+  background: #1E293B !important;
+}
+
+html.dark-mode .global-search-input:focus-within {
+  background: #0B1220 !important;
+  border-color: var(--sky-500) !important;
+}
+
+html.dark-mode .global-search-dropdown {
+  background: #111A2B !important;
+  border-color: #1E293B !important;
+}
+
+html.dark-mode .dropdown-item:hover {
+  background: #1E293B !important;
+}
+
+/* --- Cards --- */
+html.dark-mode .panel,
+html.dark-mode .card {
+  background: #111A2B !important;
+  border-color: #1E293B !important;
+}
+
+html.dark-mode .panel-head h3 {
+  color: #F1F5F9 !important;
+}
+
+/* --- Forms --- */
+html.dark-mode .form-input,
+html.dark-mode input:not([type="checkbox"]),
+html.dark-mode textarea,
+html.dark-mode select {
+  background: #0B1220 !important;
+  border-color: #1E293B !important;
+  color: #E2E8F0 !important;
+}
+
+html.dark-mode .input-icon {
+  background: #0B1220 !important;
+  border-color: #1E293B !important;
+}
+
+html.dark-mode .input-icon input {
+  color: #E2E8F0 !important;
+}
+
+/* --- Table --- */
+html.dark-mode table th {
+  background: #172033 !important;
+  color: #94A3B8 !important;
+  border-bottom-color: #1E293B !important;
+}
+
+html.dark-mode table td {
+  border-bottom-color: #1E293B !important;
+}
+
+html.dark-mode tbody tr:hover {
+  background: rgba(56, 189, 248, 0.06) !important;
+}
+
+/* --- Menu cats --- */
+html.dark-mode .menu-cats-scroll {
+  background: #1E293B !important;
+  border-color: #334155 !important;
+}
+
+html.dark-mode .menu-cats-scroll > button.cat-chip {
+  color: #94A3B8 !important;
+}
+
+html.dark-mode .menu-cats-scroll > button.cat-chip:hover {
+  color: var(--sky-300) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+html.dark-mode .menu-cats-scroll > button.cat-chip.active {
+  background: #0B1220 !important;
+  color: var(--sky-300) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* --- Header nav --- */
+html.dark-mode .header-nav {
+  background: #111A2B !important;
+  border-color: #1E293B !important;
+}
+
+html.dark-mode .header-nav-item:hover,
+html.dark-mode .header-nav-item.active {
+  color: var(--sky-300) !important;
+}
+
+/* --- Focus ring --- */
+html.dark-mode button:focus-visible,
+html.dark-mode a:focus-visible,
+html.dark-mode input:focus-visible,
+html.dark-mode textarea:focus-visible,
+html.dark-mode select:focus-visible {
+  outline-color: var(--sky-400) !important;
+}
+
+/* ============================================================
+   REFINEMENT LAYER — Khớp layout ref design
+   ============================================================ */
+
+/* ============================================================
+   R1. SIDEBAR — Roomier, khớp ref
+   ============================================================ */
+
+.sidebar, aside {
+  padding: 26px 20px !important;
+}
+
+.sidebar .brand,
+aside > div:first-child {
+  padding: 8px 6px 24px !important;
+  gap: 12px !important;
+}
+
+.brand-mark {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 12px !important;
+  font-size: 20px !important;
+}
+
+.brand-text strong {
+  font-size: 15px !important;
+  letter-spacing: 1.5px !important;
+}
+
+.brand-text small {
+  font-size: 10.5px !important;
+  letter-spacing: 3px !important;
+  font-weight: 700 !important;
+  margin-top: 3px !important;
+}
+
+.role-chip {
+  padding: 6px 14px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  margin-bottom: 18px !important;
+  border-radius: 20px !important;
+}
+
+.sidebar nav,
+aside nav {
+  gap: 4px !important;
+}
+
+.sidebar nav a,
+aside nav a,
+.nav-link {
+  padding: 12px 14px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  gap: 12px !important;
+  border-radius: 12px !important;
+  min-height: 44px;
+  letter-spacing: 0.1px;
+}
+
+.sidebar nav a svg,
+aside nav a svg,
+.nav-link svg {
+  width: 18px !important;
+  height: 18px !important;
+  flex-shrink: 0;
+}
+
+.sidebar nav a.active,
+aside nav a.active,
+.nav-link.active {
+  box-shadow:
+    0 8px 20px -6px rgba(14, 165, 233, 0.55),
+    0 2px 4px rgba(14, 165, 233, 0.15) !important;
+}
+
+.logout-btn,
+aside button.logout-btn {
+  margin-top: 12px !important;
+  padding: 12px 14px !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  min-height: 44px;
+}
+
+/* ============================================================
+   R2. TOPBAR — Cao hơn, search rộng hơn
+   ============================================================ */
+
+.topbar,
+header[style*="sticky"] {
+  height: 72px !important;
+  padding: 0 28px !important;
+  gap: 20px !important;
+}
+
+.topbar-logo-img {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+}
+
+.topbar-logo-text b {
+  font-size: 15px !important;
+  letter-spacing: 1px !important;
+}
+
+.topbar-logo-text small {
+  font-size: 10.5px !important;
+  letter-spacing: 2.5px !important;
+}
+
+.global-search {
+  max-width: 560px !important;
+}
+
+.global-search-input {
+  height: 46px !important;
+  padding: 0 20px !important;
+  border-radius: 999px !important;
+  font-size: 14px !important;
+  background: var(--sky-50) !important;
+}
+
+.global-search-input input {
+  font-size: 14px !important;
+}
+
+.topbar-profile-btn {
+  padding: 4px 14px 4px 4px !important;
+  gap: 10px !important;
+}
+
+.profile-avatar-img,
+.profile-avatar-initials {
+  width: 40px !important;
+  height: 40px !important;
+  font-size: 13px !important;
+}
+
+.profile-info b {
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+}
+
+.profile-info small {
+  font-size: 11px !important;
+}
+
+.topbar-icon-btn,
+.cart-topbar-icon {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 11px !important;
+}
+
+/* ============================================================
+   R3. PAGE HEADER — Title to hơn, khớp ref
+   ============================================================ */
+
+.page-heading {
+  margin-bottom: 24px !important;
+}
+
+.page-heading h1 {
+  font-size: 26px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.4px !important;
+  color: var(--sky-ink-900) !important;
+  margin: 0 0 6px !important;
+}
+
+.page-heading p {
+  font-size: 13.5px !important;
+  color: var(--sky-ink-500) !important;
+  margin: 0 !important;
+}
+
+.page-content {
+  padding: 28px 32px !important;
+}
+
+/* ============================================================
+   R4. CARDS & PANELS — Radius to hơn, padding generous
+   ============================================================ */
+
+.panel, .card {
+  padding: 24px !important;
+  border-radius: 16px !important;
+}
+
+.panel-head h3 {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+
+/* ============================================================
+   R5. BUTTONS — Pill, kích thước chuẩn
+   ============================================================ */
+
+.primary-btn {
+  padding: 12px 22px !important;
+  border-radius: 12px !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1px !important;
+}
+
+.primary-btn.full {
+  padding: 14px !important;
+  font-size: 14px !important;
+}
+
+.outline-btn,
+.small-btn {
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+}
+
+/* ============================================================
+   R6. FORMS — Input to hơn, radius 10
+   ============================================================ */
+
+.form-input {
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+  border-radius: 10px !important;
+  margin: 8px 0 16px !important;
+}
+
+.input-icon {
+  padding: 12px 16px !important;
+  border-radius: 10px !important;
+  margin: 8px 0 16px !important;
+}
+
+.input-icon input {
+  font-size: 14px !important;
+}
+
+label {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  margin-bottom: 6px !important;
+}
+
+.page-content select {
+  padding: 10px 14px !important;
+  border-radius: 10px !important;
+  font-size: 13.5px !important;
+  height: auto !important;
+}
+
+/* ============================================================
+   R7. TABLE — Padding thoáng hơn
+   ============================================================ */
+
+table th {
+  padding: 13px 14px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.6px !important;
+}
+
+table td {
+  padding: 13px 14px !important;
+  font-size: 13.5px !important;
+}
+
+/* ============================================================
+   R8. STATUS BADGES — Padding chuẩn hơn
+   ============================================================ */
+
+.status,
+.att-badge,
+.inv-badge {
+  padding: 5px 12px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px !important;
+}
+
+/* ============================================================
+   R9. KPI STAT CARD (utility class — optional adopt)
+   ============================================================ */
+
+.app-stat-card {
+  background: var(--sky-card-bg, #fff);
+  border: 1px solid var(--sky-border, #E2E8F0);
+  border-radius: 16px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.app-stat-card:hover {
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.10);
+  border-color: var(--sky-200);
+  transform: translateY(-2px);
+}
+
+.app-stat-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sky-600, #0284C7);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.app-stat-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--sky-ink-900, #0F172A);
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+  margin: 2px 0;
+}
+
+.app-stat-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.app-stat-delta.up   { color: #16A34A; }
+.app-stat-delta.down { color: #DC2626; }
+
+/* ============================================================
+   R10. PAGE HEAD (utility — optional adopt)
+   ============================================================ */
+
+.app-page-head {
+  margin-bottom: 22px;
+}
+
+.app-page-title {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--sky-ink-900, #0F172A);
+}
+
+.app-page-sub {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--sky-ink-500, #64748B);
+}
+
+/* ============================================================
+   R11. DARK MODE cho utility classes
+   ============================================================ */
+
+html.dark-mode .app-stat-card {
+  background: #111A2B !important;
+  border-color: #1E293B !important;
+}
+
+html.dark-mode .app-stat-card:hover {
+  border-color: rgba(56, 189, 248, 0.35) !important;
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.15) !important;
+}
+
+html.dark-mode .app-stat-label {
+  color: var(--sky-400, #38BDF8) !important;
+}
+
+html.dark-mode .app-stat-value,
+html.dark-mode .app-page-title {
+  color: #F1F5F9 !important;
+}
+
+html.dark-mode .app-page-sub {
+  color: #94A3B8 !important;
+}
+
+html.dark-mode .app-stat-delta.up   { color: #4ADE80 !important; }
+html.dark-mode .app-stat-delta.down { color: #F87171 !important; }
+
+/* ============================================================
+   R12. RESPONSIVE — Giữ tỉ lệ đẹp trên mobile
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .page-content {
+    padding: 20px 18px !important;
+  }
+
+  .app-page-title,
+  .page-heading h1 {
+    font-size: 22px !important;
+  }
+
+  .app-stat-value {
+    font-size: 22px !important;
+  }
+
+  .app-stat-card {
+    padding: 18px 20px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .topbar,
+  header[style*="sticky"] {
+    height: 60px !important;
+    padding: 0 12px !important;
+  }
+
+  .topbar-logo-img {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .global-search-input {
+    height: 40px !important;
+    padding: 0 14px !important;
+    font-size: 13px !important;
+  }
+
+  .profile-avatar-img,
+  .profile-avatar-initials {
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  .topbar-icon-btn,
+  .cart-topbar-icon {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .panel, .card {
+    padding: 18px !important;
+    border-radius: 14px !important;
+  }
+
+  .sidebar, aside {
+    padding: 20px 14px !important;
+  }
+
+  .sidebar nav a,
+  aside nav a,
+  .nav-link {
+    padding: 11px 12px !important;
+    font-size: 13.5px !important;
+  }
+
+  table th,
+  table td {
+    padding: 10px 12px !important;
+  }
+}
+
+/* ============================================================
+   MODAL FORM — Padding bottom đủ thoáng
+   ============================================================ */
+
+[role="dialog"] > div,
+.modal,
+.food-detail-content {
+  padding-bottom: 32px !important;
+}
+
+[role="dialog"] form {
+  padding-bottom: 8px;
+}
+
+[role="dialog"] > div:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================================
+   FIX-A. FONT TIẾNG VIỆT — Fallback đầy đủ
+   ------------------------------------------------------------
+   Đảm bảo font family có fallback cho tiếng Việt trên mọi
+   hệ điều hành (Windows, macOS, Linux, Android, iOS).
+   ============================================================ */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", "Noto Sans", "Noto Sans Vietnamese",
+               "Arial Unicode MS", Arial, Tahoma, Verdana, sans-serif;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+               "Courier New", Consolas, monospace;
+}
+
+/* Force font-family cho toàn bộ app */
+html, body, button, input, textarea, select {
+  font-family: var(--font-sans) !important;
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Badge status cụ thể */
+.status,
+.status-badge,
+.att-badge,
+.inv-badge,
+button,
+td,
+th {
+  font-family: var(--font-sans) !important;
+}
+
+/* Font variants */
+* {
+  font-variant-ligatures: normal;
+  font-variant-numeric: normal;
+  font-variant-east-asian: normal;
+}
+
+/* ============================================================
+   FIX-B. LOẠI BỎ VIỀN KÉP (DOUBLE BORDER) TRÊN INPUT WRAPPER
+   ------------------------------------------------------------
+   Áp dụng cho MỌI ô input nằm trong wrapper:
+     - .global-search-input  (thanh tìm kiếm topbar)
+     - .v8-input-wrap        (trang login)
+     - .input-icon           (form khác)
+     - [class*="input-wrap"] (mọi wrapper khác)
+   Nguyên tắc:
+     - Wrapper giữ border + focus ring
+     - Input con bên trong: border: 0, box-shadow: 0
+   ============================================================ */
+
+/* ---------- B1. Reset mọi input nằm trong wrapper ---------- */
+.global-search-input input,
+.global-search-input input:hover,
+.global-search-input input:focus,
+.global-search-input input:active,
+.v8-input-wrap input,
+.v8-input-wrap input:hover,
+.v8-input-wrap input:focus,
+.v8-input-wrap input:active,
+.input-icon input,
+.input-icon input:hover,
+.input-icon input:focus,
+.input-icon input:active,
+[class*="input-wrap"] input,
+[class*="input-wrap"] input:hover,
+[class*="input-wrap"] input:focus,
+[class*="input-wrap"] input:active {
+  border: 0 !important;
+  border-color: transparent !important;
+  outline: 0 !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  -webkit-box-shadow: none !important;
+}
+
+/* ---------- B2. Focus ring nằm ở wrapper ---------- */
+.global-search-input:focus-within {
+  background: var(--card-bg, #fff) !important;
+  border-color: #2634d5 !important;
+  box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.1) !important;
+}
+
+.v8-input-wrap:focus-within {
+  border-color: #1f2937 !important;
+  box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.08) !important;
+}
+
+.input-icon:focus-within {
+  border-color: #2634d5 !important;
+  box-shadow: 0 0 0 4px rgba(38, 52, 213, 0.12) !important;
+}
+
+/* ---------- B3. Autofill fix (tránh nền vàng + viền kép) ---------- */
+.global-search-input input:-webkit-autofill,
+.global-search-input input:-webkit-autofill:hover,
+.global-search-input input:-webkit-autofill:focus,
+.v8-input-wrap input:-webkit-autofill,
+.v8-input-wrap input:-webkit-autofill:hover,
+.v8-input-wrap input:-webkit-autofill:focus,
+.input-icon input:-webkit-autofill,
+.input-icon input:-webkit-autofill:hover,
+.input-icon input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: inherit !important;
+  transition: background-color 9999s ease-in-out 0s !important;
+  border: 0 !important;
+}
+
+/* ---------- B4. Browser default focus outline ---------- */
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+  outline: 0 !important;
+}
+
+/* ---------- B5. Dark mode fix ---------- */
+html.dark-mode .global-search-input:focus-within {
+  background: #0B1220 !important;
+  border-color: var(--sky-500, #0EA5E9) !important;
+}
+
+html.dark-mode .v8-input-wrap:focus-within {
+  border-color: #f1f5f9 !important;
+  box-shadow: 0 0 0 3px rgba(241, 245, 249, 0.1) !important;
+}
+
+html.dark-mode .global-search-input input:focus,
+html.dark-mode .v8-input-wrap input:focus,
+html.dark-mode .input-icon input:focus {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   FIX-C. RESPONSIVE — HeaderNav / BottomNav
+   ------------------------------------------------------------
+   Desktop (>= 901px): hiện HeaderNav, ẩn BottomNav
+   Tablet/Mobile (<= 900px): ẩn HeaderNav, hiện BottomNav
+   ============================================================ */
+
+/* Desktop: hiện HeaderNav, ẩn BottomNav */
+.header-nav {
+  display: block !important;
+}
+
+.bottom-nav {
+  display: none !important;
+}
+
+/* Tablet + Mobile: ẩn HeaderNav, hiện BottomNav */
+@media (max-width: 900px) {
+  .header-nav {
+    display: none !important;
+  }
+
+  .bottom-nav {
+    display: flex !important;
+  }
+
+  /* Space cho BottomNav */
+  body.has-bottom-nav .page-content {
+    padding-bottom: 90px !important;
+  }
+}
+
+/* Mobile nhỏ: đảm bảo chắc chắn */
+@media (max-width: 480px) {
+  .header-nav {
+    display: none !important;
+  }
+
+  .bottom-nav {
+    display: flex !important;
+  }
+}
+
+/* Đảm bảo header-nav-inner không bị xuống dòng */
+.header-nav-inner {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 4px !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.header-nav-inner::-webkit-scrollbar {
+  display: none !important;
+}
+
+.header-nav-item {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+}
+
+/* Giảm padding khi cửa sổ hẹp để đủ 6 tab */
+@media (max-width: 1400px) {
+  .header-nav-item {
+    padding: 14px 12px !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  .header-nav-item {
+    padding: 14px 10px !important;
+    font-size: 12.5px !important;
+    gap: 6px !important;
+  }
+
+  .header-nav-item svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .header-nav-item {
+    padding: 14px 8px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* ============================================================
+   KẾT THÚC FILE
+   ============================================================ */

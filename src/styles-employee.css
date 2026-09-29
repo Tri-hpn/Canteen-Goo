@@ -1,0 +1,484 @@
+/* ============================================================
+   STYLES-EMPLOYEE.CSS — Responsive tối ưu cho Employee pages
+   ============================================================
+   Import trong App.jsx (SAU styles.css và styles-sky.css):
+     import "./styles-employee.css";
+
+   Mục tiêu:
+     - Grid layouts responsive mọi breakpoint
+     - Đồng hồ CheckInOut scale theo màn hình
+     - KPI cards: 4 → 3 → 2 cột
+     - Filter chips scroll ngang mượt
+     - Modal đăng ký ca responsive
+     - Polish thẩm mỹ: shadow, hover, spacing chuẩn
+   ============================================================ */
+
+/* ============================================================
+   PHẦN 1: EMPLOYEE HOME — Grid layouts
+   ============================================================ */
+
+/* Grid chính: CheckInOutCard + KPI column */
+.emp-home-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 18px;
+  margin-bottom: 18px;
+  align-items: start;
+}
+
+/* KPI grid bên phải: 2x2 */
+.emp-home-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  height: 100%;
+  align-content: start;
+}
+
+/* KPI card */
+.emp-home-kpi-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e7ebf0);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: all 0.2s ease;
+}
+
+.emp-home-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(38, 52, 213, 0.08);
+  border-color: rgba(38, 52, 213, 0.2);
+}
+
+.emp-home-kpi-card .kpi-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.emp-home-kpi-card .kpi-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.emp-home-kpi-card .kpi-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary, #172033);
+  line-height: 1.15;
+  display: block;
+}
+
+.emp-home-kpi-card .kpi-label {
+  font-size: 12px;
+  color: var(--text-light, #8993a3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+  display: block;
+}
+
+/* ============================================================
+   PHẦN 2: CHECK-IN OUT CARD — Grid + đồng hồ
+   ============================================================ */
+
+/* Grid chính trong CheckInOutCard */
+.checkin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+/* Đồng hồ lớn — dùng clamp để scale mượt */
+.checkin-clock {
+  font-size: clamp(36px, 6vw, 56px);
+  font-weight: 800;
+  color: var(--text-primary, #172033);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -1px;
+  word-break: break-all;
+}
+
+/* Grid 3 nút chọn ca */
+.checkin-shift-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* Grid 2 nút check-in/out */
+.checkin-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* ============================================================
+   PHẦN 3: EMPLOYEE ORDERS — Filter + Table
+   ============================================================ */
+
+/* Filter bar */
+.emp-orders-filter {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Chips scroll ngang mobile */
+.emp-orders-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Bảng responsive */
+.emp-orders-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+}
+
+.emp-orders-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px; /* Ép table đủ rộng để scroll thay vì co lại */
+}
+
+/* ============================================================
+   PHẦN 4: EMPLOYEE CHECK-IN-OUT PAGE — Stats + Form
+   ============================================================ */
+
+/* Stats grid 4 KPI */
+.emp-cio-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* ============================================================
+   PHẦN 5: MODAL ĐĂNG KÝ CA — Grid 7 ngày
+   ============================================================ */
+
+/* Grid 7 ngày */
+.emp-register-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+/* Grid 3 ca */
+.emp-register-shifts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* ============================================================
+   PHẦN 6: RESPONSIVE — TABLET (1024px)
+   ============================================================ */
+
+@media (max-width: 1024px) {
+  /* HOME: 2 grid → 1 cột dọc */
+  .emp-home-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* KPI grid: vẫn 2 cột (vì trên tablet vẫn đủ rộng) */
+  .emp-home-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* KPI card to hơn */
+  .emp-home-kpi-card {
+    padding: 16px;
+  }
+  .emp-home-kpi-card .kpi-value {
+    font-size: 20px;
+  }
+
+  /* Stats 4 KPI → 2x2 */
+  .emp-cio-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  /* Filter bar: cho phép wrap */
+  .emp-orders-filter {
+    gap: 10px;
+  }
+}
+
+/* ============================================================
+   PHẦN 7: RESPONSIVE — MOBILE LỚN (768px)
+   ============================================================ */
+
+@media (max-width: 768px) {
+  /* HOME: KPI grid 2 cột vẫn OK */
+  .emp-home-kpi-card {
+    padding: 14px;
+    gap: 10px;
+  }
+  .emp-home-kpi-card .kpi-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+  }
+  .emp-home-kpi-card .kpi-value {
+    font-size: 18px;
+  }
+  .emp-home-kpi-card .kpi-label {
+    font-size: 11px;
+  }
+
+  /* CHECK-IN CARD: 2 cột → 1 cột */
+  .checkin-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  /* Đồng hồ nhỏ hơn trên mobile */
+  .checkin-clock {
+    font-size: clamp(32px, 10vw, 44px);
+  }
+
+  /* Stats: 2 cột */
+  .emp-cio-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  /* Filter chips: scroll ngang */
+  .emp-orders-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-left: -12px;
+    margin-right: -12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .emp-orders-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .emp-orders-chips > button {
+    flex-shrink: 0;
+  }
+
+  /* Filter bar: refresh button xuống dòng mới nếu cần */
+  .emp-orders-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  /* Modal đăng ký ca — Grid 7 ngày giữ nguyên vì mỗi ô đủ nhỏ */
+  .emp-register-days {
+    gap: 3px;
+  }
+
+  /* Shifts grid: giữ 3 cột vì mỗi nút nhỏ gọn */
+  .emp-register-shifts {
+    gap: 6px;
+  }
+}
+
+/* ============================================================
+   PHẦN 8: RESPONSIVE — MOBILE NHỎ (480px)
+   ============================================================ */
+
+@media (max-width: 480px) {
+  /* HOME: KPI grid 2 cột vẫn OK nhưng nhỏ hơn */
+  .emp-home-kpi-card {
+    padding: 12px;
+    gap: 8px;
+    border-radius: 12px;
+  }
+  .emp-home-kpi-card .kpi-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+  }
+  .emp-home-kpi-card .kpi-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  .emp-home-kpi-card .kpi-value {
+    font-size: 16px;
+  }
+  .emp-home-kpi-card .kpi-label {
+    font-size: 10.5px;
+  }
+
+  /* Đồng hồ nhỏ hơn */
+  .checkin-clock {
+    font-size: clamp(28px, 9vw, 36px);
+  }
+
+  /* Check-in/out: 2 cột → 1 cột full width */
+  .checkin-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Shifts picker: 3 cột → 3 cột nhưng nhỏ hơn */
+  .checkin-shift-picker {
+    gap: 4px;
+  }
+
+  /* Stats: 2 cột nhỏ */
+  .emp-cio-stats {
+    gap: 8px;
+  }
+
+  /* Grid 7 ngày trong modal: thu gọn padding */
+  .emp-register-days button {
+    padding: 6px 2px !important;
+    font-size: 10px !important;
+  }
+
+  /* Grid 3 ca trong modal: thu gọn */
+  .emp-register-shifts button {
+    padding: 8px 4px !important;
+  }
+  .emp-register-shifts button span {
+    font-size: 10px !important;
+  }
+}
+
+/* ============================================================
+   PHẦN 9: RESPONSIVE — MOBILE RẤT NHỎ (380px)
+   ============================================================ */
+
+@media (max-width: 380px) {
+  /* KPI grid: 2 cột → vẫn giữ 2 cột nhưng rất nhỏ */
+  .emp-home-kpi-card {
+    padding: 10px;
+    gap: 6px;
+  }
+  .emp-home-kpi-card .kpi-icon {
+    width: 34px;
+    height: 34px;
+  }
+  .emp-home-kpi-card .kpi-value {
+    font-size: 15px;
+  }
+}
+
+/* ============================================================
+   PHẦN 10: EMPLOYEE MENU — Summary badges
+   ============================================================ */
+
+.emp-menu-toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.emp-menu-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+@media (max-width: 768px) {
+  .emp-menu-toolbar {
+    gap: 10px;
+  }
+  .emp-menu-summary {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+}
+
+/* ============================================================
+   PHẦN 11: EMPLOYEE CHAT — Đã có responsive, tinh chỉnh nhẹ
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .chat-layout {
+    height: auto !important;
+    min-height: 600px !important;
+    max-height: calc(100vh - 140px) !important;
+  }
+}
+
+/* ============================================================
+   PHẦN 12: POLISH — Emphome bảng "Đơn cần xử lý"
+   ============================================================ */
+
+/* Card bao ngoài bảng đơn */
+.emp-need-action-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e7ebf0);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+/* Header: title + actions */
+.emp-need-action-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .emp-need-action-card {
+    padding: 14px;
+  }
+  .emp-need-action-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+
+/* ============================================================
+   PHẦN 13: DARK MODE — KPI cards
+   ============================================================ */
+
+html.dark-mode .emp-home-kpi-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+html.dark-mode .emp-home-kpi-card:hover {
+  border-color: rgba(96, 165, 250, 0.4);
+  box-shadow: 0 8px 20px rgba(56, 189, 248, 0.15);
+}
+html.dark-mode .emp-home-kpi-card .kpi-value {
+  color: #f1f5f9;
+}
+html.dark-mode .emp-home-kpi-card .kpi-label {
+  color: #94a3b8;
+}
+html.dark-mode .emp-need-action-card {
+  background: #1e293b;
+  border-color: #334155;
+}

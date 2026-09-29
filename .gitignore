@@ -1,0 +1,15 @@
+﻿node_modules/
+.env
+.env.local
+.env.*.local
+dist/
+build/
+.vite/
+.vscode/
+.idea/
+canteen-db.json
+canteen-db.local.json
+canteen-db-auto-backup-*.json
+data/
+*.log
+.DS_Store
