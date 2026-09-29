@@ -24,7 +24,7 @@
 // ============================================================
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Search, Utensils, X, Loader2 } from "lucide-react";
 import { api } from "../api";
 import { money } from "./UI";
@@ -95,6 +95,7 @@ export default function GlobalSearch({ role }) {
   const boxRef = useRef(null);
   const reqIdRef = useRef(0);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const menuPath = useMemo(() => getMenuPath(role), [role]);
 
@@ -108,6 +109,13 @@ export default function GlobalSearch({ role }) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+  // ---------- Sync q với URL (?q=) ----------
+  // Khi user vào trang menu qua URL có ?q=..., tự điền vào ô search
+  // Giúp F5 / share link không bị mất từ khoá
+  useEffect(() => {
+    const urlQ = new URLSearchParams(location.search).get("q") || "";
+    setQ(urlQ);
+  }, [location.pathname, location.search]);
 
   // ---------- Search (debounced + race-safe) ----------
   useEffect(() => {
@@ -166,6 +174,14 @@ export default function GlobalSearch({ role }) {
     setMenuResults([]);
     setOpen(false);
     setActiveIdx(-1);
+
+    // Nếu đang ở trang menu → xoá ?q= khỏi URL nhưng GIỮ ?category=
+    if (location.pathname.includes("/menu")) {
+      const params = new URLSearchParams(location.search);
+      params.delete("q");
+      const qs = params.toString();
+      navigate(qs ? `${menuPath}?${qs}` : menuPath);
+    }
   };
 
   const goToMenu = useCallback(
@@ -175,13 +191,19 @@ export default function GlobalSearch({ role }) {
       const params = new URLSearchParams();
       if (searchVal) params.set("q", searchVal);
 
+      // ✅ FIX: nếu ấn vào 1 món cụ thể → thêm category của món đó vào URL
+      // → Menu sẽ tự highlight đúng danh mục thay vì để "Tất cả"
+      if (item && item.category && item.category !== "Tất cả") {
+        params.set("category", item.category);
+      }
+
       const qs = params.toString();
       navigate(qs ? `${menuPath}?${qs}` : menuPath);
 
-      setQ("");
       setMenuResults([]);
       setOpen(false);
       setActiveIdx(-1);
+      // ✅ KHÔNG setQ("") — để useEffect sync URL giữ lại từ khoá
     },
     [menuPath, navigate, q]
   );
