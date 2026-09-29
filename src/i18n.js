@@ -17,33 +17,10 @@ import { useEffect, useState } from "react";
 // ============================================================
 // BẢNG DỊCH — VI + EN
 // ============================================================
-// Quy ước key:
-//   common.*     — Dùng chung toàn app
-//   nav.*        — Menu sidebar
-//   role.*       — Vai trò người dùng
-//   status.*     — Trạng thái đơn / user / tồn kho
-//   login.*      — Trang đăng nhập
-//   dashboard.*  — Trang dashboard chủ
-//   customer.*   — Trang khách hàng
-//   cart.*       — Giỏ hàng
-//   checkout.*   — Thanh toán
-//   menu.*       — Trang thực đơn
-//   orders.*     — Đơn hàng
-//   profile.*    — Hồ sơ
-//   points.*     — Điểm tích lũy
-//   chat.*       — Chat
-//   owner.*      — Trang chủ
-//   employee.*   — Trang nhân viên
-//   chart.*      — Biểu đồ
-//   lang.*       — Chọn ngôn ngữ
-//   promo.*      — Khuyến mãi (legacy)
-//   wallet.*     — Ví Canteen
-//   theme.*      — Chế độ sáng/tối
-// ============================================================
 
 export const translations = {
   vi: {
-    // ---------- Common (dùng chung) ----------
+    // ---------- Common ----------
     "common.save": "Lưu",
     "common.cancel": "Hủy",
     "common.delete": "Xóa",
@@ -75,7 +52,7 @@ export const translations = {
     "common.date": "Ngày",
     "common.time": "Thời gian",
 
-    // ---------- Sidebar (menu điều hướng) ----------
+    // ---------- Sidebar ----------
     "nav.dashboard": "Tổng quan",
     "nav.home": "Trang chủ",
     "nav.menu": "Thực đơn",
@@ -104,12 +81,12 @@ export const translations = {
     "nav.notifications": "Thông báo",
     "nav.more": "Thêm",
 
-    // ---------- Roles (vai trò) ----------
+    // ---------- Roles ----------
     "role.admin": "Quản trị viên",
     "role.employee": "Nhân viên",
     "role.customer": "Khách hàng",
 
-    // ---------- Status (trạng thái) ----------
+    // ---------- Status ----------
     "status.pending": "Chờ xác nhận",
     "status.confirmed": "Đã xác nhận",
     "status.preparing": "Đang chuẩn bị",
@@ -125,7 +102,7 @@ export const translations = {
     "status.lowStock": "Sắp hết",
     "status.outOfStock": "Hết hàng",
 
-    // ---------- Login (đăng nhập) ----------
+    // ---------- Login ----------
     "login.title": "Đăng nhập",
     "login.subtitle": "Truy cập hệ thống Canteen VWA",
     "login.email": "Email / Tên đăng nhập",
@@ -141,7 +118,7 @@ export const translations = {
     "login.dishes": "Món ăn mẫu",
     "login.tracking": "Theo dõi đơn",
 
-    // ---------- Dashboard (chủ canteen) ----------
+    // ---------- Dashboard ----------
     "dashboard.revenue": "Doanh thu hôm nay",
     "dashboard.orders": "Đơn hàng",
     "dashboard.customers": "Khách hàng",
@@ -163,7 +140,7 @@ export const translations = {
     "dashboard.vsYesterday": "so với hôm qua",
     "dashboard.vsLastMonth": "so với tháng trước",
 
-    // ---------- Customer home (trang chủ khách) ----------
+    // ---------- Customer home ----------
     "customer.greeting": "Xin chào",
     "customer.hello": "Chào buổi sáng",
     "customer.whatToEat": "hôm nay ăn gì?",
@@ -177,7 +154,7 @@ export const translations = {
     "customer.serving": "Món đang phục vụ",
     "customer.studentDiscount": "Ưu đãi sinh viên",
 
-    // ---------- Cart (giỏ hàng) ----------
+    // ---------- Cart ----------
     "cart.title": "Giỏ hàng",
     "cart.empty": "Giỏ hàng đang trống",
     "cart.emptyDesc": "Hãy chọn món ăn bạn yêu thích.",
@@ -189,7 +166,33 @@ export const translations = {
     "cart.total": "Tổng cộng",
     "cart.checkout": "Tiến hành đặt hàng",
 
-    // ---------- Checkout (thanh toán) ----------
+    // ✅ Bổ sung cho CustomerCart
+    "cart.selectAll": "Chọn tất cả",
+    "cart.selectedCount": "Đã chọn",
+    "cart.unitPrice": "Đơn giá",
+    "cart.remaining": "Còn",
+    "cart.maxQty": "Tối đa",
+    "cart.onlyLeftPrefix": "Chỉ còn",
+    "cart.onlyLeftSuffix": "phần trong kho",
+    "cart.removeTitle": "Xoá món khỏi giỏ hàng?",
+    "cart.removeMsgSuffix": "sẽ bị xoá khỏi giỏ. Bạn có thể thêm lại bất cứ lúc nào.",
+    "cart.removeConfirm": "Xoá món",
+    "cart.removeCancel": "Giữ lại",
+    "cart.selectedLabel": "ĐÃ CHỌN",
+    "cart.noItemSelected": "Chưa chọn món nào",
+    "cart.parts": "phần",
+    "cart.selectToOrder": "Chọn món để đặt",
+    "cart.editTitle": "Sửa món",
+    "cart.removeTitleBtn": "Xoá khỏi giỏ",
+    "cart.decreaseQty": "Giảm số lượng",
+    "cart.increaseQty": "Tăng số lượng",
+    "cart.selectAllAria": "Chọn tất cả món",
+    "cart.selectItemPrefix": "Chọn",
+    "cart.editItemPrefix": "Sửa",
+    "cart.removeItemPrefix": "Xoá",
+    "cart.removeItemSuffix": "khỏi giỏ",
+
+    // ---------- Checkout ----------
     "checkout.title": "Thanh toán",
     "checkout.subtitle": "Hoàn tất đơn hàng",
     "checkout.recipient": "Người đặt",
@@ -260,7 +263,7 @@ export const translations = {
     "checkout.subtotal": "Tạm tính",
     "checkout.orderBtn": "Đặt hàng",
 
-    // ---------- Menu page (trang thực đơn) ----------
+    // ---------- Menu page ----------
     "menu.title": "Thực đơn",
     "menu.subtitle": "Chọn món yêu thích",
     "menu.search": "Tìm món ăn...",
@@ -272,7 +275,7 @@ export const translations = {
     "menu.portions": "phần",
     "menu.addToCartFull": "Thêm vào giỏ",
 
-    // ---------- Orders (đơn hàng) ----------
+    // ---------- Orders ----------
     "orders.title": "Đơn hàng của tôi",
     "orders.subtitle": "Lịch sử đơn hàng",
     "orders.code": "Mã đơn",
@@ -289,7 +292,7 @@ export const translations = {
     "orders.cancelled": "Đã hủy đơn",
     "orders.cancelConfirm": "Bạn chắc chắn muốn hủy đơn này?",
 
-    // ---------- Profile (hồ sơ) ----------
+    // ---------- Profile ----------
     "profile.title": "Hồ sơ cá nhân",
     "profile.subtitle": "Thông tin tài khoản",
     "profile.name": "Họ và tên",
@@ -300,7 +303,7 @@ export const translations = {
     "profile.update": "Lưu thay đổi",
     "profile.updated": "Đã cập nhật thông tin",
 
-    // ---------- Points (điểm tích lũy) ----------
+    // ---------- Points ----------
     "points.title": "Điểm tích lũy",
     "points.subtitle": "Đổi điểm lấy voucher",
     "points.yourPoints": "Điểm tích lũy của bạn",
@@ -326,7 +329,7 @@ export const translations = {
     "chat.selectConv": "Chọn 1 cuộc trò chuyện để bắt đầu",
     "chat.reply": "Trả lời khách hàng...",
 
-    // ---------- Owner pages (trang chủ) ----------
+    // ---------- Owner ----------
     "owner.overview": "Tổng quan",
     "owner.employeesTitle": "Quản lý nhân viên",
     "owner.employeesDesc": "Danh sách nhân viên",
@@ -373,7 +376,7 @@ export const translations = {
     "owner.image": "Ảnh",
     "owner.reason": "Lý do đổi giá",
 
-    // ---------- Employee (nhân viên) ----------
+    // ---------- Employee ----------
     "employee.overview": "Tổng quan nhân viên",
     "employee.welcome": "Hôm nay làm việc hiệu quả nhé!",
     "employee.checkIn": "Chấm công",
@@ -397,7 +400,7 @@ export const translations = {
     "employee.priority": "Ưu tiên theo thời gian đặt",
     "employee.viewAll": "Xem tất cả",
 
-    // ---------- Chart (biểu đồ) ----------
+    // ---------- Chart ----------
     "chart.revenueByDay": "Doanh thu theo ngày",
     "chart.last7Days": "Triệu đồng • 7 ngày gần nhất",
     "chart.todayOrders": "Trạng thái đơn hàng hôm nay",
@@ -409,13 +412,13 @@ export const translations = {
     "chart.soldToday": "Món bán chạy hôm nay",
     "chart.newOrders": "Đơn hàng mới",
 
-    // ---------- Promo (khuyến mãi / voucher) ----------
+    // ---------- Promo ----------
     "promo.redeeming": "Đang đổi...",
     "promo.claiming": "Đang nhận...",
     "promo.copySuccess": "Đã sao chép mã",
     "promo.claimSuccess": "Đã nhận voucher!",
 
-    // ---------- Wallet (ví canteen) ----------
+    // ---------- Wallet ----------
     "wallet.title": "Ví Canteen",
     "wallet.balance": "Số dư khả dụng",
     "wallet.deposit": "Nạp tiền",
@@ -428,7 +431,7 @@ export const translations = {
     "theme.toLight": "Chế độ sáng",
     "theme.toDark": "Chế độ tối",
 
-    // ---------- Language (ngôn ngữ) ----------
+    // ---------- Language ----------
     "lang.vi": "Tiếng Việt",
     "lang.en": "English",
     "lang.select": "Chọn ngôn ngữ"
@@ -581,6 +584,32 @@ export const translations = {
     "cart.total": "Total",
     "cart.checkout": "Proceed to checkout",
 
+    // ✅ Added for CustomerCart
+    "cart.selectAll": "Select all",
+    "cart.selectedCount": "Selected",
+    "cart.unitPrice": "Unit price",
+    "cart.remaining": "Left",
+    "cart.maxQty": "Max",
+    "cart.onlyLeftPrefix": "Only",
+    "cart.onlyLeftSuffix": "left in stock",
+    "cart.removeTitle": "Remove item from cart?",
+    "cart.removeMsgSuffix": "will be removed from cart. You can add it back anytime.",
+    "cart.removeConfirm": "Remove",
+    "cart.removeCancel": "Keep",
+    "cart.selectedLabel": "SELECTED",
+    "cart.noItemSelected": "No items selected",
+    "cart.parts": "portions",
+    "cart.selectToOrder": "Select items to order",
+    "cart.editTitle": "Edit item",
+    "cart.removeTitleBtn": "Remove from cart",
+    "cart.decreaseQty": "Decrease quantity",
+    "cart.increaseQty": "Increase quantity",
+    "cart.selectAllAria": "Select all items",
+    "cart.selectItemPrefix": "Select",
+    "cart.editItemPrefix": "Edit",
+    "cart.removeItemPrefix": "Remove",
+    "cart.removeItemSuffix": "from cart",
+
     // ---------- Checkout ----------
     "checkout.title": "Checkout",
     "checkout.subtitle": "Complete your order",
@@ -718,7 +747,7 @@ export const translations = {
     "chat.selectConv": "Select a conversation to start",
     "chat.reply": "Reply to customer...",
 
-    // ---------- Owner pages ----------
+    // ---------- Owner ----------
     "owner.overview": "Overview",
     "owner.employeesTitle": "Employee Management",
     "owner.employeesDesc": "Employee list",
@@ -831,38 +860,22 @@ export const translations = {
 // HÀM HELPER
 // ============================================================
 
-/**
- * Lấy ngôn ngữ hiện tại từ localStorage
- * Mặc định: "vi" nếu chưa set
- */
 export function getLang() {
   return localStorage.getItem("canteen_lang") || "vi";
 }
 
-/**
- * Dịch 1 key sang ngôn ngữ chỉ định (hoặc ngôn ngữ hiện tại)
- * Fallback: ngôn ngữ được chọn → Tiếng Việt → chính key đó
- */
 export function t(key, lang) {
   const l = lang || getLang();
   return translations[l]?.[key] || translations.vi[key] || key;
 }
 
-/**
- * Đổi ngôn ngữ — lưu vào localStorage + phát event "langchange"
- * để các component đang dùng useTranslation() cập nhật lại
- */
 export function setLang(lang) {
   localStorage.setItem("canteen_lang", lang);
   window.dispatchEvent(new CustomEvent("langchange", { detail: lang }));
 }
 
 // ============================================================
-// HOOK useTranslation — dùng trong React component
-// ============================================================
-// Cách dùng:
-//   const { t, lang, setLang } = useTranslation();
-//   <h1>{t("login.title")}</h1>
+// HOOK useTranslation
 // ============================================================
 
 export function useTranslation() {
