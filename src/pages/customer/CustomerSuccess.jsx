@@ -1,22 +1,13 @@
 // ============================================================
 // CUSTOMERSUCCESS.JSX — Trang đặt hàng thành công
 // ============================================================
-// Nhận `state.order` từ navigate() sau khi đặt hàng ở Checkout.
-//
-// Fixes (so với bản gốc):
-//   - Handle state null (F5 / vào trực tiếp) → empty state thay vì
-//     hiển thị "VWA-XXXX" + "0đ" gây confuse
-//   - Thêm CTA "Đặt món tiếp" bên cạnh "Theo dõi đơn hàng"
-//   - Hướng dẫn tiếp theo (thời gian xử lý)
-//   - aria-live để screen reader announce
-//   - Fallback code/total an toàn
-// ============================================================
 
 import { useLocation, Link } from "react-router-dom";
 import {
   CheckCircle2, ShoppingBag, Package, Clock, Home,
 } from "lucide-react";
 import { money } from "../../components/UI";
+import { useTranslation } from "../../i18n";
 
 // ============================================================
 // MAIN COMPONENT
@@ -25,8 +16,9 @@ import { money } from "../../components/UI";
 export default function CustomerSuccess() {
   const { state } = useLocation();
   const order = state?.order;
+  const { t } = useTranslation();
 
-  // Fallback khi user F5 hoặc vào trực tiếp URL
+  // Fallback
   if (!order) {
     return (
       <div
@@ -55,7 +47,7 @@ export default function CustomerSuccess() {
             fontSize: 20,
           }}
         >
-          Không có thông tin đơn hàng
+          {t("success.noOrderTitle")}
         </h2>
         <p
           style={{
@@ -65,8 +57,7 @@ export default function CustomerSuccess() {
             maxWidth: 400,
           }}
         >
-          Trang này chỉ hiển thị sau khi bạn đặt hàng thành công. Vui lòng kiểm
-          tra trong danh sách đơn hàng.
+          {t("success.noOrderDesc")}
         </p>
         <div
           style={{
@@ -78,19 +69,15 @@ export default function CustomerSuccess() {
           }}
         >
           <Link to="/customer/orders" style={primaryBtnStyle}>
-            <Package size={15} /> Xem đơn hàng
+            <Package size={15} /> {t("success.viewOrders")}
           </Link>
           <Link to="/customer/menu" style={secondaryBtnStyle}>
-            <ShoppingBag size={15} /> Đặt món
+            <ShoppingBag size={15} /> {t("success.orderMore")}
           </Link>
         </div>
       </div>
     );
   }
-
-  // ============================================================
-  // SUCCESS STATE
-  // ============================================================
 
   return (
     <div
@@ -109,7 +96,6 @@ export default function CustomerSuccess() {
         gap: 14,
       }}
     >
-      {/* Icon check xanh */}
       <div
         className="success-icon"
         style={{
@@ -134,7 +120,7 @@ export default function CustomerSuccess() {
           fontSize: 24,
         }}
       >
-        Đặt hàng thành công!
+        {t("success.title")}
       </h2>
 
       <p
@@ -146,7 +132,7 @@ export default function CustomerSuccess() {
           lineHeight: 1.6,
         }}
       >
-        Cảm ơn bạn đã đặt món tại Canteen VWA. Đơn hàng của bạn đang được xử lý.
+        {t("success.desc")}
       </p>
 
       {/* Mã đơn */}
@@ -164,7 +150,9 @@ export default function CustomerSuccess() {
           justifyContent: "center",
         }}
       >
-        <span style={{ color: "var(--text-muted, #64748b)" }}>Mã đơn:</span>
+        <span style={{ color: "var(--text-muted, #64748b)" }}>
+          {t("orders.code")}:
+        </span>
         <b
           style={{
             color: "#2634d5",
@@ -194,14 +182,14 @@ export default function CustomerSuccess() {
         }}
       >
         <span style={{ color: "var(--text-muted, #64748b)", fontSize: 13 }}>
-          Tổng tiền
+          {t("cart.total")}
         </span>
         <strong style={{ color: "#2634d5", fontSize: 22, fontWeight: 800 }}>
           {money(order.total || 0)}
         </strong>
       </div>
 
-      {/* Hướng dẫn tiếp theo */}
+      {/* Hướng dẫn */}
       <div
         style={{
           display: "flex",
@@ -214,12 +202,13 @@ export default function CustomerSuccess() {
       >
         <Clock size={14} />
         <span>
-          Đơn sẽ được chuẩn bị trong <b style={{ color: "#18a967" }}>5-10 phút</b>
-          {" "}· Vui lòng đến quầy nhận đúng giờ
+          {t("success.prepareHint")}{" "}
+          <b style={{ color: "#18a967" }}>{t("success.prepareTime")}</b>
+          {" "}· {t("success.pickupHint")}
         </span>
       </div>
 
-      {/* CTA buttons */}
+      {/* CTA */}
       <div
         style={{
           display: "flex",
@@ -230,10 +219,10 @@ export default function CustomerSuccess() {
         }}
       >
         <Link to="/customer/orders" style={primaryBtnStyle}>
-          <Package size={15} /> Theo dõi đơn hàng
+          <Package size={15} /> {t("success.trackOrder")}
         </Link>
         <Link to="/customer/menu" style={secondaryBtnStyle}>
-          <ShoppingBag size={15} /> Đặt món tiếp
+          <ShoppingBag size={15} /> {t("success.orderMore")}
         </Link>
       </div>
     </div>

@@ -1,6 +1,8 @@
 ﻿// ============================================================
 // CUSTOMERHOME.JSX — Trang chủ khách hàng
 // ============================================================
+<<<<<<< HEAD
+=======
 // Gồm:
 //   - Banner carousel (data từ ../../bannerSlides)
 //   - Flash marquee (chạy chữ khuyến mãi)
@@ -14,6 +16,7 @@
 //   - Áp dụng i18n cho tất cả text
 //   - DEFAULT_FLASH_ITEMS và TESTIMONIALS dùng key i18n
 // ============================================================
+>>>>>>> origin/main
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -40,6 +43,12 @@ const FLASH_PROMOS_LIMIT = 4;
 const FLASH_VOUCHERS_LIMIT = 2;
 const SKELETON_COUNT = 5;
 
+<<<<<<< HEAD
+const TESTIMONIAL_DATA = [
+  { name: "Nguyễn Minh Anh", roleKey: "testimonial.1.role", rating: 5, textKey: "testimonial.1.text" },
+  { name: "Trần Quốc Bảo",   roleKey: "testimonial.2.role", rating: 5, textKey: "testimonial.2.text" },
+  { name: "Lê Thu Hà",       roleKey: "testimonial.3.role", rating: 4, textKey: "testimonial.3.text" },
+=======
 const DEFAULT_FLASH_ITEMS = [
   { key: "home.flash1" },
   { key: "home.flash2" },
@@ -50,6 +59,7 @@ const TESTIMONIALS = [
   { name: "Nguyễn Minh Anh", roleKey: "home.role1", rating: 5, textKey: "home.testi1" },
   { name: "Trần Quốc Bảo",   roleKey: "home.role2", rating: 5, textKey: "home.testi2" },
   { name: "Lê Thu Hà",       roleKey: "home.role3", rating: 4, textKey: "home.testi3" },
+>>>>>>> origin/main
 ];
 
 // ============================================================
@@ -63,16 +73,11 @@ function getPublicMenuUrl() {
 
 function renderChipIcon(iconName, size = 13) {
   switch (iconName) {
-    case "clock":
-      return <Clock size={size} />;
-    case "utensils":
-      return <Utensils size={size} />;
-    case "gift":
-      return <Gift size={size} />;
-    case "sparkles":
-      return <Sparkles size={size} />;
-    default:
-      return <Zap size={size} />;
+    case "clock":    return <Clock size={size} />;
+    case "utensils": return <Utensils size={size} />;
+    case "gift":     return <Gift size={size} />;
+    case "sparkles": return <Sparkles size={size} />;
+    default:         return <Zap size={size} />;
   }
 }
 
@@ -92,7 +97,7 @@ export default function CustomerHome({ user, cart, setCart }) {
   const [newItems, setNewItems] = useState([]);
   const [promotions, setPromotions] = useState([]);
   const [publicVouchers, setPublicVouchers] = useState([]);
-  const [flashItems, setFlashItems] = useState(DEFAULT_FLASH_ITEMS);
+  const [flashItems, setFlashItems] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,47 +114,76 @@ export default function CustomerHome({ user, cart, setCart }) {
 
   const inFlightRef = useRef(false);
 
+  // ---------- Default flash promos ----------
+  const defaultFlashItems = useMemo(
+    () => [
+      { text: t("flash.default.1") },
+      { text: t("flash.default.2") },
+      { text: t("flash.default.3") },
+    ],
+    [t]
+  );
+
   // ---------- Load ----------
+  const load = useCallback(
+    async (silent = false) => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
 
-  const load = useCallback(async (silent = false) => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
+      if (!silent) setRefreshing(true);
+      setError("");
 
-    if (!silent) setRefreshing(true);
-    setError("");
+      try {
+        const [menuRes, promoRes, pubVoucherRes] = await Promise.all([
+          api.menu.list("", "Tất cả", "popular").catch(() => []),
+          api.promotions.list().catch(() => []),
+          api.vouchers.public().catch(() => []),
+        ]);
 
-    try {
-      const [menuRes, promoRes, pubVoucherRes] = await Promise.all([
-        api.menu.list("", "Tất cả", "popular").catch(() => []),
-        api.promotions.list().catch(() => []),
-        api.vouchers.public().catch(() => []),
-      ]);
+        const rawList = Array.isArray(menuRes) ? menuRes : [];
+        const list = rawList.filter((m) => m.active);
 
-      const rawList = Array.isArray(menuRes) ? menuRes : [];
-      const list = rawList.filter((m) => m.active);
+        const bestSellers = [...list]
+          .filter((m) => (m.sold || 0) > 0)
+          .sort((a, b) => (b.sold || 0) - (a.sold || 0))
+          .slice(0, BEST_SELLERS_LIMIT);
+        setItems(bestSellers);
 
-      const bestSellers = [...list]
-        .filter((m) => (m.sold || 0) > 0)
-        .sort((a, b) => (b.sold || 0) - (a.sold || 0))
-        .slice(0, BEST_SELLERS_LIMIT);
-      setItems(bestSellers);
+        const sortedById = [...list].sort((a, b) => (b.id || 0) - (a.id || 0));
+        setNewItems(sortedById.slice(0, NEW_ITEMS_LIMIT));
 
-      const sortedById = [...list].sort((a, b) => (b.id || 0) - (a.id || 0));
-      setNewItems(sortedById.slice(0, NEW_ITEMS_LIMIT));
+        setPromotions(Array.isArray(promoRes) ? promoRes : []);
+        setPublicVouchers(Array.isArray(pubVoucherRes) ? pubVoucherRes : []);
 
-      setPromotions(Array.isArray(promoRes) ? promoRes : []);
-      setPublicVouchers(Array.isArray(pubVoucherRes) ? pubVoucherRes : []);
-
-      const flash = [];
-      (Array.isArray(pubVoucherRes) ? pubVoucherRes : []).forEach((v) => {
-        flash.push({
-          text: `🎁 GIẢM ${fmtNumber(v.value || 0)}đ — Mã ${v.code}`,
+        const flash = [];
+        (Array.isArray(pubVoucherRes) ? pubVoucherRes : []).forEach((v) => {
+          flash.push({
+            text: t("flash.voucherText")
+              .replace("{value}", fmtNumber(v.value || 0))
+              .replace("{code}", v.code),
+          });
         });
-      });
-      (Array.isArray(promoRes) ? promoRes : []).forEach((m) => {
-        flash.push({
-          text: `🔥 ${m.name} GIẢM ${m.discount_percent}% (còn ${fmtNumber(m.price || 0)}đ)`,
+        (Array.isArray(promoRes) ? promoRes : []).forEach((m) => {
+          flash.push({
+            text: t("flash.promoText")
+              .replace("{name}", m.name)
+              .replace("{percent}", m.discount_percent)
+              .replace("{price}", fmtNumber(m.price || 0)),
+          });
         });
+<<<<<<< HEAD
+        setFlashItems(flash.length > 0 ? flash : []);
+      } catch (e) {
+        if (!silent) setError(e.message || t("customer.loadError"));
+      } finally {
+        setLoading(false);
+        if (!silent) setRefreshing(false);
+        inFlightRef.current = false;
+      }
+    },
+    [t]
+  );
+=======
       });
       setFlashItems(
         flash.length > 0
@@ -165,13 +199,14 @@ export default function CustomerHome({ user, cart, setCart }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+>>>>>>> origin/main
 
   useEffect(() => {
     load(false);
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---------- Carousel autoplay ----------
-
   useEffect(() => {
     if (paused || !tabVisible) return;
 
@@ -189,13 +224,10 @@ export default function CustomerHome({ user, cart, setCart }) {
   }, []);
 
   // ---------- Carousel controls ----------
-
   const goNext = () => setIdx((i) => (i + 1) % SLIDES.length);
-  const goPrev = () =>
-    setIdx((i) => (i - 1 + SLIDES.length) % SLIDES.length);
+  const goPrev = () => setIdx((i) => (i - 1 + SLIDES.length) % SLIDES.length);
 
   // ---------- Derived ----------
-
   const publicMenuUrl = useMemo(() => getPublicMenuUrl(), []);
 
   const qrImageSrc = useMemo(() => {
@@ -205,10 +237,23 @@ export default function CustomerHome({ user, cart, setCart }) {
     )}&margin=0`;
   }, [publicMenuUrl]);
 
+  const effectiveFlashItems = useMemo(() => {
+    if (flashItems.length > 0) return flashItems;
+    return defaultFlashItems;
+  }, [flashItems, defaultFlashItems]);
+
   const flashTrack = useMemo(() => {
-    if (!flashItems.length) return [];
+    if (!effectiveFlashItems.length) return [];
     const out = [];
     for (let round = 0; round < 3; round++) {
+<<<<<<< HEAD
+      effectiveFlashItems.forEach((item, i) => {
+        out.push({ ...item, _key: `${round}-${i}` });
+      });
+    }
+    return out;
+  }, [effectiveFlashItems]);
+=======
       flashItems.forEach((item, i) => {
         // Nếu item có `key` → dịch; nếu có `text` → dùng luôn
         const text = item.key ? t(item.key) : item.text;
@@ -218,29 +263,42 @@ export default function CustomerHome({ user, cart, setCart }) {
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flashItems, lang]);
+>>>>>>> origin/main
 
   // ============================================================
-  // RENDER FOOD CARD — dùng chung class với CustomerMenu
+  // RENDER FOOD CARD
   // ============================================================
 
-  const renderFoodCard = useCallback((m) => {
-    const id = m.id || m._id;
-    const isOutOfStock = m.stock === 0;
-    const isHot = (m.sold || 0) >= 50;
+  const renderFoodCard = useCallback(
+    (m) => {
+      const id = m.id || m._id;
+      const isOutOfStock = m.stock === 0;
+      const isHot = (m.sold || 0) >= 50;
 
-    return (
-      <div
-        key={id}
-        className="grab-food-card"
-        onClick={() => {
-          if (isOutOfStock) return;
-          setMode("cart");
-          setSelected(m);
-        }}
-      >
-        <div className="grab-food-card__image-wrap">
-          <img src={m.image} alt={m.name} loading="lazy" />
+      return (
+        <div
+          key={id}
+          className="grab-food-card"
+          onClick={() => {
+            if (isOutOfStock) return;
+            setMode("cart");
+            setSelected(m);
+          }}
+        >
+          <div className="grab-food-card__image-wrap">
+            <img src={m.image} alt={m.name} loading="lazy" />
 
+<<<<<<< HEAD
+            {isOutOfStock ? (
+              <span className="grab-food-card__badge grab-food-card__badge--out">
+                {t("customer.badgeOutOfStock")}
+              </span>
+            ) : isHot ? (
+              <span className="grab-food-card__badge grab-food-card__badge--hot">
+                <Flame size={10} /> {t("customer.badgeBestSeller")}
+              </span>
+            ) : null}
+=======
           {isOutOfStock ? (
             <span className="grab-food-card__badge grab-food-card__badge--out">
               {t("menu.outOfStock")}
@@ -250,33 +308,42 @@ export default function CustomerHome({ user, cart, setCart }) {
               <Flame size={10} /> {t("menu.bestSeller")}
             </span>
           ) : null}
+>>>>>>> origin/main
 
-          {!isOutOfStock && (
-            <button
-              type="button"
-              className="grab-food-card__add-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMode("cart");
-                setSelected(m);
-              }}
-              aria-label={`Thêm ${m.name}`}
-            >
-              <Plus size={20} strokeWidth={3} />
-            </button>
-          )}
-        </div>
+            {!isOutOfStock && (
+              <button
+                type="button"
+                className="grab-food-card__add-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMode("cart");
+                  setSelected(m);
+                }}
+                aria-label={`${t("customer.addItem")} ${m.name}`}
+              >
+                <Plus size={20} strokeWidth={3} />
+              </button>
+            )}
+          </div>
 
-        <div className="grab-food-card__info">
-          <h4 className="grab-food-card__name">{m.name}</h4>
-          <div className="grab-food-card__price-row">
-            <span className="grab-food-card__price">{money(m.price)}</span>
+          <div className="grab-food-card__info">
+            <h4 className="grab-food-card__name">{m.name}</h4>
+            <div className="grab-food-card__price-row">
+              <span className="grab-food-card__price">{money(m.price)}</span>
+            </div>
           </div>
         </div>
+<<<<<<< HEAD
+      );
+    },
+    [t]
+  );
+=======
       </div>
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
+>>>>>>> origin/main
 
   // ============================================================
   // RENDER
@@ -318,7 +385,11 @@ export default function CustomerHome({ user, cart, setCart }) {
               gap: 4,
             }}
           >
+<<<<<<< HEAD
+            <RefreshCw size={12} /> {t("customer.retry")}
+=======
             <RefreshCw size={12} /> {t("home.retry")}
+>>>>>>> origin/main
           </button>
         </div>
       )}
@@ -329,7 +400,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
         role="region"
-        aria-label="Banner khuyến mãi"
+        aria-label={t("customer.bannerAria")}
       >
         <div
           style={{
@@ -475,14 +546,14 @@ export default function CustomerHome({ user, cart, setCart }) {
 
         <button
           onClick={goPrev}
-          aria-label="Slide trước"
+          aria-label={t("customer.prevSlide")}
           className="banner-nav banner-nav-left"
         >
           <ChevronLeft size={20} />
         </button>
         <button
           onClick={goNext}
-          aria-label="Slide tiếp theo"
+          aria-label={t("customer.nextSlide")}
           className="banner-nav banner-nav-right"
         >
           <ChevronRight size={20} />
@@ -493,7 +564,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             <button
               key={i}
               onClick={() => setIdx(i)}
-              aria-label={`Đi đến slide ${i + 1}`}
+              aria-label={t("customer.goToSlide").replace("{n}", i + 1)}
               aria-current={i === idx ? "true" : "false"}
               style={{
                 width: i === idx ? 28 : 10,
@@ -537,7 +608,11 @@ export default function CustomerHome({ user, cart, setCart }) {
             ))}
           </div>
           <span className="flash-label">
+<<<<<<< HEAD
+            <Sparkles size={12} /> {t("customer.flashLabel")}
+=======
             <Sparkles size={12} /> {t("nav.promotions")}
+>>>>>>> origin/main
           </span>
         </Link>
       )}
@@ -563,7 +638,11 @@ export default function CustomerHome({ user, cart, setCart }) {
                 gap: 8,
               }}
             >
+<<<<<<< HEAD
+              <span style={{ fontSize: 22 }}>⚡</span> {t("customer.flashTitle")}
+=======
               <span style={{ fontSize: 22 }}>⚡</span> {t("home.flashSale")}
+>>>>>>> origin/main
               <span
                 style={{
                   background: "linear-gradient(135deg, #ef4444, #f59e0b)",
@@ -574,7 +653,11 @@ export default function CustomerHome({ user, cart, setCart }) {
                   fontWeight: 800,
                 }}
               >
+<<<<<<< HEAD
+                {t("customer.flashHot")}
+=======
                 {t("home.hot")}
+>>>>>>> origin/main
               </span>
             </h3>
 
@@ -587,13 +670,17 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
+<<<<<<< HEAD
+              {t("customer.viewAll")} →
+=======
               {t("home.seeAll")} →
+>>>>>>> origin/main
             </Link>
           </div>
 
           <div style={{ marginBottom: 26 }}>
             <div className="home-food-grid-5">
-              {/* ===== VOUCHER — HÌNH VUÔNG ===== */}
+              {/* ===== VOUCHER ===== */}
               {publicVouchers.slice(0, FLASH_VOUCHERS_LIMIT).map((v) => (
                 <Link
                   key={`voucher-${v.id}`}
@@ -611,22 +698,32 @@ export default function CustomerHome({ user, cart, setCart }) {
                   </div>
 
                   <div className="grab-food-card__info">
-                    <span className="voucher-card__label">VOUCHER</span>
+                    <span className="voucher-card__label">
+                      {t("customer.voucherLabel")}
+                    </span>
                     <h4
                       className="grab-food-card__name"
                       style={{ textAlign: "center" }}
                     >
+<<<<<<< HEAD
+                      {t("customer.voucherDiscount")} {fmtNumber(v.value || 0)}đ
+                    </h4>
+                    <div className="voucher-card__code">{v.code}</div>
+                    <div className="voucher-card__cta">
+                      {t("customer.claimNow")}
+=======
                       {t("promo.discountOff")} {fmtNumber(v.value || 0)}đ
                     </h4>
                     <div className="voucher-card__code">{v.code}</div>
                     <div className="voucher-card__cta">
                       {t("promo.claimNow")}
+>>>>>>> origin/main
                     </div>
                   </div>
                 </Link>
               ))}
 
-              {/* ===== PROMO — MÓN GIẢM GIÁ ===== */}
+              {/* ===== PROMO ===== */}
               {promotions.slice(0, FLASH_PROMOS_LIMIT).map((m) => (
                 <div
                   key={`promo-${m.id}`}
@@ -651,7 +748,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                         setMode("buy");
                         setSelected(m);
                       }}
-                      aria-label={`Đặt ${m.name}`}
+                      aria-label={`${t("customer.orderItem")} ${m.name}`}
                     >
                       <Zap size={18} strokeWidth={3} />
                     </button>
@@ -714,10 +811,17 @@ export default function CustomerHome({ user, cart, setCart }) {
           >
             <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+<<<<<<< HEAD
+              {t("customer.noBestSellerTitle")}
+            </div>
+            <div style={{ fontSize: 12 }}>
+              {t("customer.noBestSellerDesc")}
+=======
               {t("home.noBestSeller")}
             </div>
             <div style={{ fontSize: 12 }}>
               {t("home.noBestSellerDesc")}
+>>>>>>> origin/main
             </div>
             <Link
               to="/customer/menu"
@@ -735,7 +839,11 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontSize: 13,
               }}
             >
+<<<<<<< HEAD
+              <Utensils size={15} /> {t("customer.exploreMenu")}
+=======
               <Utensils size={15} /> {t("home.exploreMenu")}
+>>>>>>> origin/main
             </Link>
           </div>
         )}
@@ -743,7 +851,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         {items.map(renderFoodCard)}
       </div>
 
-      {/* ============ MÓN MỚI LÊN KỆ ============ */}
+      {/* ============ MÓN MỚI ============ */}
       {newItems.length > 0 && (
         <div style={{ marginBottom: 26 }}>
           <div
@@ -761,7 +869,11 @@ export default function CustomerHome({ user, cart, setCart }) {
                 color: "var(--text-primary, #172033)",
               }}
             >
+<<<<<<< HEAD
+              ✨ {t("customer.newArrivalsTitle")}
+=======
               ✨ {t("home.newDishes")}
+>>>>>>> origin/main
             </h3>
             <Link
               to="/customer/menu"
@@ -772,7 +884,11 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
+<<<<<<< HEAD
+              {t("customer.viewAll")} →
+=======
               {t("home.seeAll")} →
+>>>>>>> origin/main
             </Link>
           </div>
           <div className="home-food-grid-5">
@@ -790,10 +906,14 @@ export default function CustomerHome({ user, cart, setCart }) {
             color: "var(--text-primary, #172033)",
           }}
         >
+<<<<<<< HEAD
+          ⭐ {t("customer.testimonialsTitle")}
+=======
           ⭐ {t("home.testimonialsTitle")}
+>>>>>>> origin/main
         </h3>
         <div className="home-testi-grid">
-          {TESTIMONIALS.map((tm, i) => (
+          {TESTIMONIAL_DATA.map((tm, i) => (
             <div
               key={i}
               style={{
@@ -921,7 +1041,7 @@ export default function CustomerHome({ user, cart, setCart }) {
           {qrImageSrc && (
             <img
               src={qrImageSrc}
-              alt="QR truy cập menu"
+              alt={t("customer.qrAlt")}
               loading="lazy"
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
@@ -936,7 +1056,11 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontWeight: 800,
             }}
           >
+<<<<<<< HEAD
+            📱 {t("customer.qrTitle")}
+=======
             📱 {t("home.qrTitle")}
+>>>>>>> origin/main
           </h3>
           <p
             style={{
@@ -946,7 +1070,11 @@ export default function CustomerHome({ user, cart, setCart }) {
               color: "var(--text-muted, #64748b)",
             }}
           >
+<<<<<<< HEAD
+            {t("customer.qrDesc")}
+=======
             {t("home.qrDesc")}
+>>>>>>> origin/main
           </p>
           <Link
             to="/customer/menu"
@@ -963,7 +1091,11 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontSize: 13,
             }}
           >
+<<<<<<< HEAD
+            {t("customer.qrOrClick")}
+=======
             {t("home.qrButton")} →
+>>>>>>> origin/main
           </Link>
         </div>
       </div>

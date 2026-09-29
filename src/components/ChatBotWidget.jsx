@@ -1,28 +1,8 @@
 ﻿// ============================================================
 // CHATBOTWIDGET.JSX — Widget chat nổi (góc phải dưới)
 // ============================================================
-// 2 mode: AI (gợi ý món) + Nhà hàng (chat với nhân viên)
-//
-// Fixes:
-//   - Bỏ setTimeout hack trong sendAI + sendStaff
-//   - Race-safe loadStaff (reqIdRef)
-//   - Smart scroll: chỉ scroll khi ở gần đáy hoặc tin của mình
-//   - onKeyDown thay onKeyPress (deprecated)
-//   - Badge "1" chỉ hiện khi có tin chưa đọc thực sự
-//   - ESC đóng panel + body scroll lock
-//   - Error state cho staff chat
-//   - Fix quickAdd stock bug (stock=0 không thành 99)
-//   - Pass settings vào getBotReply (địa chỉ/hotline từ admin)
-//   - Validate max message length
-//   - Reset AI messages khi user đổi
-//   - role="dialog" + aria-modal cho panel
-//   - ✅ FIX: quickAdd dùng flag từ trong setCart updater
-//   - ✅ FIX: cleanup fetch menu+settings bằng cancelled flag
-//   - ✅ FIX UX: FAB z-index 45 (không đè BottomNav z-index 50)
-//   - ✅ FIX CRITICAL: Chỉ gợi ý món đang bán (active=1)
-// ============================================================
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   Bot, X, Send, ShoppingCart, Store, MessageCircleHeart,
   Loader2, AlertCircle, RefreshCw,
@@ -31,15 +11,12 @@ import { api } from "../api";
 import { money } from "./UI";
 import { toast } from "./Effects";
 import { getBotReply } from "./ChatBot";
+import { useTranslation } from "../i18n";
 import FoodDetailModal from "./FoodDetailModal";
 
 // ============================================================
 // CONSTANTS
 // ============================================================
-
-const QUICK_REPLIES = [
-  "Dưới 30k", "Chay", "Nước", "Cay", "Bán chạy", "Gợi ý",
-];
 
 const AI_REPLY_DELAY_MS = 600;
 const POLL_MS = 3000;
@@ -71,19 +48,31 @@ function fmtTime(iso) {
 }
 
 function getMaxQty(item) {
-  if (typeof item?.stock === "number") {
-    return Math.max(1, item.stock);
-  }
+  if (typeof item?.stock === "number") return Math.max(1, item.stock);
   return 99;
 }
 
 // ============================================================
-// MAIN COMPONENT
+// MAIN
 // ============================================================
 
 export default function ChatBotWidget({ cart, setCart, user }) {
+  const { t, lang } = useTranslation();
+
+  const QUICK_REPLIES = useMemo(
+    () => [
+      t("chat.quick.under30"),
+      t("chat.quick.veg"),
+      t("chat.quick.drinks"),
+      t("chat.quick.spicy"),
+      t("chat.quick.bestSeller"),
+      t("chat.quick.suggest"),
+    ],
+    [t, lang]
+  );
+
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState("ai"); // "ai" | "staff"
+  const [mode, setMode] = useState("ai");
 
   const [aiMessages, setAiMessages] = useState([]);
   const [aiText, setAiText] = useState("");
@@ -110,7 +99,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   const staffBottomRef = useRef(null);
   const lastUserIdRef = useRef(user?.id);
 
-  // ---------- Load menu + settings ----------
+  // Load menu + settings
   useEffect(() => {
     let cancelled = false;
 
@@ -119,31 +108,21 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       .then((d) => {
         if (cancelled) return;
         const list = Array.isArray(d) ? d : [];
-        // ✅ FIX CRITICAL: Chỉ món đang bán
         setMenuItems(list.filter((m) => m.active));
       })
-      .catch(() => {
-        if (cancelled) return;
-        setMenuItems([]);
-      });
+      .catch(() => !cancelled && setMenuItems([]));
 
     api.settings
       .get()
-      .then((d) => {
-        if (cancelled) return;
-        setSettings(d);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setSettings(null);
-      });
+      .then((d) => !cancelled && setSettings(d))
+      .catch(() => !cancelled && setSettings(null));
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // ---------- Reset AI khi user đổi ----------
+  // Reset khi đổi user
   useEffect(() => {
     if (lastUserIdRef.current !== user?.id) {
       lastUserIdRef.current = user?.id;
@@ -154,7 +133,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     }
   }, [user?.id]);
 
-  // ---------- Welcome AI ----------
+  // Welcome AI — dịch theo ngôn ngữ hiện tại
   useEffect(() => {
     if (!open || mode !== "ai") return;
     if (aiMessages.length > 0) return;
@@ -163,54 +142,56 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       {
         id: "welcome",
         from: "bot",
-        content:
-          `Xin chào ${user?.name || "bạn"}! 👋\n` +
-          "Mình là trợ lý Canteen AI.\n\n" +
-          "Mình có thể gợi ý món theo giá, loại hoặc sở thích. " +
-          'Hoặc chuyển sang tab "Nhà hàng" để chat với nhân viên thật.',
+        content: t("chat.welcomeMessage").replace(
+          "{name}",
+          user?.name || t("account.you")
+        ),
         created_at: new Date().toISOString(),
       },
     ]);
-  }, [open, mode, user?.name, aiMessages.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode, user?.name, t, lang]);
 
-  // Cleanup AI timer
+  // Cleanup timer
   useEffect(() => {
     return () => {
       if (aiTimerRef.current) clearTimeout(aiTimerRef.current);
     };
   }, []);
 
-  // ---------- Load staff (race-safe) ----------
-  const loadStaff = useCallback(async (silent = true) => {
-    const myReqId = ++staffReqIdRef.current;
+  // Load staff
+  const loadStaff = useCallback(
+    async (silent = true) => {
+      const myReqId = ++staffReqIdRef.current;
 
-    if (!silent) {
-      setStaffLoading(true);
-      setStaffError("");
-    }
-
-    try {
-      const data = await api.chat.myMessages();
-      if (myReqId !== staffReqIdRef.current) return;
-      setStaffMessages(Array.isArray(data) ? data : []);
-    } catch (e) {
-      if (myReqId === staffReqIdRef.current && !silent) {
-        setStaffError(e.message || "Không tải được tin nhắn");
+      if (!silent) {
+        setStaffLoading(true);
+        setStaffError("");
       }
-    } finally {
-      if (myReqId === staffReqIdRef.current) setStaffLoading(false);
-    }
-  }, []);
+
+      try {
+        const data = await api.chat.myMessages();
+        if (myReqId !== staffReqIdRef.current) return;
+        setStaffMessages(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (myReqId === staffReqIdRef.current && !silent) {
+          setStaffError(e.message || t("chat.loadError"));
+        }
+      } finally {
+        if (myReqId === staffReqIdRef.current) setStaffLoading(false);
+      }
+    },
+    [t]
+  );
 
   useEffect(() => {
     if (!open || mode !== "staff") return;
-
     loadStaff(false);
     const timer = setInterval(() => loadStaff(true), POLL_MS);
     return () => clearInterval(timer);
   }, [open, mode, loadStaff]);
 
-  // ---------- Smart scroll AI ----------
+  // Smart scroll AI
   useEffect(() => {
     if (!open || mode !== "ai") return;
     const container = aiScrollRef.current;
@@ -236,7 +217,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     lastAiCountRef.current = aiMessages.length;
   }, [open, mode, aiMessages, aiTyping]);
 
-  // ---------- Smart scroll Staff ----------
+  // Smart scroll Staff
   useEffect(() => {
     if (!open || mode !== "staff") return;
     const container = staffScrollRef.current;
@@ -262,7 +243,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     lastStaffCountRef.current = staffMessages.length;
   }, [open, mode, staffMessages]);
 
-  // ---------- hasNew ----------
+  // hasNew
   useEffect(() => {
     if (open) {
       setHasNew(false);
@@ -274,34 +255,28 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     }
   }, [open, staffMessages]);
 
-  // ---------- ESC đóng panel + body scroll lock ----------
+  // ESC + body lock
   useEffect(() => {
     if (!open) return;
-
     const handler = (e) => {
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", handler);
-
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
     return () => {
       window.removeEventListener("keydown", handler);
       document.body.style.overflow = prevOverflow;
     };
   }, [open]);
 
-  // ============================================================
-  // HANDLERS
-  // ============================================================
-
+  // Handlers
   const sendAI = (value) => {
     const val = (value || aiText).trim();
     if (!val || aiTyping) return;
 
     if (val.length > MAX_MESSAGE_LENGTH) {
-      toast(`Tin nhắn tối đa ${MAX_MESSAGE_LENGTH} ký tự`, "error");
+      toast(t("chat.maxLength").replace("{n}", MAX_MESSAGE_LENGTH), "error");
       return;
     }
 
@@ -321,7 +296,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
 
     aiTimerRef.current = setTimeout(() => {
       aiTimerRef.current = null;
-      const reply = getBotReply(val, menuItems, settings);
+      const reply = getBotReply(val, menuItems, settings, t);
       setAiTyping(false);
       if (!reply) return;
 
@@ -341,9 +316,8 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   const sendStaff = async () => {
     const val = staffText.trim();
     if (!val || staffSending) return;
-
     if (val.length > MAX_MESSAGE_LENGTH) {
-      toast(`Tin nhắn tối đa ${MAX_MESSAGE_LENGTH} ký tự`, "error");
+      toast(t("chat.maxLength").replace("{n}", MAX_MESSAGE_LENGTH), "error");
       return;
     }
 
@@ -353,7 +327,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       setStaffText("");
       setStaffMessages((m) => [...m, msg]);
     } catch (e) {
-      toast(e.message || "Không gửi được", "error");
+      toast(e.message || t("chat.sendError"), "error");
     } finally {
       setStaffSending(false);
     }
@@ -370,15 +344,12 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     setCart((c) => {
       const existing = c[key];
       const currentQty = Number(existing?.qty) || 0;
-
       if (currentQty >= maxQty) {
-        reason = `Chỉ còn ${maxQty} phần trong kho`;
+        reason = t("chat.stockLeft").replace("{n}", maxQty);
         return c;
       }
-
       added = true;
       const newQty = Math.min(maxQty, currentQty + 1);
-
       return {
         ...c,
         [key]: {
@@ -393,15 +364,11 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     });
 
     if (added) {
-      toast(`Đã thêm ${m.name} vào giỏ!`, "success");
-    } else {
+      toast(t("chat.addedToCart").replace("{name}", m.name), "success");
+    } else if (reason) {
       toast(reason, "error");
     }
   };
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   const ModeIcon = mode === "ai" ? Bot : Store;
 
@@ -410,7 +377,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Mở chat hỗ trợ"
+          aria-label={t("chat.openLabel")}
           className="chatbot-fab"
           style={{
             position: "fixed",
@@ -426,22 +393,14 @@ export default function ChatBotWidget({ cart, setCart, user }) {
             boxShadow: "0 8px 24px rgba(139, 92, 246, 0.45)",
             display: "grid",
             placeItems: "center",
-            // ✅ FIX UX: z-index 45 — không đè BottomNav (z=50)
             zIndex: 45,
             transition: "transform 0.2s",
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.transform = "scale(1.08)")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.transform = "scale(1)")
-          }
         >
           <MessageCircleHeart size={26} />
-
           {hasNew && (
             <span
-              aria-label="Có tin nhắn mới"
+              aria-label={t("chat.hasNew")}
               style={{
                 position: "absolute",
                 top: 0,
@@ -464,7 +423,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
               1
             </span>
           )}
-
           <span className="chatbot-pulse" />
         </button>
       )}
@@ -474,7 +432,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
           className="chatbot-panel"
           role="dialog"
           aria-modal="true"
-          aria-label="Chat hỗ trợ"
+          aria-label={t("chat.title")}
           style={{
             position: "fixed",
             bottom: 24,
@@ -532,17 +490,15 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {mode === "ai" ? "Trợ lý Canteen AI" : "Nhà hàng Canteen"}
+                  {mode === "ai" ? t("chat.botTitle") : t("chat.staffTitleTop")}
                 </b>
                 <span style={{ fontSize: 11, opacity: 0.92 }}>
-                  {mode === "ai"
-                    ? "Gợi ý món ăn thông minh"
-                    : "Nhân viên hỗ trợ trực tuyến"}
+                  {mode === "ai" ? t("chat.botSubtitle") : t("chat.staffSubtitleTop")}
                 </span>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                aria-label="Đóng chat"
+                aria-label={t("chat.closeLabel")}
                 type="button"
                 style={{
                   background: "rgba(255,255,255,0.18)",
@@ -590,10 +546,9 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 5,
-                  transition: "all 0.2s",
                 }}
               >
-                <Bot size={14} /> Trợ lý AI
+                <Bot size={14} /> {t("chat.tab.ai")}
               </button>
               <button
                 onClick={() => setMode("staff")}
@@ -613,10 +568,9 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 5,
-                  transition: "all 0.2s",
                 }}
               >
-                <Store size={14} /> Nhà hàng
+                <Store size={14} /> {t("chat.tab.staff")}
               </button>
             </div>
           </div>
@@ -632,6 +586,8 @@ export default function ChatBotWidget({ cart, setCart, user }) {
               onView={setSelected}
               scrollRef={aiScrollRef}
               bottomRef={aiBottomRef}
+              quickReplies={QUICK_REPLIES}
+              t={t}
             />
           ) : (
             <StaffContent
@@ -645,6 +601,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
               setText={setStaffText}
               scrollRef={staffScrollRef}
               bottomRef={staffBottomRef}
+              t={t}
             />
           )}
         </div>
@@ -664,7 +621,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
 }
 
 // ============================================================
-// SUB-COMPONENT: AIContent
+// SUB: AIContent
 // ============================================================
 
 function AIContent({
@@ -677,6 +634,8 @@ function AIContent({
   onView,
   scrollRef,
   bottomRef,
+  quickReplies,
+  t,
 }) {
   const handleKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -734,9 +693,7 @@ function AIContent({
                   borderRadius: isUser
                     ? "14px 14px 4px 14px"
                     : "14px 14px 14px 4px",
-                  background: isUser
-                    ? "#2634d5"
-                    : "var(--card-bg, #fff)",
+                  background: isUser ? "#2634d5" : "var(--card-bg, #fff)",
                   color: isUser ? "#fff" : "var(--text-primary, #172033)",
                   fontSize: 13,
                   boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
@@ -806,8 +763,8 @@ function AIContent({
                         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                           <button
                             onClick={() => onQuickAdd(it)}
-                            title="Thêm vào giỏ"
-                            aria-label={`Thêm ${it.name} vào giỏ`}
+                            title={t("chat.addToCart")}
+                            aria-label={`${t("chat.addToCart")} ${it.name}`}
                             type="button"
                             style={{
                               background: "#2634d5",
@@ -825,7 +782,7 @@ function AIContent({
                           </button>
                           <button
                             onClick={() => onView(it)}
-                            title="Xem chi tiết"
+                            title={t("common.view")}
                             type="button"
                             style={{
                               background: "#f59e0b",
@@ -839,7 +796,7 @@ function AIContent({
                               fontWeight: 700,
                             }}
                           >
-                            Xem
+                            {t("common.view")}
                           </button>
                         </div>
                       </div>
@@ -909,7 +866,7 @@ function AIContent({
           scrollbarWidth: "none",
         }}
       >
-        {QUICK_REPLIES.map((q) => (
+        {quickReplies.map((q) => (
           <button
             key={q}
             onClick={() => onSend(q)}
@@ -939,7 +896,7 @@ function AIContent({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Bạn cần mình giúp gì?"
+          placeholder={t("chat.aiPlaceholder")}
           disabled={typing}
           maxLength={MAX_MESSAGE_LENGTH}
           style={{
@@ -957,7 +914,7 @@ function AIContent({
         <button
           onClick={() => onSend()}
           disabled={typing || !text.trim()}
-          aria-label="Gửi tin nhắn"
+          aria-label={t("chat.send")}
           type="button"
           style={{
             width: 42,
@@ -980,7 +937,7 @@ function AIContent({
 }
 
 // ============================================================
-// SUB-COMPONENT: StaffContent
+// SUB: StaffContent
 // ============================================================
 
 function StaffContent({
@@ -994,6 +951,7 @@ function StaffContent({
   setText,
   scrollRef,
   bottomRef,
+  t,
 }) {
   const handleKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1048,7 +1006,7 @@ function StaffContent({
                 gap: 4,
               }}
             >
-              <RefreshCw size={11} /> Thử lại
+              <RefreshCw size={11} /> {t("common.retry")}
             </button>
           </div>
         )}
@@ -1066,7 +1024,7 @@ function StaffContent({
               size={20}
               style={{ animation: "spin 1s linear infinite", marginBottom: 6 }}
             />
-            <div>Đang tải...</div>
+            <div>{t("common.loading")}</div>
           </div>
         )}
 
@@ -1091,11 +1049,9 @@ function StaffContent({
                 marginBottom: 6,
               }}
             >
-              Chat với nhà hàng
+              {t("chat.staffTitle")}
             </b>
-            <p style={{ margin: 0 }}>
-              Gửi tin nhắn đầu tiên để nhân viên Canteen hỗ trợ bạn.
-            </p>
+            <p style={{ margin: 0 }}>{t("chat.staffDesc")}</p>
           </div>
         )}
 
@@ -1137,7 +1093,7 @@ function StaffContent({
                     marginBottom: 4,
                   }}
                 >
-                  {m.from_name || "Nhân viên"}
+                  {m.from_name || t("chat.staffName")}
                 </div>
               )}
               <div style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
@@ -1165,7 +1121,7 @@ function StaffContent({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Gửi tin cho nhà hàng..."
+          placeholder={t("chat.staffPlaceholder")}
           disabled={sending}
           maxLength={MAX_MESSAGE_LENGTH}
           style={{
@@ -1183,7 +1139,7 @@ function StaffContent({
         <button
           onClick={onSend}
           disabled={sending || !text.trim()}
-          aria-label="Gửi tin nhắn"
+          aria-label={t("chat.send")}
           type="button"
           style={{
             width: 42,

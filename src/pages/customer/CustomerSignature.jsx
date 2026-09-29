@@ -1,19 +1,6 @@
 ﻿// ============================================================
 // CUSTOMERSIGNATURE.JSX — Món Signature / Best sellers
 // ============================================================
-// Hiển thị 6 món bán chạy nhất (fallback khi backend chưa hỗ trợ
-// endpoint "signature" riêng).
-//
-// Fixes (so với bản gốc):
-//   - Guard Array.isArray trước khi .slice()
-//   - Error state + retry (không silent fail)
-//   - Loading state với spinner
-//   - Empty state khi không có món
-//   - Image fallback SVG
-//   - loading="lazy" cho ảnh
-//   - ✅ FIX CRITICAL: Chỉ lấy món đang bán (active=1)
-//     Backend giờ trả hết → FE filter.
-// ============================================================
 
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
@@ -22,6 +9,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
+import { useTranslation } from "../../i18n";
 
 // ============================================================
 // CONSTANTS
@@ -43,6 +31,8 @@ const FALLBACK_IMG =
 // ============================================================
 
 export default function CustomerSignature() {
+  const { t } = useTranslation();
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -54,28 +44,23 @@ export default function CustomerSignature() {
     try {
       const data = await api.menu.list("", "Tất cả", "popular");
       const list = Array.isArray(data) ? data : [];
-      // ✅ FIX CRITICAL: Chỉ món đang bán
       const activeList = list.filter((m) => m.active);
       setItems(activeList.slice(0, SIGNATURE_LIMIT));
     } catch (e) {
-      setError(e.message || "Không tải được danh sách món");
+      setError(e.message || t("signature.loadError"));
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
   return (
     <div>
-      {/* ============ HEADER ============ */}
+      {/* HEADER */}
       <div
         style={{
           background: "var(--card-bg, #fff)",
@@ -94,8 +79,8 @@ export default function CustomerSignature() {
             gap: 8,
           }}
         >
-          <Star size={20} fill="#f59e0b" color="#f59e0b" /> Món Signature của
-          Canteen
+          <Star size={20} fill="#f59e0b" color="#f59e0b" />{" "}
+          {t("signature.title")}
         </h3>
         <p
           style={{
@@ -104,12 +89,11 @@ export default function CustomerSignature() {
             margin: 0,
           }}
         >
-          Những món ăn được yêu thích nhất — được chọn lọc từ thực đơn Canteen
-          VWA.
+          {t("signature.desc")}
         </p>
       </div>
 
-      {/* ============ ERROR BANNER ============ */}
+      {/* ERROR BANNER */}
       {error && (
         <div
           style={{
@@ -143,12 +127,12 @@ export default function CustomerSignature() {
               gap: 4,
             }}
           >
-            <RefreshCw size={12} /> Thử lại
+            <RefreshCw size={12} /> {t("common.retry")}
           </button>
         </div>
       )}
 
-      {/* ============ LOADING ============ */}
+      {/* LOADING */}
       {loading && (
         <div
           style={{
@@ -164,11 +148,11 @@ export default function CustomerSignature() {
             size={28}
             style={{ animation: "spin 1s linear infinite", marginBottom: 10 }}
           />
-          <div style={{ fontSize: 13 }}>Đang tải món signature...</div>
+          <div style={{ fontSize: 13 }}>{t("signature.loading")}</div>
         </div>
       )}
 
-      {/* ============ EMPTY ============ */}
+      {/* EMPTY */}
       {!loading && !error && items.length === 0 && (
         <div
           style={{
@@ -185,15 +169,13 @@ export default function CustomerSignature() {
             style={{ opacity: 0.3, marginBottom: 10 }}
           />
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-            Chưa có món signature nào
+            {t("signature.emptyTitle")}
           </div>
-          <div style={{ fontSize: 12 }}>
-            Xem toàn bộ thực đơn để chọn món yêu thích.
-          </div>
+          <div style={{ fontSize: 12 }}>{t("signature.emptyDesc")}</div>
         </div>
       )}
 
-      {/* ============ GRID ============ */}
+      {/* GRID */}
       {!loading && !error && items.length > 0 && (
         <div
           style={{
@@ -253,7 +235,7 @@ export default function CustomerSignature() {
                     lineHeight: 1.3,
                   }}
                 >
-                  {m.name || "Không tên"}
+                  {m.name || t("common.noName")}
                 </h4>
                 <b style={{ color: "#18a967", fontSize: 15 }}>
                   {money(m.price)}
@@ -264,7 +246,7 @@ export default function CustomerSignature() {
         </div>
       )}
 
-      {/* ============ CTA ============ */}
+      {/* CTA */}
       <div style={{ textAlign: "center", marginTop: 24 }}>
         <Link
           to="/customer/menu"
@@ -281,7 +263,7 @@ export default function CustomerSignature() {
             fontSize: 13,
           }}
         >
-          Xem toàn bộ thực đơn <ArrowRight size={16} />
+          {t("signature.viewFullMenu")} <ArrowRight size={16} />
         </Link>
       </div>
 

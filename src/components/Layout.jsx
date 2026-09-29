@@ -1,47 +1,23 @@
 // ============================================================
 // LAYOUT.JSX — Layout chính của app
 // ============================================================
-// Cấu trúc:
-//   - CUSTOMER: Topbar logo + search + cart + icons + HeaderNav + BottomNav
-//   - EMPLOYEE/ADMIN: Sidebar + Topbar hamburger + icons
-//
-// Fixes:
-//   - Fix button profile bị ẩn (display: none) → hiện đúng
-//   - Dùng useTranslation hook (không duplicate lang state)
-//   - Memo initials + roleLabel
-//   - Đổi confirm() → custom mini-modal xác nhận logout
-//   - Bỏ inline styles duplicate CSS
-//   - CartTopbarIcon extract hook
-//   - Guard user null
-//   - Avatar onError fallback
-//   - Dùng ConfirmDialog chung thay vì LogoutConfirmModal inline
-//   - Bỏ page-heading cho EMPLOYEE + ADMIN (chỉ CUSTOMER mới có title)
-//   - ✅ ConfirmDialog logout dùng CHUNG cho cả topbar + sidebar
-//   - ✅ Nút Logout + Profile topbar CHỈ hiện cho Customer
-//     (Employee + Admin đã có trong sidebar)
-//   - ✅ MEDIUM FIX: page-heading hiện đồng nhất
-//     - Trước: chỉ CUSTOMER mới có page-heading
-//     - Sau: TẤT CẢ role đều có page-heading (nếu title/subtitle)
-//     - Auto-detect title/subtitle từ route nếu không truyền prop
-//   - ✅ Auto page-heading: dùng bảng PAGE_TITLES để lookup theo path
-// ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { ChevronDown, Menu, ShoppingCart, LogOut, Globe, Sun, Moon, User as UserIcon } from "lucide-react";
+import {
+  ChevronDown, Menu, ShoppingCart, LogOut, Globe, Sun, Moon,
+  User as UserIcon,
+} from "lucide-react";
 
 import Sidebar from "./Sidebar";
 import GlobalSearch from "./GlobalSearch";
 import NotificationBell from "./NotificationBell";
+import LanguageToggle from "./LanguageToggle";
 import Footer from "./Footer";
 import HeaderNav from "./HeaderNav";
 import BottomNav from "./BottomNav";
 import ConfirmDialog, { LogoutIcon } from "./ConfirmDialog";
 import { useTranslation } from "../i18n";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
 
 const CART_KEY = "canteen_cart";
 
@@ -54,55 +30,18 @@ const FALLBACK_AVATAR =
     </svg>`
   );
 
-/**
- * ✅ Auto page-heading: bảng title/subtitle theo pathname.
- * Nếu page tự render heading riêng (VD: CustomerHome) → không cần bảng này.
- * Match theo prefix (pathname.startsWith(path)).
- *
- * Thứ tự quan trọng — path dài hơn phải đứng trước.
- */
 const PAGE_HEADINGS = [
-  // ===== CUSTOMER =====
-  { path: "/customer/menu",        title: "Thực đơn",        subtitle: "Chọn món yêu thích" },
-  { path: "/customer/cart",        title: "Giỏ hàng",         subtitle: "Món bạn đã chọn" },
-  { path: "/customer/checkout",    title: "Thanh toán",       subtitle: "Hoàn tất đơn hàng" },
-  { path: "/customer/orders",      title: "Đơn hàng",         subtitle: "Lịch sử đơn hàng" },
-  { path: "/customer/profile",     title: "Hồ sơ cá nhân",    subtitle: "Thông tin tài khoản" },
-  { path: "/customer/promotions",  title: "Khuyến mãi",       subtitle: "Ưu đãi dành cho bạn" },
-  { path: "/customer/wallet",      title: "Ví Canteen",       subtitle: "Nạp tiền & thanh toán nhanh" },
-  { path: "/customer/chat",        title: "Chat hỗ trợ",      subtitle: "Nhắn tin với Canteen" },
-  { path: "/customer/signature",   title: "Món Signature",    subtitle: "Đặc sản Canteen VWA" },
-  { path: "/customer/success",     title: "Đặt hàng thành công", subtitle: "Cảm ơn bạn!" },
-
-  // ===== EMPLOYEE =====
-  { path: "/employee/attendance",  title: "Chấm công",        subtitle: "Check-in / Check-out" },
-  { path: "/employee/orders",      title: "Đơn hàng",         subtitle: "Xử lý đơn khách" },
-  { path: "/employee/menu",        title: "Thực đơn",         subtitle: "Xem tình trạng món" },
-  { path: "/employee/profile",     title: "Hồ sơ cá nhân",    subtitle: "Thông tin tài khoản" },
-  { path: "/employee/chat",        title: "Chat khách hàng",  subtitle: "Hỗ trợ khách hàng" },
-
-  // ===== OWNER (ADMIN) =====
-  { path: "/owner/employees",      title: "Quản lý nhân viên",   subtitle: "Danh sách nhân viên" },
-  { path: "/owner/shifts",         title: "Quản lý ca",           subtitle: "Phân ca + theo dõi chấm công" },
-  { path: "/owner/attendance",     title: "Chấm công",            subtitle: "Lịch sử chấm công nhân viên" },
-  { path: "/owner/customers",      title: "Quản lý khách hàng",   subtitle: "Danh sách khách hàng" },
-  { path: "/owner/menu",           title: "Quản lý thực đơn",     subtitle: "Món ăn" },
-  { path: "/owner/price-history",  title: "Lịch sử giá",          subtitle: "Theo dõi thay đổi giá món ăn" },
-  { path: "/owner/inventory",      title: "Kho hàng",             subtitle: "Nguyên liệu" },
-  { path: "/owner/reports",        title: "Báo cáo",              subtitle: "Doanh thu & thống kê" },
-  { path: "/owner/permissions",    title: "Phân quyền",           subtitle: "Phân quyền chi tiết cho từng user" },
-  { path: "/owner/orders",         title: "Quản lý đơn hàng",     subtitle: "Xử lý đơn khách như nhân viên" },
-  { path: "/owner/vouchers",       title: "Quản lý Voucher",      subtitle: "Tạo / sửa / xóa voucher cho khách" },
-  { path: "/owner/finance",        title: "Quản lý tài chính",    subtitle: "Tài khoản nhận tiền, doanh thu, chi phí" },
-  { path: "/owner/wallet",         title: "Quản lý Ví Canteen",   subtitle: "Duyệt nạp / rút / thanh toán của khách" },
-  { path: "/owner/settings",       title: "Cài đặt",              subtitle: "Tài khoản nhận tiền + thông tin liên hệ" },
-  { path: "/owner/profile",        title: "Hồ sơ cá nhân",        subtitle: "Thông tin tài khoản" },
-  { path: "/owner/backup",         title: "Backup dữ liệu",       subtitle: "Xuất / nhập / reset database" },
+  { path: "/customer/menu",       titleKey: "page.menu.title",       subtitleKey: "page.menu.subtitle" },
+  { path: "/customer/cart",       titleKey: "page.cart.title",       subtitleKey: "page.cart.subtitle" },
+  { path: "/customer/checkout",   titleKey: "page.checkout.title",   subtitleKey: "page.checkout.subtitle" },
+  { path: "/customer/orders",     titleKey: "page.orders.title",     subtitleKey: "page.orders.subtitle" },
+  { path: "/customer/profile",    titleKey: "page.profile.title",    subtitleKey: "page.profile.subtitle" },
+  { path: "/customer/promotions", titleKey: "page.promotions.title", subtitleKey: "page.promotions.subtitle" },
+  { path: "/customer/wallet",     titleKey: "page.wallet.title",     subtitleKey: "page.wallet.subtitle" },
+  { path: "/customer/chat",       titleKey: "page.chat.title",       subtitleKey: "page.chat.subtitle" },
+  { path: "/customer/signature",  titleKey: "page.signature.title",  subtitleKey: "page.signature.subtitle" },
+  { path: "/customer/success",    titleKey: "page.success.title",    subtitleKey: "page.success.subtitle" },
 ];
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function getHomePath(role) {
   if (role === "ADMIN") return "/owner";
@@ -138,30 +77,18 @@ function readCartCount() {
   }
 }
 
-/**
- * ✅ Auto lookup heading theo pathname.
- * Trả về { title, subtitle } hoặc null.
- */
 function lookupHeading(pathname) {
   if (!pathname) return null;
-
-  // Sort by length DESC để match path cụ thể trước
   const sorted = [...PAGE_HEADINGS].sort(
     (a, b) => b.path.length - a.path.length
   );
-
   for (const h of sorted) {
     if (pathname === h.path || pathname.startsWith(h.path + "/")) {
-      return { title: h.title, subtitle: h.subtitle };
+      return { titleKey: h.titleKey, subtitleKey: h.subtitleKey };
     }
   }
-
   return null;
 }
-
-// ============================================================
-// SUB-COMPONENT: TopbarLogo
-// ============================================================
 
 function TopbarLogo({ role }) {
   const home = getHomePath(role);
@@ -184,20 +111,15 @@ function TopbarLogo({ role }) {
   );
 }
 
-// ============================================================
-// SUB-COMPONENT: CartTopbarIcon
-// ============================================================
-
 function CartTopbarIcon() {
   const [count, setCount] = useState(0);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const read = () => setCount(readCartCount());
-
     read();
     window.addEventListener("cart-updated", read);
     window.addEventListener("refresh-cart", read);
-
     return () => {
       window.removeEventListener("cart-updated", read);
       window.removeEventListener("refresh-cart", read);
@@ -208,8 +130,8 @@ function CartTopbarIcon() {
     <Link
       to="/customer/cart"
       className="cart-topbar-icon"
-      title="Giỏ hàng"
-      aria-label={`Giỏ hàng${count > 0 ? `, ${count} món` : ""}`}
+      title={t("nav.cart")}
+      aria-label={`${t("nav.cart")}${count > 0 ? `, ${count}` : ""}`}
     >
       <ShoppingCart size={18} />
       {count > 0 && (
@@ -220,10 +142,6 @@ function CartTopbarIcon() {
     </Link>
   );
 }
-
-// ============================================================
-// SUB-COMPONENT: TopbarProfile
-// ============================================================
 
 function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
   const initials = useMemo(() => getInitials(user?.name), [user?.name]);
@@ -237,7 +155,6 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
   const dropdownRef = useRef(null);
   const { t, lang, setLang } = useTranslation();
 
-  // Sync theme từ nơi khác
   useEffect(() => {
     const update = () => {
       setTheme(
@@ -250,7 +167,6 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
     return () => window.removeEventListener("themechange", update);
   }, []);
 
-  // Click outside để đóng
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
@@ -262,7 +178,6 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // ESC đóng
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
@@ -277,7 +192,9 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
     const isDark = root.classList.contains("dark-mode");
     if (isDark) root.classList.remove("dark-mode");
     else root.classList.add("dark-mode");
-    try { localStorage.setItem("theme", isDark ? "light" : "dark"); } catch {}
+    try {
+      localStorage.setItem("theme", isDark ? "light" : "dark");
+    } catch {}
     try {
       window.dispatchEvent(
         new CustomEvent("themechange", { detail: isDark ? "light" : "dark" })
@@ -312,8 +229,8 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
         type="button"
         onClick={() => setOpen((s) => !s)}
         className="topbar-profile-btn"
-        title="Menu tài khoản"
-        aria-label="Menu tài khoản"
+        title={t("account.menu")}
+        aria-label={t("account.menu")}
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -332,7 +249,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
         )}
 
         <span className="profile-info">
-          <b className="profile-name">{user?.name || "Người dùng"}</b>
+          <b className="profile-name">{user?.name || t("account.user")}</b>
           <small className="profile-role">{roleLabel}</small>
         </span>
 
@@ -380,7 +297,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }
           >
             <UserIcon size={16} />
-            <span>Hồ sơ cá nhân</span>
+            <span>{t("account.profile")}</span>
           </button>
 
           <div
@@ -405,7 +322,9 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }
           >
             <Globe size={16} />
-            <span style={{ flex: 1, textAlign: "left" }}>Ngôn ngữ</span>
+            <span style={{ flex: 1, textAlign: "left" }}>
+              {t("account.language")}
+            </span>
             <span
               style={{
                 fontSize: 12,
@@ -431,7 +350,9 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }
           >
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-            <span style={{ flex: 1, textAlign: "left" }}>Chế độ</span>
+            <span style={{ flex: 1, textAlign: "left" }}>
+              {t("account.theme")}
+            </span>
             <span
               style={{
                 fontSize: 12,
@@ -439,7 +360,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
                 fontWeight: 600,
               }}
             >
-              {theme === "dark" ? "Tối" : "Sáng"}
+              {theme === "dark" ? t("account.dark") : t("account.light")}
             </span>
           </button>
 
@@ -468,17 +389,13 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }
           >
             <LogOut size={16} />
-            <span>Đăng xuất</span>
+            <span>{t("account.logout")}</span>
           </button>
         </div>
       )}
     </div>
   );
 }
-
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
 
 export default function Layout({
   role,
@@ -496,7 +413,6 @@ export default function Layout({
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // ---------- Body class cho customer ----------
   useEffect(() => {
     if (role === "CUSTOMER") {
       document.body.classList.add("has-bottom-nav");
@@ -506,7 +422,6 @@ export default function Layout({
     return () => document.body.classList.remove("has-bottom-nav");
   }, [role]);
 
-  // ---------- Role label ----------
   const roleLabel = useMemo(() => {
     if (role === "ADMIN") return t("role.admin");
     if (role === "EMPLOYEE") return t("role.employee");
@@ -514,19 +429,18 @@ export default function Layout({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, t, lang]);
 
-  // ---------- ✅ Auto page-heading ----------
-  // Logic:
-  //   1. Nếu truyền prop `title` → dùng prop (highest priority)
-  //   2. Nếu không → lookup từ PAGE_HEADINGS theo pathname
-  //   3. Nếu không có → null (không render heading)
   const heading = useMemo(() => {
     if (title || subtitle) {
       return { title, subtitle };
     }
-    return lookupHeading(location.pathname);
-  }, [title, subtitle, location.pathname]);
-
-  // ---------- Handlers ----------
+    const raw = lookupHeading(location.pathname);
+    if (!raw) return null;
+    return {
+      title: t(raw.titleKey),
+      subtitle: t(raw.subtitleKey),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, subtitle, location.pathname, t, lang]);
 
   const openProfile = useCallback(() => {
     navigate(getProfilePath(role));
@@ -536,20 +450,14 @@ export default function Layout({
     window.dispatchEvent(new CustomEvent("toggle-sidebar"));
   }, []);
 
-  // ✅ Mở ConfirmDialog — dùng chung cho topbar + sidebar
   const openLogoutConfirm = useCallback(() => {
     setShowLogoutConfirm(true);
   }, []);
 
-  // ✅ Chỉ chạy khi user đã xác nhận trong ConfirmDialog
   const handleLogoutConfirm = useCallback(() => {
     setShowLogoutConfirm(false);
     onLogout?.();
   }, [onLogout]);
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div
@@ -557,20 +465,12 @@ export default function Layout({
         "app-shell" + (role === "CUSTOMER" ? " customer-layout" : "")
       }
     >
-      {/* ============ SIDEBAR (non-customer) ============ */}
-      {/* ✅ Truyền callback MỞ confirm thay vì logout ngay */}
       {role !== "CUSTOMER" && (
-        <Sidebar
-          role={role}
-          onLogout={openLogoutConfirm}
-          user={user}
-        />
+        <Sidebar role={role} onLogout={openLogoutConfirm} user={user} />
       )}
 
       <main className="main">
-        {/* ============ TOPBAR ============ */}
         <header className="topbar">
-          {/* ----- LEFT ----- */}
           <div className="topbar-left">
             {role === "CUSTOMER" && <TopbarLogo role={role} />}
 
@@ -579,7 +479,7 @@ export default function Layout({
                 type="button"
                 className="hamburger-btn"
                 onClick={toggleSidebar}
-                aria-label="Mở menu"
+                aria-label={t("common.openMenu")}
               >
                 <Menu size={20} />
               </button>
@@ -588,30 +488,27 @@ export default function Layout({
             {role === "CUSTOMER" && <GlobalSearch role={role} />}
           </div>
 
-          {/* ----- RIGHT ----- */}
           <div className="topbar-right">
-  {role === "CUSTOMER" && <CartTopbarIcon />}
+            {role === "CUSTOMER" && <CartTopbarIcon />}
 
-  <NotificationBell />
+            <LanguageToggle />
 
-  {role === "CUSTOMER" && (
-    <TopbarProfile
-      user={user}
-      roleLabel={roleLabel}
-      onOpenProfile={openProfile}
-      onLogout={openLogoutConfirm}
-    />
-  )}
-</div>
+            <NotificationBell />
+
+            {role === "CUSTOMER" && (
+              <TopbarProfile
+                user={user}
+                roleLabel={roleLabel}
+                onOpenProfile={openProfile}
+                onLogout={openLogoutConfirm}
+              />
+            )}
+          </div>
         </header>
 
-        {/* ============ HEADER NAV (customer only) ============ */}
         {role === "CUSTOMER" && <HeaderNav />}
 
-        {/* ============ PAGE CONTENT ============ */}
         <section className="page-content">
-          {/* ✅ Page heading — hiện cho TẤT CẢ role
-             (nếu có title/subtitle, không bị ẩn bởi hideHeading) */}
           {!hideHeading && heading && (heading.title || heading.subtitle) && (
             <div className="page-heading">
               {heading.title && <h1>{heading.title}</h1>}
@@ -625,17 +522,15 @@ export default function Layout({
         </section>
       </main>
 
-      {/* ============ BOTTOM NAV (customer only) ============ */}
       {role === "CUSTOMER" && <BottomNav onLogout={onLogout} />}
 
-      {/* ============ ✅ CONFIRM LOGOUT MODAL (dùng chung) ============ */}
       <ConfirmDialog
         open={showLogoutConfirm}
         icon={LogoutIcon}
-        title="Đăng xuất khỏi Canteen VWA?"
-        message="Bạn sẽ cần đăng nhập lại để tiếp tục sử dụng."
-        confirmText="Đăng xuất"
-        cancelText="Ở lại"
+        title={t("logout.title")}
+        message={t("logout.message")}
+        confirmText={t("common.logout")}
+        cancelText={t("logout.stay")}
         danger
         onConfirm={handleLogoutConfirm}
         onClose={() => setShowLogoutConfirm(false)}
