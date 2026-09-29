@@ -16,7 +16,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { NavLink } from "react-router-dom";
 import {
-  Home, UtensilsCrossed, ShoppingCart, Package, Wallet, Gift,
+  Home, UtensilsCrossed, Package, Wallet, Gift,
 } from "lucide-react";
 import { api } from "../api";
 
@@ -35,11 +35,10 @@ const ACTIVE_ORDER_STATUSES = [
   "Sẵn sàng nhận",
 ];
 
-// 6 tab chính — bỏ "Hồ sơ" vì đã có ở topbar
+// 5 tab chính — bỏ "Hồ sơ" (đã có ở topbar) và "Giỏ hàng" (đã có icon topbar)
 const TABS = [
   { key: "home",       label: "Trang chủ",  icon: Home,            path: "/customer" },
   { key: "menu",       label: "Thực đơn",   icon: UtensilsCrossed, path: "/customer/menu" },
-  { key: "cart",       label: "Giỏ hàng",   icon: ShoppingCart,    path: "/customer/cart",       badge: "cart" },
   { key: "orders",     label: "Đơn hàng",   icon: Package,         path: "/customer/orders",     badge: "orders" },
   { key: "wallet",     label: "Ví Canteen", icon: Wallet,          path: "/customer/wallet" },
   { key: "promotions", label: "Khuyến mãi", icon: Gift,            path: "/customer/promotions" },
