@@ -2,21 +2,9 @@
 // ĐA NGÔN NGỮ — i18n.js
 // ============================================================
 // Hỗ trợ 2 ngôn ngữ: Tiếng Việt (vi) + English (en)
-//
-// Cách dùng:
-//   import { useTranslation } from "../i18n";
-//   const { t, lang, setLang } = useTranslation();
-//   t("common.save")  // → "Lưu" hoặc "Save"
-//
-// Đổi ngôn ngữ:
-//   setLang("en")  // Lưu vào localStorage + phát event
 // ============================================================
 
 import { useEffect, useState } from "react";
-
-// ============================================================
-// BẢNG DỊCH — VI + EN
-// ============================================================
 
 export const translations = {
   vi: {
@@ -154,6 +142,44 @@ export const translations = {
     "customer.serving": "Món đang phục vụ",
     "customer.studentDiscount": "Ưu đãi sinh viên",
 
+    // ✅ Bổ sung cho CustomerHome
+    "customer.badgeBestSeller": "Bán chạy",
+    "customer.badgeOutOfStock": "Hết hàng",
+    "customer.addItem": "Thêm",
+    "customer.orderItem": "Đặt",
+    "customer.viewAll": "Xem tất cả",
+    "customer.retry": "Thử lại",
+    "customer.loadError": "Không tải được dữ liệu trang chủ",
+    "customer.flashLabel": "ƯU ĐÃI",
+    "customer.flashTitle": "FLASH SALE",
+    "customer.flashHot": "HOT",
+    "customer.voucherLabel": "VOUCHER",
+    "customer.voucherDiscount": "Giảm",
+    "customer.claimNow": "Nhận ngay",
+    "customer.orderNow": "Đặt ngay",
+    "customer.newArrivalsTitle": "Món mới lên kệ",
+    "customer.noBestSellerTitle": "Chưa có món bán chạy nào",
+    "customer.noBestSellerDesc": "Khám phá thực đơn để chọn món yêu thích.",
+    "customer.exploreMenu": "Xem thực đơn",
+    "customer.testimonialsTitle": "Khách hàng nói gì về Canteen VWA",
+    "customer.qrTitle": "Quét mã QR để xem menu",
+    "customer.qrDesc": "Mở camera điện thoại và quét mã để truy cập thực đơn Canteen VWA ngay — không cần tải app.",
+    "customer.qrOrClick": "Hoặc bấm vào đây →",
+    "customer.qrAlt": "QR truy cập menu",
+
+    // ✅ Default flash promos (fallback)
+    "flash.default.1": "🎉 Ưu đãi sinh viên — Giảm 10% khi đặt món qua app",
+    "flash.default.2": "⚡ Chuẩn bị món 5-8 phút — Nhận ngay tại quầy",
+    "flash.default.3": "💳 Thanh toán VietQR · Ví Canteen · Tiền mặt",
+
+    // ✅ Testimonials (text + role; name giữ nguyên)
+    "testimonial.1.role": "Sinh viên K20",
+    "testimonial.1.text": "Món ăn ngon, giá cả hợp lý. Đặt online tiện lợi hơn hẳn so với xếp hàng!",
+    "testimonial.2.role": "Cán bộ VWA",
+    "testimonial.2.text": "Giao nhanh, nhân viên thân thiện, món ăn luôn nóng hổi. Rất hài lòng.",
+    "testimonial.3.role": "Sinh viên K19",
+    "testimonial.3.text": "Canteen sạch sẽ, đồ ăn đa dạng. Đặt món qua app dễ dùng, giao đúng giờ.",
+
     // ---------- Cart ----------
     "cart.title": "Giỏ hàng",
     "cart.empty": "Giỏ hàng đang trống",
@@ -165,8 +191,6 @@ export const translations = {
     "cart.serviceFee": "Phí dịch vụ",
     "cart.total": "Tổng cộng",
     "cart.checkout": "Tiến hành đặt hàng",
-
-    // ✅ Bổ sung cho CustomerCart
     "cart.selectAll": "Chọn tất cả",
     "cart.selectedCount": "Đã chọn",
     "cart.unitPrice": "Đơn giá",
@@ -219,8 +243,6 @@ export const translations = {
     "checkout.invalidPhone": "Số điện thoại không hợp lệ",
     "checkout.pointsEarn": "Nhận điểm khi đặt hàng",
     "checkout.checkInfo": "Vui lòng kiểm tra lại thông tin",
-
-    // ✅ Bổ sung cho CustomerCheckout
     "checkout.nameLabel": "Họ và tên",
     "checkout.namePlaceholder": "Nguyễn Văn A",
     "checkout.phoneLabel": "Số điện thoại",
@@ -263,7 +285,7 @@ export const translations = {
     "checkout.subtotal": "Tạm tính",
     "checkout.orderBtn": "Đặt hàng",
 
-    // ---------- Menu page ----------
+    // ---------- Menu ----------
     "menu.title": "Thực đơn",
     "menu.subtitle": "Chọn món yêu thích",
     "menu.search": "Tìm món ăn...",
@@ -572,6 +594,44 @@ export const translations = {
     "customer.serving": "Dishes served",
     "customer.studentDiscount": "Student discount",
 
+    // ✅ Added for CustomerHome
+    "customer.badgeBestSeller": "Best seller",
+    "customer.badgeOutOfStock": "Out of stock",
+    "customer.addItem": "Add",
+    "customer.orderItem": "Order",
+    "customer.viewAll": "View all",
+    "customer.retry": "Retry",
+    "customer.loadError": "Failed to load home data",
+    "customer.flashLabel": "DEALS",
+    "customer.flashTitle": "FLASH SALE",
+    "customer.flashHot": "HOT",
+    "customer.voucherLabel": "VOUCHER",
+    "customer.voucherDiscount": "Save",
+    "customer.claimNow": "Claim now",
+    "customer.orderNow": "Order now",
+    "customer.newArrivalsTitle": "New arrivals",
+    "customer.noBestSellerTitle": "No best sellers yet",
+    "customer.noBestSellerDesc": "Explore the menu to pick your favorites.",
+    "customer.exploreMenu": "Explore menu",
+    "customer.testimonialsTitle": "What customers say about Canteen VWA",
+    "customer.qrTitle": "Scan the QR to view the menu",
+    "customer.qrDesc": "Open your phone camera and scan the code to access the Canteen VWA menu instantly — no app needed.",
+    "customer.qrOrClick": "Or click here →",
+    "customer.qrAlt": "Menu QR code",
+
+    // ✅ Default flash promos
+    "flash.default.1": "🎉 Student deal — 10% off when ordering via app",
+    "flash.default.2": "⚡ Prepared in 5-8 minutes — Pickup at counter",
+    "flash.default.3": "💳 VietQR · Canteen Wallet · Cash",
+
+    // ✅ Testimonials
+    "testimonial.1.role": "Student K20",
+    "testimonial.1.text": "Delicious food, reasonable prices. Ordering online is much more convenient than queuing!",
+    "testimonial.2.role": "VWA Staff",
+    "testimonial.2.text": "Fast delivery, friendly staff, food is always hot. Very satisfied.",
+    "testimonial.3.role": "Student K19",
+    "testimonial.3.text": "Clean canteen, diverse menu. The app is easy to use and delivers on time.",
+
     // ---------- Cart ----------
     "cart.title": "Cart",
     "cart.empty": "Your cart is empty",
@@ -583,8 +643,6 @@ export const translations = {
     "cart.serviceFee": "Service fee",
     "cart.total": "Total",
     "cart.checkout": "Proceed to checkout",
-
-    // ✅ Added for CustomerCart
     "cart.selectAll": "Select all",
     "cart.selectedCount": "Selected",
     "cart.unitPrice": "Unit price",
@@ -637,8 +695,6 @@ export const translations = {
     "checkout.invalidPhone": "Invalid phone number",
     "checkout.pointsEarn": "Earn points on order",
     "checkout.checkInfo": "Please check your information",
-
-    // ✅ Added for CustomerCheckout
     "checkout.nameLabel": "Full name",
     "checkout.namePlaceholder": "John Doe",
     "checkout.phoneLabel": "Phone number",
@@ -681,7 +737,7 @@ export const translations = {
     "checkout.subtotal": "Subtotal",
     "checkout.orderBtn": "Place order",
 
-    // ---------- Menu page ----------
+    // ---------- Menu ----------
     "menu.title": "Menu",
     "menu.subtitle": "Choose your favorite",
     "menu.search": "Search dishes...",

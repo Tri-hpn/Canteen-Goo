@@ -10,10 +10,9 @@
 //   - Testimonials
 //   - QR truy cập menu (auto-detect origin)
 //
-// FIX v7:
-//   - Voucher card chuyển sang HÌNH VUÔNG (class .voucher-card)
-//   - Badge -% đẩy sang PHẢI (class .grab-food-card__badge--right)
-//   - renderFoodCard dùng .grab-food-card (thống nhất với CustomerMenu)
+// FIX v8:
+//   - ✅ Áp dụng i18n cho TẤT CẢ text
+//   - ✅ Flash promos fallback + testimonials lấy từ t()
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -41,31 +40,11 @@ const FLASH_PROMOS_LIMIT = 4;
 const FLASH_VOUCHERS_LIMIT = 2;
 const SKELETON_COUNT = 5;
 
-const DEFAULT_FLASH_ITEMS = [
-  { text: "🎉 Ưu đãi sinh viên — Giảm 10% khi đặt món qua app" },
-  { text: "⚡ Chuẩn bị món 5-8 phút — Nhận ngay tại quầy" },
-  { text: "💳 Thanh toán VietQR · Ví Canteen · Tiền mặt" },
-];
-
-const TESTIMONIALS = [
-  {
-    name: "Nguyễn Minh Anh",
-    role: "Sinh viên K20",
-    rating: 5,
-    text: "Món ăn ngon, giá cả hợp lý. Đặt online tiện lợi hơn hẳn so với xếp hàng!",
-  },
-  {
-    name: "Trần Quốc Bảo",
-    role: "Cán bộ VWA",
-    rating: 5,
-    text: "Giao nhanh, nhân viên thân thiện, món ăn luôn nóng hổi. Rất hài lòng.",
-  },
-  {
-    name: "Lê Thu Hà",
-    role: "Sinh viên K19",
-    rating: 4,
-    text: "Canteen sạch sẽ, đồ ăn đa dạng. Đặt món qua app dễ dùng, giao đúng giờ.",
-  },
+// Testimonials — chỉ giữ name + rating (text/role lấy từ i18n)
+const TESTIMONIAL_DATA = [
+  { name: "Nguyễn Minh Anh", roleKey: "testimonial.1.role", rating: 5, textKey: "testimonial.1.text" },
+  { name: "Trần Quốc Bảo",   roleKey: "testimonial.2.role", rating: 5, textKey: "testimonial.2.text" },
+  { name: "Lê Thu Hà",       roleKey: "testimonial.3.role", rating: 4, textKey: "testimonial.3.text" },
 ];
 
 // ============================================================
@@ -79,16 +58,11 @@ function getPublicMenuUrl() {
 
 function renderChipIcon(iconName, size = 13) {
   switch (iconName) {
-    case "clock":
-      return <Clock size={size} />;
-    case "utensils":
-      return <Utensils size={size} />;
-    case "gift":
-      return <Gift size={size} />;
-    case "sparkles":
-      return <Sparkles size={size} />;
-    default:
-      return <Zap size={size} />;
+    case "clock":    return <Clock size={size} />;
+    case "utensils": return <Utensils size={size} />;
+    case "gift":     return <Gift size={size} />;
+    case "sparkles": return <Sparkles size={size} />;
+    default:         return <Zap size={size} />;
   }
 }
 
@@ -108,7 +82,7 @@ export default function CustomerHome({ user, cart, setCart }) {
   const [newItems, setNewItems] = useState([]);
   const [promotions, setPromotions] = useState([]);
   const [publicVouchers, setPublicVouchers] = useState([]);
-  const [flashItems, setFlashItems] = useState(DEFAULT_FLASH_ITEMS);
+  const [flashItems, setFlashItems] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -125,64 +99,76 @@ export default function CustomerHome({ user, cart, setCart }) {
 
   const inFlightRef = useRef(false);
 
+  // ---------- Default flash promos (i18n) ----------
+  const defaultFlashItems = useMemo(
+    () => [
+      { text: t("flash.default.1") },
+      { text: t("flash.default.2") },
+      { text: t("flash.default.3") },
+    ],
+    [t]
+  );
+
   // ---------- Load ----------
+  const load = useCallback(
+    async (silent = false) => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
 
-  const load = useCallback(async (silent = false) => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
+      if (!silent) setRefreshing(true);
+      setError("");
 
-    if (!silent) setRefreshing(true);
-    setError("");
+      try {
+        const [menuRes, promoRes, pubVoucherRes] = await Promise.all([
+          api.menu.list("", "Tất cả", "popular").catch(() => []),
+          api.promotions.list().catch(() => []),
+          api.vouchers.public().catch(() => []),
+        ]);
 
-    try {
-      const [menuRes, promoRes, pubVoucherRes] = await Promise.all([
-        api.menu.list("", "Tất cả", "popular").catch(() => []),
-        api.promotions.list().catch(() => []),
-        api.vouchers.public().catch(() => []),
-      ]);
+        const rawList = Array.isArray(menuRes) ? menuRes : [];
+        const list = rawList.filter((m) => m.active);
 
-      const rawList = Array.isArray(menuRes) ? menuRes : [];
-      const list = rawList.filter((m) => m.active);
+        const bestSellers = [...list]
+          .filter((m) => (m.sold || 0) > 0)
+          .sort((a, b) => (b.sold || 0) - (a.sold || 0))
+          .slice(0, BEST_SELLERS_LIMIT);
+        setItems(bestSellers);
 
-      const bestSellers = [...list]
-        .filter((m) => (m.sold || 0) > 0)
-        .sort((a, b) => (b.sold || 0) - (a.sold || 0))
-        .slice(0, BEST_SELLERS_LIMIT);
-      setItems(bestSellers);
+        const sortedById = [...list].sort((a, b) => (b.id || 0) - (a.id || 0));
+        setNewItems(sortedById.slice(0, NEW_ITEMS_LIMIT));
 
-      const sortedById = [...list].sort((a, b) => (b.id || 0) - (a.id || 0));
-      setNewItems(sortedById.slice(0, NEW_ITEMS_LIMIT));
+        setPromotions(Array.isArray(promoRes) ? promoRes : []);
+        setPublicVouchers(Array.isArray(pubVoucherRes) ? pubVoucherRes : []);
 
-      setPromotions(Array.isArray(promoRes) ? promoRes : []);
-      setPublicVouchers(Array.isArray(pubVoucherRes) ? pubVoucherRes : []);
-
-      const flash = [];
-      (Array.isArray(pubVoucherRes) ? pubVoucherRes : []).forEach((v) => {
-        flash.push({
-          text: `🎁 GIẢM ${fmtNumber(v.value || 0)}đ — Mã ${v.code}`,
+        const flash = [];
+        (Array.isArray(pubVoucherRes) ? pubVoucherRes : []).forEach((v) => {
+          flash.push({
+            text: `🎁 GIẢM ${fmtNumber(v.value || 0)}đ — Mã ${v.code}`,
+          });
         });
-      });
-      (Array.isArray(promoRes) ? promoRes : []).forEach((m) => {
-        flash.push({
-          text: `🔥 ${m.name} GIẢM ${m.discount_percent}% (còn ${fmtNumber(m.price || 0)}đ)`,
+        (Array.isArray(promoRes) ? promoRes : []).forEach((m) => {
+          flash.push({
+            text: `🔥 ${m.name} GIẢM ${m.discount_percent}% (còn ${fmtNumber(m.price || 0)}đ)`,
+          });
         });
-      });
-      setFlashItems(flash.length > 0 ? flash : DEFAULT_FLASH_ITEMS);
-    } catch (e) {
-      if (!silent) setError(e.message || "Không tải được dữ liệu trang chủ");
-    } finally {
-      setLoading(false);
-      if (!silent) setRefreshing(false);
-      inFlightRef.current = false;
-    }
-  }, []);
+        setFlashItems(flash.length > 0 ? flash : []);
+      } catch (e) {
+        if (!silent) setError(e.message || t("customer.loadError"));
+      } finally {
+        setLoading(false);
+        if (!silent) setRefreshing(false);
+        inFlightRef.current = false;
+      }
+    },
+    [t]
+  );
 
   useEffect(() => {
     load(false);
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---------- Carousel autoplay ----------
-
   useEffect(() => {
     if (paused || !tabVisible) return;
 
@@ -200,13 +186,11 @@ export default function CustomerHome({ user, cart, setCart }) {
   }, []);
 
   // ---------- Carousel controls ----------
-
   const goNext = () => setIdx((i) => (i + 1) % SLIDES.length);
   const goPrev = () =>
     setIdx((i) => (i - 1 + SLIDES.length) % SLIDES.length);
 
   // ---------- Derived ----------
-
   const publicMenuUrl = useMemo(() => getPublicMenuUrl(), []);
 
   const qrImageSrc = useMemo(() => {
@@ -216,74 +200,83 @@ export default function CustomerHome({ user, cart, setCart }) {
     )}&margin=0`;
   }, [publicMenuUrl]);
 
+  // Flash track: nếu chưa load xong → dùng default (i18n)
+  const effectiveFlashItems = useMemo(() => {
+    if (flashItems.length > 0) return flashItems;
+    return defaultFlashItems;
+  }, [flashItems, defaultFlashItems]);
+
   const flashTrack = useMemo(() => {
-    if (!flashItems.length) return [];
+    if (!effectiveFlashItems.length) return [];
     const out = [];
     for (let round = 0; round < 3; round++) {
-      flashItems.forEach((item, i) => {
+      effectiveFlashItems.forEach((item, i) => {
         out.push({ ...item, _key: `${round}-${i}` });
       });
     }
     return out;
-  }, [flashItems]);
+  }, [effectiveFlashItems]);
 
   // ============================================================
-  // RENDER FOOD CARD — dùng chung class với CustomerMenu
+  // RENDER FOOD CARD
   // ============================================================
 
-  const renderFoodCard = useCallback((m) => {
-    const id = m.id || m._id;
-    const isOutOfStock = m.stock === 0;
-    const isHot = (m.sold || 0) >= 50;
+  const renderFoodCard = useCallback(
+    (m) => {
+      const id = m.id || m._id;
+      const isOutOfStock = m.stock === 0;
+      const isHot = (m.sold || 0) >= 50;
 
-    return (
-      <div
-        key={id}
-        className="grab-food-card"
-        onClick={() => {
-          if (isOutOfStock) return;
-          setMode("cart");
-          setSelected(m);
-        }}
-      >
-        <div className="grab-food-card__image-wrap">
-          <img src={m.image} alt={m.name} loading="lazy" />
+      return (
+        <div
+          key={id}
+          className="grab-food-card"
+          onClick={() => {
+            if (isOutOfStock) return;
+            setMode("cart");
+            setSelected(m);
+          }}
+        >
+          <div className="grab-food-card__image-wrap">
+            <img src={m.image} alt={m.name} loading="lazy" />
 
-          {isOutOfStock ? (
-            <span className="grab-food-card__badge grab-food-card__badge--out">
-              Hết hàng
-            </span>
-          ) : isHot ? (
-            <span className="grab-food-card__badge grab-food-card__badge--hot">
-              <Flame size={10} /> Bán chạy
-            </span>
-          ) : null}
+            {isOutOfStock ? (
+              <span className="grab-food-card__badge grab-food-card__badge--out">
+                {t("customer.badgeOutOfStock")}
+              </span>
+            ) : isHot ? (
+              <span className="grab-food-card__badge grab-food-card__badge--hot">
+                <Flame size={10} /> {t("customer.badgeBestSeller")}
+              </span>
+            ) : null}
 
-          {!isOutOfStock && (
-            <button
-              type="button"
-              className="grab-food-card__add-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMode("cart");
-                setSelected(m);
-              }}
-              aria-label={`Thêm ${m.name}`}
-            >
-              <Plus size={20} strokeWidth={3} />
-            </button>
-          )}
-        </div>
+            {!isOutOfStock && (
+              <button
+                type="button"
+                className="grab-food-card__add-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMode("cart");
+                  setSelected(m);
+                }}
+                aria-label={`${t("customer.addItem")} ${m.name}`}
+              >
+                <Plus size={20} strokeWidth={3} />
+              </button>
+            )}
+          </div>
 
-        <div className="grab-food-card__info">
-          <h4 className="grab-food-card__name">{m.name}</h4>
-          <div className="grab-food-card__price-row">
-            <span className="grab-food-card__price">{money(m.price)}</span>
+          <div className="grab-food-card__info">
+            <h4 className="grab-food-card__name">{m.name}</h4>
+            <div className="grab-food-card__price-row">
+              <span className="grab-food-card__price">{money(m.price)}</span>
+            </div>
           </div>
         </div>
-      </div>
-    );
-  }, []);
+      );
+    },
+    [t]
+  );
 
   // ============================================================
   // RENDER
@@ -325,7 +318,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               gap: 4,
             }}
           >
-            <RefreshCw size={12} /> Thử lại
+            <RefreshCw size={12} /> {t("customer.retry")}
           </button>
         </div>
       )}
@@ -544,7 +537,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             ))}
           </div>
           <span className="flash-label">
-            <Sparkles size={12} /> ƯU ĐÃI
+            <Sparkles size={12} /> {t("customer.flashLabel")}
           </span>
         </Link>
       )}
@@ -552,7 +545,7 @@ export default function CustomerHome({ user, cart, setCart }) {
       {/* ============ FLASH SALE ============ */}
       {(promotions.length > 0 || publicVouchers.length > 0) && (
         <>
-                    <div
+          <div
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -570,7 +563,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 gap: 8,
               }}
             >
-              <span style={{ fontSize: 22 }}>⚡</span> FLASH SALE
+              <span style={{ fontSize: 22 }}>⚡</span> {t("customer.flashTitle")}
               <span
                 style={{
                   background: "linear-gradient(135deg, #ef4444, #f59e0b)",
@@ -581,7 +574,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   fontWeight: 800,
                 }}
               >
-                HOT
+                {t("customer.flashHot")}
               </span>
             </h3>
 
@@ -594,7 +587,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
-              Xem tất cả →
+              {t("customer.viewAll")} →
             </Link>
           </div>
 
@@ -608,7 +601,6 @@ export default function CustomerHome({ user, cart, setCart }) {
                   className="grab-food-card voucher-card"
                   style={{ textDecoration: "none" }}
                 >
-                  {/* Khối vuông giữa card */}
                   <div className="voucher-card__icon">
                     <div className="voucher-card__icon-inner">
                       <span className="voucher-card__emoji">🎟️</span>
@@ -619,15 +611,19 @@ export default function CustomerHome({ user, cart, setCart }) {
                   </div>
 
                   <div className="grab-food-card__info">
-                    <span className="voucher-card__label">VOUCHER</span>
+                    <span className="voucher-card__label">
+                      {t("customer.voucherLabel")}
+                    </span>
                     <h4
                       className="grab-food-card__name"
                       style={{ textAlign: "center" }}
                     >
-                      Giảm {fmtNumber(v.value || 0)}đ
+                      {t("customer.voucherDiscount")} {fmtNumber(v.value || 0)}đ
                     </h4>
                     <div className="voucher-card__code">{v.code}</div>
-                    <div className="voucher-card__cta">Nhận ngay</div>
+                    <div className="voucher-card__cta">
+                      {t("customer.claimNow")}
+                    </div>
                   </div>
                 </Link>
               ))}
@@ -645,7 +641,6 @@ export default function CustomerHome({ user, cart, setCart }) {
                   <div className="grab-food-card__image-wrap">
                     <img src={m.image} alt={m.name} loading="lazy" />
 
-                    {/* Badge -% đẩy sang PHẢI */}
                     <span className="grab-food-card__badge grab-food-card__badge--hot grab-food-card__badge--right">
                       -{m.discount_percent}%
                     </span>
@@ -658,7 +653,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                         setMode("buy");
                         setSelected(m);
                       }}
-                      aria-label={`Đặt ${m.name}`}
+                      aria-label={`${t("customer.orderItem")} ${m.name}`}
                     >
                       <Zap size={18} strokeWidth={3} />
                     </button>
@@ -721,10 +716,10 @@ export default function CustomerHome({ user, cart, setCart }) {
           >
             <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-              Chưa có món bán chạy nào
+              {t("customer.noBestSellerTitle")}
             </div>
             <div style={{ fontSize: 12 }}>
-              Khám phá thực đơn để chọn món yêu thích.
+              {t("customer.noBestSellerDesc")}
             </div>
             <Link
               to="/customer/menu"
@@ -742,7 +737,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontSize: 13,
               }}
             >
-              <Utensils size={15} /> Xem thực đơn
+              <Utensils size={15} /> {t("customer.exploreMenu")}
             </Link>
           </div>
         )}
@@ -768,7 +763,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 color: "var(--text-primary, #172033)",
               }}
             >
-              ✨ Món mới lên kệ
+              ✨ {t("customer.newArrivalsTitle")}
             </h3>
             <Link
               to="/customer/menu"
@@ -779,7 +774,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
-              Xem tất cả →
+              {t("customer.viewAll")} →
             </Link>
           </div>
           <div className="home-food-grid-5">
@@ -797,10 +792,10 @@ export default function CustomerHome({ user, cart, setCart }) {
             color: "var(--text-primary, #172033)",
           }}
         >
-          ⭐ Khách hàng nói gì về Canteen VWA
+          ⭐ {t("customer.testimonialsTitle")}
         </h3>
         <div className="home-testi-grid">
-          {TESTIMONIALS.map((tm, i) => (
+          {TESTIMONIAL_DATA.map((tm, i) => (
             <div
               key={i}
               style={{
@@ -843,7 +838,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   flex: 1,
                 }}
               >
-                "{tm.text}"
+                "{t(tm.textKey)}"
               </p>
               <div
                 style={{
@@ -888,7 +883,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   <span
                     style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}
                   >
-                    {tm.role}
+                    {t(tm.roleKey)}
                   </span>
                 </div>
               </div>
@@ -928,7 +923,7 @@ export default function CustomerHome({ user, cart, setCart }) {
           {qrImageSrc && (
             <img
               src={qrImageSrc}
-              alt="QR truy cập menu"
+              alt={t("customer.qrAlt")}
               loading="lazy"
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
@@ -943,7 +938,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontWeight: 800,
             }}
           >
-            📱 Quét mã QR để xem menu
+            📱 {t("customer.qrTitle")}
           </h3>
           <p
             style={{
@@ -953,8 +948,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               color: "var(--text-muted, #64748b)",
             }}
           >
-            Mở camera điện thoại và quét mã để truy cập thực đơn Canteen VWA
-            ngay — không cần tải app.
+            {t("customer.qrDesc")}
           </p>
           <Link
             to="/customer/menu"
@@ -971,7 +965,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontSize: 13,
             }}
           >
-            Hoặc bấm vào đây →
+            {t("customer.qrOrClick")}
           </Link>
         </div>
       </div>
