@@ -8,16 +8,8 @@
 //   - Xoá món (có confirm)
 //   - Cột summary: sticky, tính tổng theo món đã chọn
 //
-// Fixes (so với bản gốc):
-//   - BUG: item bị bỏ chọn không tự động chọn lại khi đổi qty
-//     (dùng prevKeysRef thay vì so sánh keys hiện tại)
-//   - BUG: stock=0 → không còn cho tăng vô hạn (maxQty = max(1, stock))
-//   - toast() ra khỏi setState updater (StrictMode double-invoke)
-//   - useMemo cho lines / selected / total / allSelected
-//   - confirm() khi xoá món
-//   - aria-label cho nút icon-only
-//   - Cleanup selectedKeys khi cart rỗng
-//   - ✅ Thay confirm() native bằng ConfirmDialog custom
+// FIX v8:
+//   - Áp dụng i18n cho tất cả text
 // ============================================================
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -41,11 +33,6 @@ const DEFAULT_MAX_QTY = 99;
 // HELPERS
 // ============================================================
 
-/**
- * Tính max qty hợp lệ cho 1 item:
- *   - Có stock (number) → max(1, stock) — luôn cho giữ tối thiểu 1
- *   - Không có stock → DEFAULT_MAX_QTY
- */
 function getMaxQty(item) {
   if (typeof item?.stock === "number") {
     return Math.max(1, item.stock);
@@ -53,10 +40,6 @@ function getMaxQty(item) {
   return DEFAULT_MAX_QTY;
 }
 
-/**
- * Đọc selectedKeys từ localStorage, chỉ giữ key còn trong cart.
- * Fallback: chọn tất cả key có trong cart.
- */
 function readSavedSelection(cartKeys) {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -96,10 +79,8 @@ export default function CustomerCart({ cart, setCart }) {
     readSavedSelection(Object.keys(cart))
   );
 
-  // ✅ State cho confirm dialog
   const [confirmRemove, setConfirmRemove] = useState(null);
 
-  // Track keys đã có ở render trước — dùng để phát hiện item MỚI
   const prevKeysRef = useRef(cartKeys);
 
   // ---------- Persist selectedKeys ----------
@@ -115,12 +96,6 @@ export default function CustomerCart({ cart, setCart }) {
   }, [selectedKeys]);
 
   // ---------- Sync selectedKeys khi cart đổi ----------
-  //
-  // Quy tắc:
-  //   1. Key mới xuất hiện trong cart (chưa từng có) → auto-select
-  //   2. Key cũ bị xoá khỏi cart → remove khỏi selectedKeys
-  //   3. Key cũ vẫn còn trong cart nhưng đang bị bỏ chọn
-  //      → GIỮ NGUYÊN trạng thái (không tự động chọn lại!)
   useEffect(() => {
     const prevKeys = prevKeysRef.current;
     const newKeys = cartKeys.filter((k) => !prevKeys.includes(k));
@@ -177,10 +152,6 @@ export default function CustomerCart({ cart, setCart }) {
     else setSelectedKeys(lines.map((m) => m._key));
   };
 
-  /**
-   * Cập nhật qty. Validate TRƯỚC khi setState
-   * (tránh toast trong updater → StrictMode double-fire).
-   */
   const updateQty = (key, delta) => {
     const item = cart[key];
     if (!item) return;
@@ -189,7 +160,10 @@ export default function CustomerCart({ cart, setCart }) {
     const currentQty = Number(item.qty) || 1;
 
     if (delta > 0 && currentQty >= maxQty) {
-      toast(`Chỉ còn ${maxQty} phần trong kho`, "error");
+      toast(
+        `${t("cart.stockLimitPrefix")} ${maxQty} ${t("cart.stockLimitSuffix")}`,
+        "error"
+      );
       return;
     }
 
@@ -199,18 +173,12 @@ export default function CustomerCart({ cart, setCart }) {
     setCart((c) => ({ ...c, [key]: { ...c[key], qty: newQty } }));
   };
 
-  /**
-   * ✅ Mở confirm dialog thay vì confirm() native.
-   */
   const removeItem = (key) => {
     const item = cart[key];
     if (!item) return;
     setConfirmRemove({ key, name: item.name });
   };
 
-  /**
-   * ✅ Thực thi xoá sau khi user xác nhận.
-   */
   const executeRemove = () => {
     if (!confirmRemove) return;
     const { key } = confirmRemove;
@@ -336,7 +304,7 @@ export default function CustomerCart({ cart, setCart }) {
               <span
                 role="checkbox"
                 aria-checked={allSelected}
-                aria-label="Chọn tất cả món"
+                aria-label={t("cart.selectAll")}
                 tabIndex={0}
                 onClick={toggleAll}
                 onKeyDown={(e) =>
@@ -361,12 +329,12 @@ export default function CustomerCart({ cart, setCart }) {
               <b
                 style={{ fontSize: 14, color: "var(--text-primary, #172033)" }}
               >
-                Chọn tất cả ({lines.length} món)
+                {t("cart.selectAll")} ({lines.length} {t("cart.items")})
               </b>
             </label>
 
             <span style={{ fontSize: 13, color: "var(--text-muted, #64748b)" }}>
-              Đã chọn{" "}
+              {t("cart.selectedCount")}{" "}
               <b style={{ color: "#2634d5" }}>{selectedLines.length}</b>/
               {lines.length}
             </span>
@@ -406,7 +374,7 @@ export default function CustomerCart({ cart, setCart }) {
                   <span
                     role="checkbox"
                     aria-checked={checked}
-                    aria-label={`Chọn ${m.name}`}
+                    aria-label={`${t("cart.selectAll")} ${m.name}`}
                     tabIndex={0}
                     onClick={() => toggleItem(m._key)}
                     onKeyDown={(e) =>
@@ -469,12 +437,16 @@ export default function CustomerCart({ cart, setCart }) {
                       }}
                     >
                       <span>
-                        Đơn giá:{" "}
+                        {t("cart.unitPrice")}:{" "}
                         <b style={{ color: "#18a967" }}>{money(m.price)}</b>
                       </span>
                       {typeof m.stock === "number" && (
-                        <span style={{ color: m.stock === 0 ? "#ef4444" : undefined }}>
-                          Còn: {m.stock}
+                        <span
+                          style={{
+                            color: m.stock === 0 ? "#ef4444" : undefined,
+                          }}
+                        >
+                          {t("cart.inStock")}: {m.stock}
                         </span>
                       )}
                     </div>
@@ -494,7 +466,7 @@ export default function CustomerCart({ cart, setCart }) {
                     <button
                       onClick={() => updateQty(m._key, -1)}
                       disabled={atMin}
-                      aria-label="Giảm số lượng"
+                      aria-label={t("common.quantity")}
                       style={{
                         width: 28,
                         height: 28,
@@ -526,7 +498,7 @@ export default function CustomerCart({ cart, setCart }) {
                     <button
                       onClick={() => updateQty(m._key, 1)}
                       disabled={atMax}
-                      aria-label="Tăng số lượng"
+                      aria-label={t("common.quantity")}
                       style={{
                         width: 28,
                         height: 28,
@@ -563,8 +535,8 @@ export default function CustomerCart({ cart, setCart }) {
                   {/* Sửa */}
                   <button
                     onClick={() => setEditingItem({ key: m._key, item: m })}
-                    title="Sửa món"
-                    aria-label={`Sửa ${m.name}`}
+                    title={t("cart.editItem")}
+                    aria-label={`${t("cart.editItem")} ${m.name}`}
                     style={{
                       width: 32,
                       height: 32,
@@ -584,8 +556,8 @@ export default function CustomerCart({ cart, setCart }) {
                   {/* Xoá */}
                   <button
                     onClick={() => removeItem(m._key)}
-                    title="Xoá khỏi giỏ"
-                    aria-label={`Xoá ${m.name} khỏi giỏ`}
+                    title={t("cart.removeItem")}
+                    aria-label={`${t("cart.removeItem")} ${m.name}`}
                     style={{
                       width: 32,
                       height: 32,
@@ -653,20 +625,22 @@ export default function CustomerCart({ cart, setCart }) {
                 marginBottom: 4,
               }}
             >
-              ĐÃ CHỌN
+              {t("cart.selectedCount").toUpperCase()}
             </div>
             {selectedLines.length === 0 ? (
               <div
                 style={{ fontSize: 13, color: "#ef4444", fontWeight: 600 }}
               >
-                Chưa chọn món nào
+                {t("cart.notSelected")}
               </div>
             ) : (
               <div
                 style={{ fontSize: 14, color: "var(--text-primary, #172033)" }}
               >
-                <b style={{ color: "#2634d5" }}>{selectedLines.length}</b> món ·{" "}
-                <b style={{ color: "#2634d5" }}>{totalQty}</b> phần
+                <b style={{ color: "#2634d5" }}>{selectedLines.length}</b>{" "}
+                {t("cart.items")} ·{" "}
+                <b style={{ color: "#2634d5" }}>{totalQty}</b>{" "}
+                {t("cart.portions")}
               </div>
             )}
           </div>
@@ -759,7 +733,7 @@ export default function CustomerCart({ cart, setCart }) {
                 {t("cart.checkout")} <ArrowRight size={16} />
               </>
             ) : (
-              "Chọn món để đặt"
+              t("cart.selectToOrder")
             )}
           </button>
         </div>
@@ -792,17 +766,17 @@ export default function CustomerCart({ cart, setCart }) {
         )}
       </div>
 
-      {/* ============ ✅ CONFIRM REMOVE DIALOG ============ */}
+      {/* ============ CONFIRM REMOVE DIALOG ============ */}
       <ConfirmDialog
         open={!!confirmRemove}
-        title="Xoá món khỏi giỏ hàng?"
+        title={t("cart.removeTitle")}
         message={
           confirmRemove
-            ? `"${confirmRemove.name}" sẽ bị xoá khỏi giỏ. Bạn có thể thêm lại bất cứ lúc nào.`
+            ? `"${confirmRemove.name}" ${t("cart.removeMsg")}`
             : ""
         }
-        confirmText="Xoá món"
-        cancelText="Giữ lại"
+        confirmText={t("cart.removeBtn")}
+        cancelText={t("cart.keepBtn")}
         danger
         onConfirm={executeRemove}
         onClose={() => setConfirmRemove(null)}
