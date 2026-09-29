@@ -1,0 +1,878 @@
+﻿# ============================================================
+# CANTEEN VWA — API TEST COLLECTION
+# ============================================================
+# Base URL: https://canteen-goo.onrender.com
+#
+# CÁCH DÙNG:
+#   1. Chạy request [AUTH] Login đầu tiên → copy token
+#   2. Paste token vào biến {{token}} bên dưới
+#   3. Chạy các request khác theo thứ tự
+#
+# TÀI KHOẢN DEMO:
+#   Admin    : admin@vwa.vn    / 123456
+#   Employee : nhanvien@vwa.vn / 123456
+#   Customer : sinhvien@vwa.vn / 123456
+#
+# LƯU Ý:
+#   - Render free tier cold start ~30s lần request đầu
+#   - Token hết hạn sau 7 ngày
+#   - KHÔNG chạy [BACKUP] Reset bừa — sẽ xoá hết dữ liệu
+#
+# ✅ UPDATE (theo fix mới):
+#   - GET /api/menu         → trả về TẤT CẢ món (kể cả active=0)
+#   - GET /api/menu?active_only=1 → chỉ trả món đang bán (Customer dùng)
+#   - Bỏ query param ?all=1 (không còn cần thiết)
+# ============================================================
+
+@baseUrl = https://canteen-goo.onrender.com
+@token = PASTE_TOKEN_HERE
+
+
+# ============================================================
+# 1️⃣  AUTH — Đăng nhập & tài khoản
+# ============================================================
+
+### 1.1. Login (chạy ĐẦU TIÊN để lấy token)
+# @name login
+curl --location --request POST '{{baseUrl}}/api/auth/login' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--data-raw '{
+  "email": "admin@vwa.vn",
+  "password": "123456"
+}'
+
+### 1.2. Register khách hàng mới
+curl --location --request POST '{{baseUrl}}/api/auth/register' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--data-raw '{
+  "email": "test@vwa.vn",
+  "password": "123456",
+  "name": "Test User",
+  "phone": "0901234567"
+}'
+
+### 1.3. Lấy info cá nhân
+curl --location --request GET '{{baseUrl}}/api/auth/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 1.4. Cập nhật profile
+curl --location --request PUT '{{baseUrl}}/api/auth/profile' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "name": "Nguyễn Văn A",
+  "phone": "0901234567",
+  "address": "Hà Nội"
+}'
+
+### 1.5. Đổi mật khẩu
+curl --location --request PUT '{{baseUrl}}/api/auth/password' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "currentPassword": "123456",
+  "newPassword": "newpass123"
+}'
+
+
+# ============================================================
+# 2️⃣  MENU — Thực đơn
+# ============================================================
+
+### 2.1. Lấy TẤT CẢ món (kể cả active=0) — dùng cho Admin/Employee
+# ✅ ĐÃ UPDATE: bỏ ?all=1, endpoint mặc định trả hết
+curl --location --request GET '{{baseUrl}}/api/menu' \
+--header 'accept: application/json'
+
+### 2.1b. Chỉ lấy món ĐANG BÁN (active=1) — dùng cho Customer
+# ✅ MỚI: dùng ?active_only=1
+curl --location --request GET '{{baseUrl}}/api/menu?active_only=1' \
+--header 'accept: application/json'
+
+### 2.2. Tìm kiếm + lọc theo category
+curl --location --request GET '{{baseUrl}}/api/menu?q=cơm&category=Cơm&sort=popular' \
+--header 'accept: application/json'
+
+### 2.2b. Tìm kiếm + lọc cho Customer (chỉ món đang bán)
+curl --location --request GET '{{baseUrl}}/api/menu?q=cơm&active_only=1' \
+--header 'accept: application/json'
+
+### 2.3. Lấy chi tiết 1 món
+curl --location --request GET '{{baseUrl}}/api/menu/1' \
+--header 'accept: application/json'
+
+### 2.4. Tạo món mới (ADMIN)
+curl --location --request POST '{{baseUrl}}/api/menu' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "name": "Cơm gà test",
+  "category": "Cơm",
+  "price": 35000,
+  "stock": 50,
+  "description": "Món test",
+  "image": "https://example.com/image.jpg"
+}'
+
+### 2.5. Cập nhật món (ADMIN)
+curl --location --request PUT '{{baseUrl}}/api/menu/1' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "price": 30000,
+  "stock": 100,
+  "reason": "Giảm giá test"
+}'
+
+### 2.6. Tắt món (ADMIN) — set active = 0
+# ✅ SAU KHI FIX: món tắt vẫn xuất hiện ở:
+#   - GET /api/menu (không param) → Admin/Employee thấy
+#   - KHÔNG xuất hiện ở GET /api/menu?active_only=1 → Customer không thấy
+curl --location --request PUT '{{baseUrl}}/api/menu/1' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "active": 0
+}'
+
+### 2.7. Bật món (ADMIN) — set active = 1
+curl --location --request PUT '{{baseUrl}}/api/menu/1' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "active": 1
+}'
+
+### 2.8. Xoá món (ADMIN)
+curl --location --request DELETE '{{baseUrl}}/api/menu/1' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 3️⃣  CATEGORIES — Danh mục
+# ============================================================
+
+### 3.1. Lấy danh sách danh mục
+curl --location --request GET '{{baseUrl}}/api/categories' \
+--header 'accept: application/json'
+
+### 3.2. Tạo danh mục mới (ADMIN)
+curl --location --request POST '{{baseUrl}}/api/categories' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "name": "Món nướng",
+  "icon": "🔥",
+  "order": 8
+}'
+
+### 3.3. Cập nhật danh mục (ADMIN)
+curl --location --request PUT '{{baseUrl}}/api/categories/1' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "name": "Cơm",
+  "icon": "🍚",
+  "order": 1
+}'
+
+### 3.4. Xoá danh mục (ADMIN)
+curl --location --request DELETE '{{baseUrl}}/api/categories/8' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 4️⃣  USERS — Quản lý người dùng (ADMIN)
+# ============================================================
+
+### 4.1. Lấy tất cả users
+curl --location --request GET '{{baseUrl}}/api/users' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 4.2. Lọc theo role (EMPLOYEE / CUSTOMER / ADMIN)
+curl --location --request GET '{{baseUrl}}/api/users?role=EMPLOYEE' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 4.3. Tạo user mới (nhân viên)
+curl --location --request POST '{{baseUrl}}/api/users' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "name": "Nguyễn Văn B",
+  "email": "employee2@vwa.vn",
+  "phone": "0901234567",
+  "role": "EMPLOYEE",
+  "password": "123456"
+}'
+
+### 4.4. Cập nhật user
+curl --location --request PUT '{{baseUrl}}/api/users/2' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "name": "Trần Văn Trí",
+  "phone": "0901234567",
+  "status": "Hoạt động"
+}'
+
+### 4.5. Reset mật khẩu user về 123456
+curl --location --request PUT '{{baseUrl}}/api/users/2' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "password": "123456"
+}'
+
+### 4.6. Xoá user
+curl --location --request DELETE '{{baseUrl}}/api/users/99' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 5️⃣  ORDERS — Đơn hàng
+# ============================================================
+
+### 5.1. Tạo đơn hàng (CUSTOMER)
+curl --location --request POST '{{baseUrl}}/api/orders' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "items": [
+    { "menuItem": 1, "qty": 2 },
+    { "menuItem": 3, "qty": 1 }
+  ],
+  "payment": "Tiền mặt",
+  "note": "Ít cay",
+  "discount": 0,
+  "voucherCode": ""
+}'
+
+### 5.2. Đơn hàng của tôi (CUSTOMER)
+curl --location --request GET '{{baseUrl}}/api/orders/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 5.3. Tất cả đơn (ADMIN/EMPLOYEE)
+curl --location --request GET '{{baseUrl}}/api/orders' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 5.4. Lọc theo trạng thái
+# Status: Chờ xác nhận | Đã xác nhận | Đang chuẩn bị | Sẵn sàng nhận | Hoàn thành | Đã hủy
+curl --location --request GET '{{baseUrl}}/api/orders?status=Chờ xác nhận' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 5.5. Chuyển trạng thái đơn (ADMIN/EMPLOYEE)
+curl --location --request PATCH '{{baseUrl}}/api/orders/1' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "status": "Đã xác nhận"
+}'
+
+### 5.6. Customer xác nhận đã nhận món
+curl --location --request POST '{{baseUrl}}/api/orders/1/received' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 5.7. Customer hủy đơn
+curl --location --request POST '{{baseUrl}}/api/orders/1/cancel' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 6️⃣  INVENTORY — Kho hàng (ADMIN)
+# ============================================================
+
+### 6.1. Danh sách kho
+curl --location --request GET '{{baseUrl}}/api/inventory' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 6.2. Tạo nguyên liệu
+curl --location --request POST '{{baseUrl}}/api/inventory' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "code": "NL999",
+  "name": "Nguyên liệu test",
+  "qty": 100,
+  "unit": "kg",
+  "min": 20
+}'
+
+### 6.3. Cập nhật nguyên liệu
+curl --location --request PUT '{{baseUrl}}/api/inventory/NL999' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "qty": 150,
+  "min": 30
+}'
+
+### 6.4. Nhập kho
+curl --location --request POST '{{baseUrl}}/api/inventory/NL999/import' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "qty": 50,
+  "supplier": "NCC Test",
+  "note": "Nhập kho test"
+}'
+
+### 6.5. Lịch sử nhập kho
+curl --location --request GET '{{baseUrl}}/api/inventory/imports' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 6.6. Xoá nguyên liệu
+curl --location --request DELETE '{{baseUrl}}/api/inventory/NL999' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 7️⃣  ATTENDANCE — Chấm công
+# ============================================================
+
+### 7.1. Check-in (EMPLOYEE)
+# Shift: Ca sáng | Ca chiều | Ca tối
+curl --location --request POST '{{baseUrl}}/api/attendance/checkin' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "shift": "Ca sáng"
+}'
+
+### 7.2. Check-out (EMPLOYEE)
+curl --location --request POST '{{baseUrl}}/api/attendance/checkout' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "shift": "Ca sáng"
+}'
+
+### 7.3. Chấm công hôm nay
+curl --location --request GET '{{baseUrl}}/api/attendance/today' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 7.4. Lịch sử chấm công của tôi
+curl --location --request GET '{{baseUrl}}/api/attendance/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 7.5. Tất cả chấm công theo tháng (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/attendance?month=2026-09' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 7.6. Danh sách nhân viên (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/attendance/employees' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 8️⃣  SHIFTS — Ca làm việc
+# ============================================================
+
+### 8.1. Ca của tôi
+curl --location --request GET '{{baseUrl}}/api/shifts/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 8.2. Đăng ký ca (EMPLOYEE)
+curl --location --request POST '{{baseUrl}}/api/shifts/register' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "dates": ["2026-10-01", "2026-10-02"],
+  "shifts": ["Ca sáng", "Ca chiều"],
+  "note": "Đăng ký test"
+}'
+
+### 8.3. Danh sách ca chờ duyệt (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/shifts/pending' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 8.4. Duyệt ca (ADMIN)
+curl --location --request PATCH '{{baseUrl}}/api/shifts/1/approve' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 8.5. Từ chối ca (ADMIN)
+curl --location --request DELETE '{{baseUrl}}/api/shifts/1/reject' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 8.6. Phân ca hàng loạt (ADMIN)
+curl --location --request POST '{{baseUrl}}/api/shifts/bulk' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "employee_id": 2,
+  "dates": ["2026-10-05"],
+  "shifts": ["Ca sáng"],
+  "note": "Phân ca test"
+}'
+
+### 8.7. Xoá ca (ADMIN)
+curl --location --request DELETE '{{baseUrl}}/api/shifts/1' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 9️⃣  WALLET — Ví Canteen
+# ============================================================
+
+### 9.1. Thông tin ví
+curl --location --request GET '{{baseUrl}}/api/wallet/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 9.2. Lịch sử giao dịch
+curl --location --request GET '{{baseUrl}}/api/wallet/transactions' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 9.3. Nạp tiền
+# Method: QR | CASH
+curl --location --request POST '{{baseUrl}}/api/wallet/deposit' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "amount": 100000,
+  "method": "QR",
+  "note": "Nạp test"
+}'
+
+### 9.4. Rút tiền
+curl --location --request POST '{{baseUrl}}/api/wallet/withdraw' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "amount": 50000,
+  "note": "Rút test"
+}'
+
+### 9.5. Liên kết ngân hàng
+curl --location --request POST '{{baseUrl}}/api/wallet/link-bank' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "bank_name": "VCB",
+  "bank_account": "1234567890",
+  "bank_account_name": "NGUYEN VAN A"
+}'
+
+### 9.6. Thanh toán từ ví
+curl --location --request POST '{{baseUrl}}/api/wallet/pay' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "amount": 35000,
+  "order_code": "VWA-TEST123"
+}'
+
+### 9.7. Danh sách yêu cầu chờ duyệt (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/wallet/requests?status=pending' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 9.8. Tất cả giao dịch (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/wallet/all' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 9.9. Thống kê ví (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/wallet/stats' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 9.10. Duyệt yêu cầu (ADMIN)
+curl --location --request PATCH '{{baseUrl}}/api/wallet/requests/1/approve' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "admin_note": "Đã xác nhận"
+}'
+
+### 9.11. Từ chối yêu cầu (ADMIN)
+curl --location --request PATCH '{{baseUrl}}/api/wallet/requests/1/reject' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "admin_note": "Số tài khoản không đúng"
+}'
+
+
+# ============================================================
+# 🔟  VOUCHERS — Mã giảm giá
+# ============================================================
+
+### 10.1. Ví voucher của tôi
+curl --location --request GET '{{baseUrl}}/api/vouchers/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 10.2. Voucher public (nhận được)
+curl --location --request GET '{{baseUrl}}/api/vouchers/public' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 10.3. Kiểm tra mã voucher có hợp lệ
+curl --location --request POST '{{baseUrl}}/api/vouchers/validate' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "code": "VOUCHER0001"
+}'
+
+### 10.4. Nhận voucher public
+curl --location --request POST '{{baseUrl}}/api/vouchers/claim/14' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 10.5. Danh sách tất cả voucher (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/vouchers' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 10.6. Tạo voucher (ADMIN)
+# user_id: null = voucher public (mọi người nhận được)
+curl --location --request POST '{{baseUrl}}/api/vouchers' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "code": "SALE2026",
+  "value": 30000,
+  "user_id": null,
+  "points_used": 0
+}'
+
+### 10.7. Cập nhật voucher (ADMIN)
+curl --location --request PUT '{{baseUrl}}/api/vouchers/14' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "value": 50000,
+  "used": false
+}'
+
+### 10.8. Xoá voucher (ADMIN)
+curl --location --request DELETE '{{baseUrl}}/api/vouchers/14' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 10.9. Thống kê voucher (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/vouchers/stats' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 10.10. Danh sách người đã claim (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/vouchers/claims/14' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 10.11. Ví voucher của 1 user (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/vouchers/user/3' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 10.12. Thu hồi voucher (ADMIN)
+curl --location --request DELETE '{{baseUrl}}/api/vouchers/revoke/20' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 1️⃣1️⃣  REVIEWS — Đánh giá món
+# ============================================================
+
+### 11.1. Kiểm tra có thể review không
+curl --location --request GET '{{baseUrl}}/api/reviews/can-review/1' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 11.2. Tạo đánh giá
+curl --location --request POST '{{baseUrl}}/api/reviews' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "menuItemId": 1,
+  "rating": 5,
+  "comment": "Món ngon!"
+}'
+
+### 11.3. Xem đánh giá của 1 món
+curl --location --request GET '{{baseUrl}}/api/reviews/1' \
+--header 'accept: application/json'
+
+### 11.4. Đánh giá của tôi
+curl --location --request GET '{{baseUrl}}/api/reviews/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 1️⃣2️⃣  POINTS — Điểm tích lũy
+# ============================================================
+
+### 12.1. Xem điểm + lịch sử
+curl --location --request GET '{{baseUrl}}/api/points/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 12.2. Đổi điểm thành voucher
+curl --location --request POST '{{baseUrl}}/api/points/redeem' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "points": 100
+}'
+
+
+# ============================================================
+# 1️⃣3️⃣  NOTIFICATIONS — Thông báo
+# ============================================================
+
+### 13.1. Danh sách thông báo
+curl --location --request GET '{{baseUrl}}/api/notifications' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 13.2. Đánh dấu đã đọc 1 thông báo
+curl --location --request POST '{{baseUrl}}/api/notifications/1/read' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 13.3. Đánh dấu đã đọc tất cả
+curl --location --request POST '{{baseUrl}}/api/notifications/read-all' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 1️⃣4️⃣  CHAT — Tin nhắn
+# ============================================================
+
+### 14.1. Tin nhắn của tôi (CUSTOMER)
+curl --location --request GET '{{baseUrl}}/api/chat/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 14.2. Danh sách cuộc trò chuyện (STAFF)
+curl --location --request GET '{{baseUrl}}/api/chat/conversations' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 14.3. Tin nhắn với 1 user (STAFF)
+curl --location --request GET '{{baseUrl}}/api/chat/with/3' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 14.4. Gửi tin (CUSTOMER)
+curl --location --request POST '{{baseUrl}}/api/chat/send' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "content": "Chào shop"
+}'
+
+### 14.5. Trả lời khách (STAFF)
+curl --location --request POST '{{baseUrl}}/api/chat/send' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "content": "Chào bạn, shop có thể giúp gì?",
+  "toUserId": 3
+}'
+
+
+# ============================================================
+# 1️⃣5️⃣  TOPPINGS & SIZES
+# ============================================================
+
+### 15.1. Danh sách topping (theo category)
+curl --location --request GET '{{baseUrl}}/api/toppings?category=Cơm' \
+--header 'accept: application/json'
+
+### 15.2. Danh sách size
+curl --location --request GET '{{baseUrl}}/api/sizes' \
+--header 'accept: application/json'
+
+
+# ============================================================
+# 1️⃣6️⃣  STATS & REPORTS
+# ============================================================
+
+### 16.1. Stats dashboard (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/stats' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 16.2. Báo cáo doanh thu
+# Period: day | week | month | year
+curl --location --request GET '{{baseUrl}}/api/reports/revenue?period=day' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 1️⃣7️⃣  PERMISSIONS — Phân quyền
+# ============================================================
+
+### 17.1. Tất cả quyền có thể gán (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/permissions' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 17.2. Quyền của tôi
+curl --location --request GET '{{baseUrl}}/api/permissions/me' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 17.3. Quyền của 1 user (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/permissions/2' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 17.4. Cập nhật quyền (ADMIN)
+curl --location --request PUT '{{baseUrl}}/api/permissions/2' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "custom": ["menu.toggle", "orders.cancel"]
+}'
+
+
+# ============================================================
+# 1️⃣8️⃣  BACKUP — Sao lưu (ADMIN)
+# ============================================================
+
+### 18.1. Export toàn bộ database
+curl --location --request GET '{{baseUrl}}/api/backup/export' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 18.2. Thống kê database
+curl --location --request GET '{{baseUrl}}/api/backup/stats' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 18.3. Import (cần body lớn — không test qua Postman)
+curl --location --request POST '{{baseUrl}}/api/backup/import' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "data": { "users": [], "menu_items": [] }
+}'
+
+### 18.4. Reset database (⚠️ NGUY HIỂM — chỉ dùng khi cần)
+curl --location --request POST '{{baseUrl}}/api/backup/reset' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "confirm": "RESET"
+}'
+
+
+# ============================================================
+# 1️⃣9️⃣  SETTINGS — Cài đặt hệ thống
+# ============================================================
+
+### 19.1. Lấy cài đặt
+curl --location --request GET '{{baseUrl}}/api/settings' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 19.2. Cập nhật cài đặt (ADMIN)
+curl --location --request PUT '{{baseUrl}}/api/settings' \
+--header 'accept: application/json' \
+--header 'content-type: application/json' \
+--header 'Authorization: Bearer {{token}}' \
+--data-raw '{
+  "bank": "VCB",
+  "account": "1234567890",
+  "accountName": "CANTEEN VWA",
+  "hotline": "0328866959",
+  "email": "admin@vwa.vn",
+  "address": "68 Nguyễn Chí Thanh, Hà Nội"
+}'
+
+
+# ============================================================
+# 2️⃣0️⃣  PROMOTIONS & PRICE HISTORY
+# ============================================================
+
+### 20.1. Món đang giảm giá (public)
+curl --location --request GET '{{baseUrl}}/api/promotions' \
+--header 'accept: application/json'
+
+### 20.2. Lịch sử thay đổi giá (ADMIN)
+curl --location --request GET '{{baseUrl}}/api/price-history' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+### 20.3. Lịch sử giá của 1 món
+curl --location --request GET '{{baseUrl}}/api/price-history?menu_item_id=1' \
+--header 'accept: application/json' \
+--header 'Authorization: Bearer {{token}}'
+
+
+# ============================================================
+# 2️⃣1️⃣  HEALTH CHECK
+# ============================================================
+
+### 21.1. Kiểm tra server còn sống
+curl --location --request GET '{{baseUrl}}/' \
+--header 'accept: application/json'
