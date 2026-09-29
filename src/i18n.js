@@ -106,6 +106,40 @@ export const translations = {
     "login.dishes": "Món ăn mẫu",
     "login.tracking": "Theo dõi đơn",
 
+    // ✅ Bổ sung cho Login V8
+    "login.welcomeBack": "Chào mừng trở lại",
+    "login.enterInfo": "Nhập thông tin tài khoản để truy cập Canteen VWA",
+    "login.emailOrUsername": "Email hoặc tên đăng nhập",
+    "login.emailPlaceholder": "email@vwa.vn",
+    "login.passwordLabel": "Mật khẩu",
+    "login.passwordPlaceholder": "••••••",
+    "login.rememberDays": "Ghi nhớ đăng nhập trong 30 ngày",
+    "login.loginBtn": "Đăng nhập vào tài khoản",
+    "login.loggingIn": "Đang đăng nhập...",
+    "login.orContinueWith": "hoặc tiếp tục với",
+    "login.noAccountRegister": "Chưa có tài khoản?",
+    "login.registerFree": "Đăng ký miễn phí",
+    "login.demoHint": "Click để tự động điền",
+    "login.tabLogin": "Đăng nhập",
+    "login.tabRegister": "Đăng ký",
+    "login.brandName": "CANTEEN",
+    "login.brandSub": "VWA",
+    "login.welcomeTo": "Chào mừng đến Canteen VWA",
+    "login.tagline": "Đặt món nhanh — Quản lý gọn — Phục vụ tận tâm.",
+    "login.peekBubble": "🙈 Đang nhập mật khẩu — không nhìn đâu!",
+    "login.privacyBubble": "🤫 Squad privacy mode: Shhh, no peeking!",
+    "login.demoAdmin": "Admin",
+    "login.demoEmployee": "Nhân viên",
+    "login.demoCustomer": "Khách hàng",
+    "login.errorEmailRequired": "Vui lòng nhập email",
+    "login.errorPasswordRequired": "Vui lòng nhập mật khẩu",
+    "login.errorInvalid": "Tài khoản hoặc mật khẩu không đúng.",
+    "login.errorFailed": "Đăng nhập thất bại",
+    "login.oauthGoogleMissing": "Chưa cấu hình Google OAuth. Vui lòng liên hệ admin.",
+    "login.oauthFacebookMissing": "Chưa cấu hình Facebook OAuth. Vui lòng liên hệ admin.",
+    "login.showPassword": "Hiện mật khẩu",
+    "login.hidePassword": "Ẩn mật khẩu",
+
     // ---------- Dashboard ----------
     "dashboard.revenue": "Doanh thu hôm nay",
     "dashboard.orders": "Đơn hàng",
@@ -141,8 +175,6 @@ export const translations = {
     "customer.minutes": "phút",
     "customer.serving": "Món đang phục vụ",
     "customer.studentDiscount": "Ưu đãi sinh viên",
-
-    // ✅ Bổ sung cho CustomerHome
     "customer.badgeBestSeller": "Bán chạy",
     "customer.badgeOutOfStock": "Hết hàng",
     "customer.addItem": "Thêm",
@@ -167,12 +199,12 @@ export const translations = {
     "customer.qrOrClick": "Hoặc bấm vào đây →",
     "customer.qrAlt": "QR truy cập menu",
 
-    // ✅ Default flash promos (fallback)
+    // ---------- Flash defaults ----------
     "flash.default.1": "🎉 Ưu đãi sinh viên — Giảm 10% khi đặt món qua app",
     "flash.default.2": "⚡ Chuẩn bị món 5-8 phút — Nhận ngay tại quầy",
     "flash.default.3": "💳 Thanh toán VietQR · Ví Canteen · Tiền mặt",
 
-    // ✅ Testimonials (text + role; name giữ nguyên)
+    // ---------- Testimonials ----------
     "testimonial.1.role": "Sinh viên K20",
     "testimonial.1.text": "Món ăn ngon, giá cả hợp lý. Đặt online tiện lợi hơn hẳn so với xếp hàng!",
     "testimonial.2.role": "Cán bộ VWA",
@@ -558,6 +590,40 @@ export const translations = {
     "login.dishes": "Sample dishes",
     "login.tracking": "Order tracking",
 
+    // ✅ Added for Login V8
+    "login.welcomeBack": "Welcome back",
+    "login.enterInfo": "Enter your account info to access Canteen VWA",
+    "login.emailOrUsername": "Email or username",
+    "login.emailPlaceholder": "email@vwa.vn",
+    "login.passwordLabel": "Password",
+    "login.passwordPlaceholder": "••••••",
+    "login.rememberDays": "Remember me for 30 days",
+    "login.loginBtn": "Sign in to account",
+    "login.loggingIn": "Signing in...",
+    "login.orContinueWith": "or continue with",
+    "login.noAccountRegister": "Don't have an account?",
+    "login.registerFree": "Sign up free",
+    "login.demoHint": "Click to auto-fill",
+    "login.tabLogin": "Login",
+    "login.tabRegister": "Register",
+    "login.brandName": "CANTEEN",
+    "login.brandSub": "VWA",
+    "login.welcomeTo": "Welcome to Canteen VWA",
+    "login.tagline": "Quick ordering — Smart management — Dedicated service.",
+    "login.peekBubble": "🙈 Typing password — no peeking!",
+    "login.privacyBubble": "🤫 Squad privacy mode: Shhh, no peeking!",
+    "login.demoAdmin": "Admin",
+    "login.demoEmployee": "Employee",
+    "login.demoCustomer": "Customer",
+    "login.errorEmailRequired": "Please enter your email",
+    "login.errorPasswordRequired": "Please enter your password",
+    "login.errorInvalid": "Incorrect email or password.",
+    "login.errorFailed": "Login failed",
+    "login.oauthGoogleMissing": "Google OAuth not configured. Please contact admin.",
+    "login.oauthFacebookMissing": "Facebook OAuth not configured. Please contact admin.",
+    "login.showPassword": "Show password",
+    "login.hidePassword": "Hide password",
+
     // ---------- Dashboard ----------
     "dashboard.revenue": "Today's revenue",
     "dashboard.orders": "Orders",
@@ -593,8 +659,6 @@ export const translations = {
     "customer.minutes": "minutes",
     "customer.serving": "Dishes served",
     "customer.studentDiscount": "Student discount",
-
-    // ✅ Added for CustomerHome
     "customer.badgeBestSeller": "Best seller",
     "customer.badgeOutOfStock": "Out of stock",
     "customer.addItem": "Add",
@@ -619,12 +683,12 @@ export const translations = {
     "customer.qrOrClick": "Or click here →",
     "customer.qrAlt": "Menu QR code",
 
-    // ✅ Default flash promos
+    // ---------- Flash defaults ----------
     "flash.default.1": "🎉 Student deal — 10% off when ordering via app",
     "flash.default.2": "⚡ Prepared in 5-8 minutes — Pickup at counter",
     "flash.default.3": "💳 VietQR · Canteen Wallet · Cash",
 
-    // ✅ Testimonials
+    // ---------- Testimonials ----------
     "testimonial.1.role": "Student K20",
     "testimonial.1.text": "Delicious food, reasonable prices. Ordering online is much more convenient than queuing!",
     "testimonial.2.role": "VWA Staff",
