@@ -1,16 +1,6 @@
 ﻿// ============================================================
 // CUSTOMERCART.JSX — Giỏ hàng khách hàng
 // ============================================================
-// Tính năng:
-//   - Chọn/bỏ chọn từng món để đặt (persist vào localStorage)
-//   - Tăng/giảm qty (giới hạn theo stock)
-//   - Sửa món (mở FoodDetailModal) — đổi size/topping
-//   - Xoá món (có confirm)
-//   - Cột summary: sticky, tính tổng theo món đã chọn
-//
-// FIX v10:
-//   - ✅ Áp dụng i18n cho TẤT CẢ text (toast, aria-label, dialog)
-// ============================================================
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -60,7 +50,6 @@ export default function CustomerCart({ cart, setCart }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  // ---------- Derived ----------
   const lines = useMemo(
     () => Object.entries(cart).map(([key, item]) => ({ ...item, _key: key })),
     [cart]
@@ -68,7 +57,6 @@ export default function CustomerCart({ cart, setCart }) {
 
   const cartKeys = useMemo(() => Object.keys(cart), [cart]);
 
-  // ---------- State ----------
   const [editingItem, setEditingItem] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(() =>
     readSavedSelection(Object.keys(cart))
@@ -251,10 +239,6 @@ export default function CustomerCart({ cart, setCart }) {
     );
   }
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
   return (
     <>
       <div
@@ -432,7 +416,11 @@ export default function CustomerCart({ cart, setCart }) {
                         <b style={{ color: "#18a967" }}>{money(m.price)}</b>
                       </span>
                       {typeof m.stock === "number" && (
-                        <span style={{ color: m.stock === 0 ? "#ef4444" : undefined }}>
+                        <span
+                          style={{
+                            color: m.stock === 0 ? "#ef4444" : undefined,
+                          }}
+                        >
                           {t("cart.remaining")}: {m.stock}
                         </span>
                       )}
@@ -615,9 +603,7 @@ export default function CustomerCart({ cart, setCart }) {
               {t("cart.selectedLabel")}
             </div>
             {selectedLines.length === 0 ? (
-              <div
-                style={{ fontSize: 13, color: "#ef4444", fontWeight: 600 }}
-              >
+              <div style={{ fontSize: 13, color: "#ef4444", fontWeight: 600 }}>
                 {t("cart.noItemSelected")}
               </div>
             ) : (

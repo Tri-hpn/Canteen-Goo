@@ -2,33 +2,16 @@
 // LANGUAGETOGGLE.JSX — Nút đổi ngôn ngữ (VI / EN)
 // ============================================================
 // Dùng hook `useTranslation` từ i18n.js — không tự viết lại.
-//
-// Fixes (so với bản gốc):
-//   - 🔴 Guard e.target là Element trước khi .closest()
-//   - 🔴 ESC đóng dropdown
-//   - 🔴 Dùng useTranslation hook (không duplicate logic)
-//   - 🟡 Dùng class .lang-dropdown (đã có CSS PHẦN 6)
-//   - 🟡 Fallback khi translation key thiếu
-//   - 🟡 aria-haspopup + aria-expanded + aria-label
-//   - 🟡 role="menu" cho dropdown
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
 import { Globe, Check } from "lucide-react";
 import { useTranslation } from "../i18n";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
 const LANGUAGES = [
   { code: "vi", flag: "🇻🇳", fallbackLabel: "Tiếng Việt" },
   { code: "en", flag: "🇬🇧", fallbackLabel: "English" },
 ];
-
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
 
 export default function LanguageToggle() {
   const [open, setOpen] = useState(false);
@@ -40,7 +23,6 @@ export default function LanguageToggle() {
     if (!open) return;
 
     const handler = (e) => {
-      // Guard: e.target phải là Element (không phải text node)
       const target = e.target;
       if (!target || typeof target.closest !== "function") return;
 
@@ -65,7 +47,6 @@ export default function LanguageToggle() {
   }, [open]);
 
   // ---------- Handlers ----------
-
   const toggle = () => setOpen((s) => !s);
 
   const change = (code) => {
@@ -77,17 +58,13 @@ export default function LanguageToggle() {
     setOpen(false);
   };
 
-  // ---------- Label helper ----------
-
   const getLangLabel = (code) => {
-    return t(`lang.${code}`) || 
-      LANGUAGES.find((l) => l.code === code)?.fallbackLabel || 
-      code.toUpperCase();
+    return (
+      t(`lang.${code}`) ||
+      LANGUAGES.find((l) => l.code === code)?.fallbackLabel ||
+      code.toUpperCase()
+    );
   };
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div ref={boxRef} className="lang-toggle">

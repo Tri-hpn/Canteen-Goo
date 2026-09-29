@@ -1,19 +1,6 @@
 ﻿// ============================================================
 // CUSTOMERHOME.JSX — Trang chủ khách hàng
 // ============================================================
-// Gồm:
-//   - Banner carousel (data từ ../../bannerSlides)
-//   - Flash marquee (chạy chữ khuyến mãi)
-//   - Flash sale (voucher vuông + món giảm giá)
-//   - Bán chạy nhất (top 5 sold)
-//   - Món mới lên kệ (4 món mới nhất)
-//   - Testimonials
-//   - QR truy cập menu (auto-detect origin)
-//
-// FIX v8:
-//   - ✅ Áp dụng i18n cho TẤT CẢ text
-//   - ✅ Flash promos fallback + testimonials lấy từ t()
-// ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -40,7 +27,6 @@ const FLASH_PROMOS_LIMIT = 4;
 const FLASH_VOUCHERS_LIMIT = 2;
 const SKELETON_COUNT = 5;
 
-// Testimonials — chỉ giữ name + rating (text/role lấy từ i18n)
 const TESTIMONIAL_DATA = [
   { name: "Nguyễn Minh Anh", roleKey: "testimonial.1.role", rating: 5, textKey: "testimonial.1.text" },
   { name: "Trần Quốc Bảo",   roleKey: "testimonial.2.role", rating: 5, textKey: "testimonial.2.text" },
@@ -99,7 +85,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
   const inFlightRef = useRef(false);
 
-  // ---------- Default flash promos (i18n) ----------
+  // ---------- Default flash promos ----------
   const defaultFlashItems = useMemo(
     () => [
       { text: t("flash.default.1") },
@@ -143,12 +129,17 @@ export default function CustomerHome({ user, cart, setCart }) {
         const flash = [];
         (Array.isArray(pubVoucherRes) ? pubVoucherRes : []).forEach((v) => {
           flash.push({
-            text: `🎁 GIẢM ${fmtNumber(v.value || 0)}đ — Mã ${v.code}`,
+            text: t("flash.voucherText")
+              .replace("{value}", fmtNumber(v.value || 0))
+              .replace("{code}", v.code),
           });
         });
         (Array.isArray(promoRes) ? promoRes : []).forEach((m) => {
           flash.push({
-            text: `🔥 ${m.name} GIẢM ${m.discount_percent}% (còn ${fmtNumber(m.price || 0)}đ)`,
+            text: t("flash.promoText")
+              .replace("{name}", m.name)
+              .replace("{percent}", m.discount_percent)
+              .replace("{price}", fmtNumber(m.price || 0)),
           });
         });
         setFlashItems(flash.length > 0 ? flash : []);
@@ -187,8 +178,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
   // ---------- Carousel controls ----------
   const goNext = () => setIdx((i) => (i + 1) % SLIDES.length);
-  const goPrev = () =>
-    setIdx((i) => (i - 1 + SLIDES.length) % SLIDES.length);
+  const goPrev = () => setIdx((i) => (i - 1 + SLIDES.length) % SLIDES.length);
 
   // ---------- Derived ----------
   const publicMenuUrl = useMemo(() => getPublicMenuUrl(), []);
@@ -200,7 +190,6 @@ export default function CustomerHome({ user, cart, setCart }) {
     )}&margin=0`;
   }, [publicMenuUrl]);
 
-  // Flash track: nếu chưa load xong → dùng default (i18n)
   const effectiveFlashItems = useMemo(() => {
     if (flashItems.length > 0) return flashItems;
     return defaultFlashItems;
@@ -329,7 +318,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
         role="region"
-        aria-label="Banner khuyến mãi"
+        aria-label={t("customer.bannerAria")}
       >
         <div
           style={{
@@ -475,14 +464,14 @@ export default function CustomerHome({ user, cart, setCart }) {
 
         <button
           onClick={goPrev}
-          aria-label="Slide trước"
+          aria-label={t("customer.prevSlide")}
           className="banner-nav banner-nav-left"
         >
           <ChevronLeft size={20} />
         </button>
         <button
           onClick={goNext}
-          aria-label="Slide tiếp theo"
+          aria-label={t("customer.nextSlide")}
           className="banner-nav banner-nav-right"
         >
           <ChevronRight size={20} />
@@ -493,7 +482,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             <button
               key={i}
               onClick={() => setIdx(i)}
-              aria-label={`Đi đến slide ${i + 1}`}
+              aria-label={t("customer.goToSlide").replace("{n}", i + 1)}
               aria-current={i === idx ? "true" : "false"}
               style={{
                 width: i === idx ? 28 : 10,
@@ -593,7 +582,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
           <div style={{ marginBottom: 26 }}>
             <div className="home-food-grid-5">
-              {/* ===== VOUCHER — HÌNH VUÔNG ===== */}
+              {/* ===== VOUCHER ===== */}
               {publicVouchers.slice(0, FLASH_VOUCHERS_LIMIT).map((v) => (
                 <Link
                   key={`voucher-${v.id}`}
@@ -628,7 +617,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 </Link>
               ))}
 
-              {/* ===== PROMO — MÓN GIẢM GIÁ ===== */}
+              {/* ===== PROMO ===== */}
               {promotions.slice(0, FLASH_PROMOS_LIMIT).map((m) => (
                 <div
                   key={`promo-${m.id}`}
@@ -745,7 +734,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         {items.map(renderFoodCard)}
       </div>
 
-      {/* ============ MÓN MỚI LÊN KỆ ============ */}
+      {/* ============ MÓN MỚI ============ */}
       {newItems.length > 0 && (
         <div style={{ marginBottom: 26 }}>
           <div

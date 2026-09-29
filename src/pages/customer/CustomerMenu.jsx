@@ -1,11 +1,6 @@
 ﻿// ============================================================
 // CUSTOMERMENU.JSX — Thực đơn khách hàng (GrabFood style)
 // ============================================================
-// FIX v6:
-//   - Dùng class .grab-food-card đã có CSS trong styles.css (PHẦN 38)
-//   - Sticky category dùng class .menu-cats-sticky (đúng topbar)
-//   - Bỏ toàn bộ inline style rườm rà
-// ============================================================
 
 import { SkeletonCard } from "../../components/Skeleton";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -15,6 +10,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
+import { useTranslation } from "../../i18n";
 import FoodDetailModal from "../../components/FoodDetailModal";
 import ChatBotWidget from "../../components/ChatBotWidget";
 
@@ -33,11 +29,34 @@ const FALLBACK_IMG =
     </svg>`
   );
 
+/**
+ * Map tên danh mục (tiếng Việt, từ DB) → i18n key.
+ * Dùng để dịch label hiển thị mà vẫn giữ id gốc để filter.
+ */
+const CATEGORY_LABEL_KEYS = {
+  "Tất cả":      "cat.all",
+  "Cơm":         "cat.rice",
+  "Món mặn":     "cat.savory",
+  "Món chay":    "cat.vegetarian",
+  "Món phụ":     "cat.side",
+  "Đồ ăn nhanh": "cat.fastfood",
+  "Đồ uống":     "cat.drinks",
+  "Combo":       "cat.combo",
+};
+
+/** Dịch tên danh mục. Nếu không có key → giữ nguyên tên gốc. */
+function translateCategory(name, t) {
+  const key = CATEGORY_LABEL_KEYS[name];
+  return key ? t(key) : name;
+}
+
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
 
 export default function CustomerMenu({ cart, setCart, user }) {
+  const { t } = useTranslation();
+
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,58 +67,73 @@ export default function CustomerMenu({ cart, setCart, user }) {
   const [mode, setMode] = useState("cart");
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const load = useCallback(async (silent = false) => {
-    setError("");
-    try {
-      const [menuRes, catRes] = await Promise.all([
-        api.menu.list("", ALL_CATEGORY, "popular").catch(() => []),
-        api.categories.list().catch(() => []),
-      ]);
-      const rawList = Array.isArray(menuRes) ? menuRes : [];
-      setItems(rawList.filter((m) => m.active));
-      setCategories(Array.isArray(catRes) ? catRes : []);
-    } catch (e) {
-      if (!silent) setError(e.message || "Không tải được thực đơn");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // ---------- Load menu + categories ----------
+  const load = useCallback(
+    async (silent = false) => {
+      setError("");
+      try {
+        const [menuRes, catRes] = await Promise.all([
+          api.menu.list("", ALL_CATEGORY, "popular").catch(() => []),
+          api.categories.list().catch(() => []),
+        ]);
+        const rawList = Array.isArray(menuRes) ? menuRes : [];
+        setItems(rawList.filter((m) => m.active));
+        setCategories(Array.isArray(catRes) ? catRes : []);
+      } catch (e) {
+        if (!silent) setError(e.message || t("menu.loadError"));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t]
+  );
 
   useEffect(() => {
     load(false);
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // ---------- Sync với URL (?q= và ?category=) ----------
   const searchParamsStr = searchParams.toString();
   useEffect(() => {
     setCategory(searchParams.get("category") || ALL_CATEGORY);
     setSearch(searchParams.get("q") || "");
-  }, [searchParamsStr]); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParamsStr]);
 
+  // ---------- Lắng nghe global search event ----------
   useEffect(() => {
     const handler = (e) => setSearch(e.detail || "");
     window.addEventListener("globalsearch", handler);
     return () => window.removeEventListener("globalsearch", handler);
   }, []);
 
+  // ---------- Category chips (dịch label, giữ id gốc) ----------
   const categoryChips = useMemo(() => {
     const fromApi = categories.map((cat) => ({
-      id: cat.name,
-      label: cat.name,
+      id: cat.name,                            // giữ tiếng Việt để filter đúng DB
+      label: translateCategory(cat.name, t),   // label đã dịch
       icon: cat.icon,
     }));
-    return [{ id: ALL_CATEGORY, label: ALL_CATEGORY }, ...fromApi];
-  }, [categories]);
+    return [
+      { id: ALL_CATEGORY, label: translateCategory(ALL_CATEGORY, t) },
+      ...fromApi,
+    ];
+  }, [categories, t]);
 
   const validCategoryIds = useMemo(
     () => new Set(categoryChips.map((c) => c.id)),
     [categoryChips]
   );
 
+  // ---------- Filtered items ----------
   const filtered = useMemo(() => {
     let list = items;
+
     if (category !== ALL_CATEGORY && validCategoryIds.has(category)) {
       list = list.filter((m) => m.category === category);
     }
+
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       list = list.filter((m) => {
@@ -108,9 +142,11 @@ export default function CustomerMenu({ cart, setCart, user }) {
         return name.includes(q) || cat.includes(q);
       });
     }
+
     return list;
   }, [items, category, search, validCategoryIds]);
 
+  // ---------- Handlers ----------
   const selectCategory = (id) => {
     setCategory(id);
     const params = {};
@@ -132,8 +168,13 @@ export default function CustomerMenu({ cart, setCart, user }) {
 
   const hasFilter = category !== ALL_CATEGORY || search.trim();
 
+  // ============================================================
+  // RENDER
+  // ============================================================
+
   return (
     <div>
+      {/* ============ ERROR BANNER ============ */}
       {error && (
         <div
           style={{
@@ -167,12 +208,12 @@ export default function CustomerMenu({ cart, setCart, user }) {
               gap: 4,
             }}
           >
-            <RefreshCw size={12} /> Thử lại
+            <RefreshCw size={12} /> {t("common.retry")}
           </button>
         </div>
       )}
 
-      {/* Category chips — sticky đúng topbar */}
+      {/* ============ CATEGORY CHIPS ============ */}
       <div
         className="menu-cats-sticky"
         style={{
@@ -203,7 +244,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         </div>
       </div>
 
-      {/* Summary line */}
+      {/* ============ SUMMARY LINE ============ */}
       <div
         style={{
           fontSize: 13,
@@ -216,9 +257,10 @@ export default function CustomerMenu({ cart, setCart, user }) {
         }}
       >
         <span>
-          {filtered.length} món
-          {category !== ALL_CATEGORY && ` trong "${category}"`}
-          {search && ` — tìm "${search}"`}
+          {filtered.length} {t("menu.dishesCount")}
+          {category !== ALL_CATEGORY &&
+            ` ${t("menu.inCategory")} "${translateCategory(category, t)}"`}
+          {search && ` — ${t("menu.searchFor")} "${search}"`}
         </span>
         {hasFilter && (
           <button
@@ -237,12 +279,12 @@ export default function CustomerMenu({ cart, setCart, user }) {
               gap: 4,
             }}
           >
-            <X size={11} /> Xoá lọc
+            <X size={11} /> {t("menu.clearFilter")}
           </button>
         )}
       </div>
 
-      {/* Loading */}
+      {/* ============ LOADING ============ */}
       {loading && (
         <div className="menu-food-grid">
           {Array.from({ length: 10 }).map((_, i) => (
@@ -251,7 +293,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         </div>
       )}
 
-      {/* Empty */}
+      {/* ============ EMPTY ============ */}
       {!loading && filtered.length === 0 && (
         <div
           style={{
@@ -265,10 +307,13 @@ export default function CustomerMenu({ cart, setCart, user }) {
           <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
             {search
-              ? `Không tìm thấy món nào với "${search}"`
+              ? `${t("menu.emptySearchPrefix")} "${search}"`
               : category !== ALL_CATEGORY
-              ? `Chưa có món nào trong "${category}"`
-              : "Chưa có món nào trong thực đơn"}
+              ? `${t("menu.emptyCategoryPrefix")} "${translateCategory(
+                  category,
+                  t
+                )}"`
+              : t("menu.emptyDefault")}
           </div>
           {hasFilter && (
             <button
@@ -285,13 +330,13 @@ export default function CustomerMenu({ cart, setCart, user }) {
                 fontSize: 13,
               }}
             >
-              Xem tất cả món
+              {t("menu.viewAll")}
             </button>
           )}
         </div>
       )}
 
-      {/* Grid */}
+      {/* ============ GRID ============ */}
       {!loading && filtered.length > 0 && (
         <div className="menu-food-grid">
           {filtered.map((m) => {
@@ -307,7 +352,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
                 className="grab-food-card"
                 onClick={() => !isOutOfStock && openModal(m)}
               >
-                {/* Ảnh + badge + nút + */}
                 <div className="grab-food-card__image-wrap">
                   <img
                     src={m.image || FALLBACK_IMG}
@@ -319,18 +363,16 @@ export default function CustomerMenu({ cart, setCart, user }) {
                     }}
                   />
 
-                  {/* Badge trên ảnh */}
                   {isOutOfStock ? (
                     <span className="grab-food-card__badge grab-food-card__badge--out">
-                      Hết hàng
+                      {t("customer.badgeOutOfStock")}
                     </span>
                   ) : isHot ? (
                     <span className="grab-food-card__badge grab-food-card__badge--hot">
-                      <Flame size={10} /> Bán chạy
+                      <Flame size={10} /> {t("customer.badgeBestSeller")}
                     </span>
                   ) : null}
 
-                  {/* Nút + nổi góc dưới phải */}
                   {!isOutOfStock && (
                     <button
                       type="button"
@@ -339,14 +381,13 @@ export default function CustomerMenu({ cart, setCart, user }) {
                         e.stopPropagation();
                         openModal(m);
                       }}
-                      aria-label={`Thêm ${m.name}`}
+                      aria-label={`${t("customer.addItem")} ${m.name}`}
                     >
                       <Plus size={20} strokeWidth={3} />
                     </button>
                   )}
                 </div>
 
-                {/* Info bên dưới */}
                 <div className="grab-food-card__info">
                   <h4 className="grab-food-card__name">{m.name}</h4>
                   <div className="grab-food-card__price-row">
@@ -366,7 +407,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         </div>
       )}
 
-      {/* Modal */}
+      {/* ============ MODAL ============ */}
       {selected && (
         <FoodDetailModal
           item={selected}
