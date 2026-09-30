@@ -1,5 +1,5 @@
 // ============================================================
-// ĐA NGÔN NGỮ — i18n.js (VI + EN)
+// ĐA NGÔN NGỮ — i18n.js
 // ============================================================
 // Hỗ trợ 2 ngôn ngữ: Tiếng Việt (vi) + English (en)
 // ============================================================
@@ -10,7 +10,6 @@ export const translations = {
   vi: {
     // ---------- Common ----------
     "common.save": "Lưu",
-    "common.saving": "Đang lưu...",
     "common.cancel": "Hủy",
     "common.delete": "Xóa",
     "common.edit": "Sửa",
@@ -22,7 +21,6 @@ export const translations = {
     "common.processing": "Đang xử lý...",
     "common.success": "Thành công",
     "common.error": "Lỗi",
-    "common.retry": "Thử lại",
     "common.logout": "Đăng xuất",
     "common.login": "Đăng nhập",
     "common.register": "Đăng ký",
@@ -554,38 +552,11 @@ export const translations = {
     "login.noAccount": "Chưa có tài khoản?",
     "login.registerNow": "Đăng ký ngay",
     "login.demoAccounts": "Tài khoản demo",
-    "login.welcomeBack": "Chào mừng trở lại",
-    "login.enterInfo": "Nhập thông tin tài khoản để truy cập Canteen VWA",
-    "login.emailOrUsername": "Email hoặc tên đăng nhập",
-    "login.emailPlaceholder": "email@vwa.vn",
-    "login.passwordLabel": "Mật khẩu",
-    "login.passwordPlaceholder": "••••••",
-    "login.rememberDays": "Ghi nhớ đăng nhập trong 30 ngày",
-    "login.loginBtn": "Đăng nhập vào tài khoản",
-    "login.loggingIn": "Đang đăng nhập...",
-    "login.orContinueWith": "hoặc tiếp tục với",
-    "login.noAccountRegister": "Chưa có tài khoản?",
-    "login.registerFree": "Đăng ký miễn phí",
-    "login.demoHint": "Click để tự động điền",
-    "login.tabLogin": "Đăng nhập",
-    "login.tabRegister": "Đăng ký",
-    "login.brandName": "CANTEEN",
-    "login.brandSub": "VWA",
-    "login.welcomeTo": "Chào mừng đến Canteen VWA",
-    "login.tagline": "Đặt món nhanh — Quản lý gọn — Phục vụ tận tâm.",
-    "login.peekBubble": "🙈 Đang nhập mật khẩu — không nhìn đâu!",
-    "login.privacyBubble": "🤫 Squad privacy mode: Shhh, no peeking!",
-    "login.demoAdmin": "Admin",
-    "login.demoEmployee": "Nhân viên",
-    "login.demoCustomer": "Khách hàng",
-    "login.errorEmailRequired": "Vui lòng nhập email",
-    "login.errorPasswordRequired": "Vui lòng nhập mật khẩu",
-    "login.errorInvalid": "Tài khoản hoặc mật khẩu không đúng.",
-    "login.errorFailed": "Đăng nhập thất bại",
-    "login.oauthGoogleMissing": "Chưa cấu hình Google OAuth. Vui lòng liên hệ admin.",
-    "login.oauthFacebookMissing": "Chưa cấu hình Facebook OAuth. Vui lòng liên hệ admin.",
-    "login.showPassword": "Hiện mật khẩu",
-    "login.hidePassword": "Ẩn mật khẩu",
+    "login.welcome": "Quản lý Canteen đơn giản & hiệu quả.",
+    "login.description": "Hệ thống đặt món và quản lý Canteen VWA dành cho khách hàng, nhân viên và quản trị viên.",
+    "login.users": "Nhóm người dùng",
+    "login.dishes": "Món ăn mẫu",
+    "login.tracking": "Theo dõi đơn",
 
     // ---------- Dashboard ----------
     "dashboard.revenue": "Doanh thu hôm nay",
@@ -762,7 +733,6 @@ export const translations = {
   en: {
     // ---------- Common ----------
     "common.save": "Save",
-    "common.saving": "Saving...",
     "common.cancel": "Cancel",
     "common.delete": "Delete",
     "common.edit": "Edit",
@@ -774,7 +744,6 @@ export const translations = {
     "common.processing": "Processing...",
     "common.success": "Success",
     "common.error": "Error",
-    "common.retry": "Retry",
     "common.logout": "Logout",
     "common.login": "Login",
     "common.register": "Register",
@@ -1306,158 +1275,40 @@ export const translations = {
     "login.noAccount": "Don't have an account?",
     "login.registerNow": "Register now",
     "login.demoAccounts": "Demo accounts",
-    "login.welcomeBack": "Welcome back",
-    "login.enterInfo": "Enter your account info to access Canteen VWA",
-    "login.emailOrUsername": "Email or username",
-    "login.emailPlaceholder": "email@vwa.vn",
-    "login.passwordLabel": "Password",
-    "login.passwordPlaceholder": "••••••",
-    "login.rememberDays": "Remember me for 30 days",
-    "login.loginBtn": "Sign in to account",
-    "login.loggingIn": "Signing in...",
-    "login.orContinueWith": "or continue with",
-    "login.noAccountRegister": "Don't have an account?",
-    "login.registerFree": "Sign up free",
-    "login.demoHint": "Click to auto-fill",
-    "login.tabLogin": "Login",
-    "login.tabRegister": "Register",
-    "login.brandName": "CANTEEN",
-    "login.brandSub": "VWA",
-    "login.welcomeTo": "Welcome to Canteen VWA",
-    "login.tagline": "Quick ordering — Smart management — Dedicated service.",
-    "login.peekBubble": "🙈 Typing password — no peeking!",
-    "login.privacyBubble": "🤫 Squad privacy mode: Shhh, no peeking!",
-    "login.demoAdmin": "Admin",
-    "login.demoEmployee": "Employee",
-    "login.demoCustomer": "Customer",
-    "login.errorEmailRequired": "Please enter your email",
-    "login.errorPasswordRequired": "Please enter your password",
-    "login.errorInvalid": "Incorrect email or password.",
-    "login.errorFailed": "Login failed",
-    "login.oauthGoogleMissing":
-      "Google OAuth not configured. Please contact admin.",
-    "login.oauthFacebookMissing":
-      "Facebook OAuth not configured. Please contact admin.",
-    "login.showPassword": "Show password",
-    "login.hidePassword": "Hide password",
+    "login.welcome": "Simple & effective Canteen management.",
+    "login.description": "Order and manage Canteen VWA for customers, employees and admins.",
+    "login.users": "User groups",
+    "login.dishes": "Sample dishes",
+    "login.tracking": "Order tracking",
 
-    // ---------- Register ----------
-    "register.title": "Create account",
-    "register.subtitle":
-      "Sign up to order, track deliveries and enjoy student deals",
-    "register.nameLabel": "Full name *",
-    "register.namePlaceholder": "John Doe",
-    "register.emailLabel": "Email *",
-    "register.emailPlaceholder": "email@vwa.vn",
-    "register.phoneLabel": "Phone number",
-    "register.phonePlaceholder": "0901234567",
-    "register.passwordLabel": "Password *",
-    "register.passwordPlaceholder": "Minimum 6 characters",
-    "register.confirmLabel": "Confirm password *",
-    "register.confirmPlaceholder": "Re-enter password",
-    "register.submitBtn": "Create account",
-    "register.submitting": "Signing up...",
-    "register.haveAccount": "Already have an account?",
-    "register.loginNow": "Sign in",
-    "register.bubbleIdle": "👋 Welcome, new friend! Let's sign up!",
-    "register.bubblePeek": "🙈 Typing password — no peeking!",
-    "register.captionTitle": "Create an account in 30 seconds",
-    "register.captionSub":
-      "Quick ordering — Student deals — Earn points, redeem gifts.",
-    "register.errorNameRequired": "Please enter your name",
-    "register.errorEmailRequired": "Please enter your email",
-    "register.errorEmailInvalid": "Invalid email",
-    "register.errorPhoneInvalid": "Phone must be 10-11 digits",
-    "register.errorPasswordMin": "Password must be at least 6 characters",
-    "register.errorPasswordMismatch": "Passwords do not match",
-    "register.errorFailed": "Registration failed",
-    "register.successWelcome": "Registration successful! Welcome",
-
-    // ---------- Forgot ----------
-    "forgot.title1": "Forgot password",
-    "forgot.title2": "Reset password",
-    "forgot.title3": "All done!",
-    "forgot.subtitle1": "Enter your email to receive a recovery OTP",
-    "forgot.subtitle2": "Enter the OTP and your new password",
-    "forgot.subtitle3": "Your password has been reset successfully",
-    "forgot.emailLabel": "Email",
-    "forgot.emailPlaceholder": "admin@vwa.vn",
-    "forgot.otpLabelDemo": "OTP code (demo: 123456)",
-    "forgot.passwordLabel": "New password",
-    "forgot.passwordPlaceholder": "Minimum 6 characters",
-    "forgot.sendOtpBtn": "Send OTP",
-    "forgot.sendingOtp": "Sending OTP...",
-    "forgot.resetBtn": "Reset password",
-    "forgot.resetting": "Processing...",
-    "forgot.backToLogin": "← Back to login",
-    "forgot.backToLoginShort": "← Login",
-    "forgot.notReceived": "Didn't receive the code?",
-    "forgot.resendIn": "Resend in",
-    "forgot.resend": "Resend OTP",
-    "forgot.successMsg": "You can now sign in with your new password.",
-    "forgot.loginNowBtn": "Back to login",
-    "forgot.errorEmailRequired": "Please enter your email",
-    "forgot.errorEmailInvalid": "Invalid email",
-    "forgot.errorOtpRequired": "Please enter the OTP code",
-    "forgot.errorOtpLength": "OTP must be 6 digits",
-    "forgot.errorPasswordMin": "Password must be at least 6 characters",
-    "forgot.errorOtpWrong": "Incorrect OTP. Please check again.",
-    "forgot.errorSendOtp": "Failed to send OTP",
-    "forgot.errorResetFailed": "Failed to reset password",
-    "forgot.toastOtpSent": "OTP sent to email (demo: 123456)",
-    "forgot.toastOtpResent": "OTP resent (demo: 123456)",
-    "forgot.toastSuccess": "Password reset successfully!",
-    "forgot.bubbleStep1": "🤔 Forgot your password? Stay calm, we'll help!",
-    "forgot.bubbleStep2": "📱 Enter the OTP we just sent you!",
-    "forgot.bubbleStep3": "🎉 All done! Your account is recovered!",
-    "forgot.bubblePeek": "🙈 Typing password — no peeking!",
-    "forgot.captionTitle": "Forgot your password? Don't worry.",
-    "forgot.captionSub": "We'll help you regain access.",
-    "forgot.captionDone": "All done!",
-    "forgot.captionDoneSub": "You can sign in with your new password.",
-
-    // ---------- Page headings ----------
-    "page.menu.title": "Menu",
-    "page.menu.subtitle": "Choose your favorite",
-    "page.cart.title": "Cart",
-    "page.cart.subtitle": "Items you selected",
-    "page.checkout.title": "Checkout",
-    "page.checkout.subtitle": "Complete your order",
-    "page.orders.title": "Orders",
-    "page.orders.subtitle": "Order history",
-    "page.profile.title": "Profile",
-    "page.profile.subtitle": "Account information",
-    "page.promotions.title": "Promotions",
-    "page.promotions.subtitle": "Deals for you",
-    "page.wallet.title": "Canteen Wallet",
-    "page.wallet.subtitle": "Top-up & quick payment",
-    "page.chat.title": "Chat Support",
-    "page.chat.subtitle": "Message the Canteen",
-    "page.signature.title": "Signature Dishes",
-    "page.signature.subtitle": "Canteen VWA specialties",
-    "page.success.title": "Order placed",
-    "page.success.subtitle": "Thank you!",
+    // ---------- Dashboard ----------
+    "dashboard.revenue": "Today's revenue",
+    "dashboard.orders": "Orders",
+    "dashboard.customers": "Customers",
+    "dashboard.lowStock": "Low stock",
+    "dashboard.revenue7": "7-day revenue",
+    "dashboard.orderStatus": "Order status",
+    "dashboard.topItems": "Top 5 best sellers",
+    "dashboard.newOrders": "Latest orders",
+    "dashboard.todayOverview": "Canteen activity tracking",
+    "dashboard.welcome": "Welcome Canteen Owner",
+    "dashboard.ordersToday": "Today's orders",
+    "dashboard.pending": "Pending",
+    "dashboard.preparing": "Preparing",
+    "dashboard.done": "Completed",
+    "dashboard.needAction": "Need restock",
+    "dashboard.units": "thousands VND",
+    "dashboard.staffOnline": "Working",
+    "dashboard.realTime": "Realtime",
+    "dashboard.vsYesterday": "vs yesterday",
+    "dashboard.vsLastMonth": "vs last month",
 
     // ---------- Customer home ----------
-    "customer.badgeBestSeller": "Best seller",
-    "customer.badgeOutOfStock": "Out of stock",
-    "customer.addItem": "Add",
-    "customer.orderItem": "Order",
-    "customer.viewAll": "View all",
-    "customer.retry": "Retry",
-    "customer.loadError": "Failed to load home data",
-    "customer.flashLabel": "DEALS",
-    "customer.flashTitle": "FLASH SALE",
-    "customer.flashHot": "HOT",
-    "customer.voucherLabel": "VOUCHER",
-    "customer.voucherDiscount": "Save",
-    "customer.claimNow": "Claim now",
-    "customer.orderNow": "Order now",
-    "customer.newArrivalsTitle": "New arrivals",
-    "customer.noBestSellerTitle": "No best sellers yet",
-    "customer.noBestSellerDesc":
-      "Explore the menu to pick your favorites.",
-    "customer.exploreMenu": "Explore menu",
+    "customer.greeting": "Hello",
+    "customer.hello": "Good morning",
+    "customer.whatToEat": "what to eat today?",
+    "customer.subtitle": "Quick ordering, convenient payment.",
+    "customer.viewMenu": "View menu",
     "customer.bestSeller": "Best sellers",
     "customer.newDishes": "New arrivals",
     "customer.quickOrder": "Quick order",
@@ -1579,16 +1430,17 @@ export const translations = {
     "employee.priority": "Priority by order time",
     "employee.viewAll": "View all",
 
-    // ---------- Signature ----------
-    "signature.title": "Canteen Signature Dishes",
-    "signature.desc":
-      "The most loved dishes — curated from Canteen VWA menu.",
-    "signature.loadError": "Failed to load dishes",
-    "signature.loading": "Loading signature dishes...",
-    "signature.emptyTitle": "No signature dishes yet",
-    "signature.emptyDesc":
-      "Browse the full menu to pick your favorites.",
-    "signature.viewFullMenu": "View full menu",
+    // ---------- Chart ----------
+    "chart.revenueByDay": "Revenue by day",
+    "chart.last7Days": "Millions VND • Last 7 days",
+    "chart.todayOrders": "Today's order status",
+    "chart.orders": "orders",
+    "chart.completed": "Completed",
+    "chart.processing": "Processing",
+    "chart.pending": "Pending",
+    "chart.cancelled": "Cancelled",
+    "chart.soldToday": "Top sellers today",
+    "chart.newOrders": "New orders",
 
     // ---------- Categories ----------
     "cat.all": "All",
@@ -1603,15 +1455,11 @@ export const translations = {
 };
 
 // ============================================================
-// HELPERS
+// HÀM HELPER
 // ============================================================
 
 export function getLang() {
-  try {
-    return localStorage.getItem("canteen_lang") || "vi";
-  } catch {
-    return "vi";
-  }
+  return localStorage.getItem("canteen_lang") || "vi";
 }
 
 export function t(key, lang) {
@@ -1620,9 +1468,7 @@ export function t(key, lang) {
 }
 
 export function setLang(lang) {
-  try {
-    localStorage.setItem("canteen_lang", lang);
-  } catch {}
+  localStorage.setItem("canteen_lang", lang);
   window.dispatchEvent(new CustomEvent("langchange", { detail: lang }));
 }
 
