@@ -1,8 +1,10 @@
 // ============================================================
 // PAGINATION.JSX — Phân trang + chọn số item/trang
 // ============================================================
+
 import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslation } from "../i18n";
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
@@ -13,11 +15,12 @@ export default function Pagination({
   onPageChange,
   onPageSizeChange,
 }) {
+  const { t } = useTranslation();
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
 
-  // Generate page numbers with ellipsis
   const pages = [];
   const maxShow = 5;
   let from = Math.max(1, page - Math.floor(maxShow / 2));
@@ -66,10 +69,19 @@ export default function Pagination({
         borderTop: "1px solid var(--border-color, #eef2f7)",
       }}
     >
-      {/* Info + page size */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
         <span style={{ fontSize: 13, color: "var(--text-muted, #64748b)" }}>
-          Hiển thị <b style={{ color: "var(--text-primary, #172033)" }}>{start}-{end}</b> / {total}
+          {t("pagination.showing")
+            .replace("{start}", start)
+            .replace("{end}", end)
+            .replace("{total}", total)}
         </span>
         <select
           value={pageSize}
@@ -86,14 +98,20 @@ export default function Pagination({
         >
           {PAGE_SIZES.map((n) => (
             <option key={n} value={n}>
-              {n} / trang
+              {t("pagination.perPage").replace("{n}", n)}
             </option>
           ))}
         </select>
       </div>
 
-      {/* Page buttons */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          flexWrap: "wrap",
+        }}
+      >
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
@@ -102,7 +120,7 @@ export default function Pagination({
             opacity: page <= 1 ? 0.4 : 1,
             cursor: page <= 1 ? "not-allowed" : "pointer",
           }}
-          aria-label="Trang trước"
+          aria-label={t("pagination.prevPage")}
         >
           <ChevronLeft size={14} />
         </button>
@@ -119,7 +137,7 @@ export default function Pagination({
             <button
               key={p}
               onClick={() => onPageChange(p)}
-                           style={{
+              style={{
                 ...btnBase,
                 background:
                   p === page
@@ -145,7 +163,7 @@ export default function Pagination({
             opacity: page >= totalPages ? 0.4 : 1,
             cursor: page >= totalPages ? "not-allowed" : "pointer",
           }}
-          aria-label="Trang sau"
+          aria-label={t("pagination.nextPage")}
         >
           <ChevronRight size={14} />
         </button>
@@ -154,10 +172,6 @@ export default function Pagination({
   );
 }
 
-// ============================================================
-// HOOK: dùng kèm Pagination
-// ============================================================
-
 export function usePagination(list, defaultSize = 10) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(defaultSize);
@@ -165,7 +179,6 @@ export function usePagination(list, defaultSize = 10) {
   const total = list.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // Reset về trang 1 khi list đổi (VD filter)
   useEffect(() => {
     setPage(1);
   }, [total]);

@@ -1,34 +1,13 @@
 ﻿// ============================================================
 // IMAGEUPLOADER.JSX — Upload ảnh với drag & drop
 // ============================================================
-// Props:
-//   value    — string (data URI hoặc URL)
-//   onChange — callback(dataUri)
-//   label    — string
-//
-// Fixes (so với bản gốc):
-//   - 🔴 Sync preview khi value prop đổi (useEffect)
-//   - 🔴 Reset inputRef.value sau mỗi lần chọn (kể cả lỗi)
-//   - 🔴 Guard unmount trong reader.onload
-//   - 🔴 clear() reset cả error
-//   - 🔴 Dropzone keyboard accessible (role, tabIndex, Enter/Space)
-//   - 🟡 Reset dragging khi window blur
-//   - 🟡 Dùng CSS variables → dark mode
-//   - 🟡 Validate extension khi type rỗng
-//   - 🟡 Cảnh báo khi drop nhiều file
-//   - 🟡 aria-label cho input + nút X
-//   - 🟢 Inline @keyframes spin
-// ============================================================
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Image as ImageIcon, X, Loader2 } from "lucide-react";
 import { toast } from "./Effects";
+import { useTranslation } from "../i18n";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
-const MAX_SIZE = 2 * 1024 * 1024; // 2MB
+const MAX_SIZE = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 
@@ -41,52 +20,12 @@ const FALLBACK_PREVIEW =
     </svg>`
   );
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-/**
- * Validate file.
- * Trả về { ok: true } hoặc { ok: false, msg: string }
- */
-function validateFile(file) {
-  if (!file) {
-    return { ok: false, msg: "Không có file nào được chọn" };
-  }
-
-  // Type có thể rỗng trên một số OS/browser → fallback check extension
-  const typeOk = ALLOWED_TYPES.includes(file.type);
-  const extOk = ALLOWED_EXTENSIONS.some((ext) =>
-    file.name.toLowerCase().endsWith(ext)
-  );
-
-  if (!typeOk && !extOk) {
-    return {
-      ok: false,
-      msg: "Chỉ chấp nhận ảnh JPEG, PNG, WebP",
-    };
-  }
-
-  if (file.size > MAX_SIZE) {
-    const mb = (file.size / 1024 / 1024).toFixed(2);
-    return {
-      ok: false,
-      msg: `Ảnh vượt quá 2MB (hiện ${mb}MB)`,
-    };
-  }
-
-  return { ok: true };
-}
-
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function ImageUploader({
   value,
   onChange,
-  label = "Ảnh món ăn (JPEG/PNG)",
+  label,
 }) {
+  const { t } = useTranslation();
   const [preview, setPreview] = useState(value || "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -95,7 +34,8 @@ export default function ImageUploader({
   const inputRef = useRef(null);
   const mountedRef = useRef(true);
 
-  // ---------- Track unmount ----------
+  const finalLabel = label || t("upload.label");
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -103,22 +43,44 @@ export default function ImageUploader({
     };
   }, []);
 
-  // ---------- Sync preview khi value prop đổi ----------
   useEffect(() => {
     setPreview(value || "");
-    // Xoá error khi value đổi từ ngoài vào
     setError("");
   }, [value]);
 
-  // ---------- Reset dragging khi window blur ----------
-  // Tránh state kẹt khi user kéo file ra khỏi window
   useEffect(() => {
     const handleBlur = () => setDragging(false);
     window.addEventListener("blur", handleBlur);
     return () => window.removeEventListener("blur", handleBlur);
   }, []);
 
-  // ---------- Handle file ----------
+  const validateFile = useCallback(
+    (file) => {
+      if (!file) {
+        return { ok: false, msg: t("upload.noFile") };
+      }
+
+      const typeOk = ALLOWED_TYPES.includes(file.type);
+      const extOk = ALLOWED_EXTENSIONS.some((ext) =>
+        file.name.toLowerCase().endsWith(ext)
+      );
+
+      if (!typeOk && !extOk) {
+        return { ok: false, msg: t("upload.wrongType") };
+      }
+
+      if (file.size > MAX_SIZE) {
+        const mb = (file.size / 1024 / 1024).toFixed(2);
+        return {
+          ok: false,
+          msg: t("upload.tooLarge").replace("{size}", mb),
+        };
+      }
+
+      return { ok: true };
+    },
+    [t]
+  );
 
   const handleFile = useCallback(
     (file) => {
@@ -136,12 +98,11 @@ export default function ImageUploader({
       const reader = new FileReader();
 
       reader.onload = () => {
-        // Guard: component đã unmount
         if (!mountedRef.current) return;
 
         const dataUri = reader.result;
         if (typeof dataUri !== "string") {
-          setError("Không đọc được dữ liệu ảnh");
+          setError(t("upload.readError"));
           setLoading(false);
           return;
         }
@@ -149,33 +110,28 @@ export default function ImageUploader({
         setPreview(dataUri);
         onChange?.(dataUri);
         setLoading(false);
-        toast("Đã tải ảnh lên", "success");
+        toast(t("upload.success"), "success");
       };
 
       reader.onerror = () => {
         if (!mountedRef.current) return;
-        setError("Không đọc được file");
+        setError(t("upload.readError"));
         setLoading(false);
       };
 
       reader.readAsDataURL(file);
     },
-    [onChange]
+    [onChange, validateFile, t]
   );
-
-  // ---------- Input change ----------
 
   const onInputChange = (e) => {
     const file = e.target.files?.[0];
     handleFile(file);
 
-    // Reset input value → cho phép chọn lại cùng file
     if (inputRef.current) {
       inputRef.current.value = "";
     }
   };
-
-  // ---------- Drag & drop ----------
 
   const onDrop = (e) => {
     e.preventDefault();
@@ -185,7 +141,7 @@ export default function ImageUploader({
     if (!files || files.length === 0) return;
 
     if (files.length > 1) {
-      toast("Chỉ nhận 1 ảnh — đã dùng ảnh đầu tiên", "info");
+      toast(t("upload.multipleFiles"), "info");
     }
 
     handleFile(files[0]);
@@ -197,13 +153,9 @@ export default function ImageUploader({
   };
 
   const onDragLeave = (e) => {
-    // Chỉ reset khi rời khỏi dropzone hoàn toàn
-    // (không phải khi di chuyển giữa các element con)
     if (e.currentTarget.contains(e.relatedTarget)) return;
     setDragging(false);
   };
-
-  // ---------- Clear ----------
 
   const clear = () => {
     setPreview("");
@@ -211,8 +163,6 @@ export default function ImageUploader({
     onChange?.("");
     if (inputRef.current) inputRef.current.value = "";
   };
-
-  // ---------- Keyboard open picker ----------
 
   const openPicker = () => {
     if (loading) return;
@@ -226,10 +176,6 @@ export default function ImageUploader({
     }
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
   return (
     <div style={{ margin: "10px 0 16px" }}>
       <label
@@ -241,10 +187,9 @@ export default function ImageUploader({
           color: "var(--text-muted, #475569)",
         }}
       >
-        {label}
+        {finalLabel}
       </label>
 
-      {/* ============ DROPZONE ============ */}
       <div
         onClick={openPicker}
         onKeyDown={onKeyDown}
@@ -253,7 +198,11 @@ export default function ImageUploader({
         onDrop={onDrop}
         role="button"
         tabIndex={0}
-        aria-label={preview ? "Đổi ảnh — nhấn Enter để chọn file" : "Chọn ảnh — nhấn Enter"}
+        aria-label={
+          preview
+            ? t("upload.changeAria")
+            : t("upload.chooseAria")
+        }
         style={{
           position: "relative",
           border: dragging
@@ -292,13 +241,13 @@ export default function ImageUploader({
             }}
           >
             <Loader2 size={28} className="spin" />
-            <span style={{ fontSize: 13 }}>Đang xử lý...</span>
+            <span style={{ fontSize: 13 }}>{t("upload.processing")}</span>
           </div>
         ) : preview ? (
           <>
             <img
               src={preview}
-              alt="Xem trước ảnh"
+              alt={t("upload.previewAlt")}
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = FALLBACK_PREVIEW;
@@ -318,8 +267,8 @@ export default function ImageUploader({
                 e.stopPropagation();
                 clear();
               }}
-              aria-label="Xoá ảnh"
-              title="Xoá ảnh"
+              aria-label={t("upload.removeAria")}
+              title={t("upload.removeAria")}
               style={{
                 position: "absolute",
                 top: 8,
@@ -358,7 +307,9 @@ export default function ImageUploader({
           >
             <ImageIcon
               size={32}
-              style={{ color: dragging ? "#2634d5" : "var(--text-light, #94a3b8)" }}
+              style={{
+                color: dragging ? "#2634d5" : "var(--text-light, #94a3b8)",
+              }}
             />
             <b
               style={{
@@ -366,27 +317,23 @@ export default function ImageUploader({
                 fontSize: 14,
               }}
             >
-              Kéo ảnh vào đây hoặc nhấn để chọn
+              {t("upload.dragHint")}
             </b>
-            <span style={{ fontSize: 12 }}>
-              JPEG, PNG, WebP · Tối đa 2MB
-            </span>
+            <span style={{ fontSize: 12 }}>{t("upload.formatHint")}</span>
           </div>
         )}
       </div>
 
-      {/* ============ INPUT FILE ============ */}
       <input
         ref={inputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp"
         onChange={onInputChange}
-        aria-label="Chọn ảnh"
+        aria-label={t("upload.chooseAria")}
         tabIndex={-1}
         style={{ display: "none" }}
       />
 
-      {/* ============ ERROR ============ */}
       {error && (
         <div
           style={{
@@ -407,7 +354,6 @@ export default function ImageUploader({
         </div>
       )}
 
-      {/* ============ ANIMATION ============ */}
       <style>{`
         @keyframes imgUploaderSpin {
           from { transform: rotate(0deg); }

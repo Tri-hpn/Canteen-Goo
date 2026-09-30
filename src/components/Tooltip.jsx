@@ -1,12 +1,15 @@
 // ============================================================
 // TOOLTIP.JSX — Custom tooltip (hover 0.3s hiện)
 // ============================================================
+// Nội dung tooltip do caller truyền vào → KHÔNG cần i18n.
+// ============================================================
+
 import { useState, useRef, useEffect } from "react";
 
 export default function Tooltip({
   children,
   content,
-  placement = "top", // top | bottom | left | right
+  placement = "top",
   delay = 300,
 }) {
   const [show, setShow] = useState(false);

@@ -1,43 +1,15 @@
 ﻿// ============================================================
 // PRINTRECEIPT.JSX — In hóa đơn đơn hàng
 // ============================================================
-// Props:
-//   order   — object đơn hàng
-//   onClose — callback đóng modal
-//
-// Fixes (so với bản gốc):
-//   - Lấy hotline từ api.settings (không hardcode "0900 000 000")
-//   - z-index chuẩn 2147483600
-//   - ESC đóng modal
-//   - Guard NaN cho price × qty
-//   - Guard Invalid Date
-//   - Print CSS đảm bảo in đúng (thêm .receipt-print-root)
-//   - Body scroll lock khi mở
-//   - Nút "Đóng" bên phải (UX chuẩn)
-//   - role="dialog" + aria-modal
-//   - Guard order.items null
-//   - Memo items, total, date
-//   - Page size A5 cho print
-//   - ✅ Xoá hook-in-hook `useSafeState`/`useStateSafe` (vi phạm
-//     Rules of Hooks — dễ vỡ nếu sau này wrap trong điều kiện)
-//   - ✅ Xoá state `hotline` không dùng, giữ duy nhất `hotlineState`
-// ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Printer, X } from "lucide-react";
 import { money } from "./UI";
 import { api } from "../api";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const MODAL_Z = 2147483600;
 const DEFAULT_HOTLINE = "0900 000 000";
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function calcLineTotal(price, qty) {
   const p = Number(price) || 0;
@@ -64,12 +36,8 @@ function fmtDateTime(iso) {
   }
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function PrintReceipt({ order, onClose }) {
-  // ---------- Hotline từ settings ----------
+  const { t } = useTranslation();
   const [hotline, setHotline] = useState(DEFAULT_HOTLINE);
 
   useEffect(() => {
@@ -92,7 +60,6 @@ export default function PrintReceipt({ order, onClose }) {
     };
   }, []);
 
-  // ---------- ESC đóng ----------
   useEffect(() => {
     if (!order) return;
 
@@ -103,7 +70,6 @@ export default function PrintReceipt({ order, onClose }) {
     return () => window.removeEventListener("keydown", handler);
   }, [order, onClose]);
 
-  // ---------- Body scroll lock ----------
   useEffect(() => {
     if (!order) return;
     const prev = document.body.style.overflow;
@@ -113,16 +79,12 @@ export default function PrintReceipt({ order, onClose }) {
     };
   }, [order]);
 
-  // ---------- Memo derived ----------
   const items = useMemo(() => {
     if (!order || !Array.isArray(order.items)) return [];
     return order.items;
   }, [order]);
 
-  const total = useMemo(
-    () => Number(order?.total) || 0,
-    [order?.total]
-  );
+  const total = useMemo(() => Number(order?.total) || 0, [order?.total]);
 
   const dateStr = useMemo(
     () => fmtDateTime(order?.created_at),
@@ -130,21 +92,15 @@ export default function PrintReceipt({ order, onClose }) {
   );
 
   const customerName = useMemo(
-    () => order?.customer_name || order?.customerName || "Khách",
-    [order]
+    () => order?.customer_name || order?.customerName || t("profile.guest"),
+    [order, t]
   );
 
-  // ---------- Handlers ----------
   const handlePrint = useCallback(() => {
     window.print();
   }, []);
 
-  // ---------- Early return ----------
   if (!order) return null;
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div
@@ -152,7 +108,7 @@ export default function PrintReceipt({ order, onClose }) {
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={`Hóa đơn ${order.code || ""}`}
+      aria-label={t("receipt.ariaLabel").replace("{code}", order.code || "")}
       style={{
         position: "fixed",
         inset: 0,
@@ -177,7 +133,6 @@ export default function PrintReceipt({ order, onClose }) {
           overflowY: "auto",
         }}
       >
-        {/* ============ ACTIONS (không in) ============ */}
         <div
           className="no-print"
           style={{
@@ -191,7 +146,7 @@ export default function PrintReceipt({ order, onClose }) {
           <button
             onClick={onClose}
             type="button"
-            aria-label="Đóng"
+            aria-label={t("common.close")}
             style={{
               padding: "8px 12px",
               border: "1px solid #e5e9ef",
@@ -206,13 +161,13 @@ export default function PrintReceipt({ order, onClose }) {
               color: "#172033",
             }}
           >
-            <X size={16} /> Đóng
+            <X size={16} /> {t("common.close")}
           </button>
 
           <button
             onClick={handlePrint}
             type="button"
-            aria-label="In hóa đơn"
+            aria-label={t("receipt.print")}
             style={{
               padding: "8px 16px",
               background: "#2634d5",
@@ -227,11 +182,10 @@ export default function PrintReceipt({ order, onClose }) {
               fontSize: 13,
             }}
           >
-            <Printer size={16} /> In
+            <Printer size={16} /> {t("receipt.print")}
           </button>
         </div>
 
-        {/* ============ RECEIPT ============ */}
         <div
           className="receipt"
           style={{
@@ -240,20 +194,14 @@ export default function PrintReceipt({ order, onClose }) {
             color: "#000",
           }}
         >
-          {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <h2 style={{ margin: "0 0 4px", fontSize: 18 }}>
-              CANTEEN VWA
-            </h2>
+            <h2 style={{ margin: "0 0 4px", fontSize: 18 }}>CANTEEN VWA</h2>
             <p style={{ margin: 0, fontSize: 11 }}>
-              Hệ thống quản lý Canteen
+              {t("receipt.tagline")}
             </p>
-            <p style={{ margin: "4px 0 0", fontSize: 11 }}>
-              ☎ {hotline}
-            </p>
+            <p style={{ margin: "4px 0 0", fontSize: 11 }}>☎ {hotline}</p>
           </div>
 
-          {/* Info block */}
           <div
             style={{
               borderTop: "1px dashed #000",
@@ -263,26 +211,25 @@ export default function PrintReceipt({ order, onClose }) {
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <span>Mã đơn:</span>
+              <span>{t("receipt.orderCode")}:</span>
               <b style={{ wordBreak: "break-all", textAlign: "right" }}>
                 {order.code || "—"}
               </b>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <span>Khách:</span>
+              <span>{t("receipt.customer")}:</span>
               <b style={{ textAlign: "right" }}>{customerName}</b>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <span>Thời gian:</span>
+              <span>{t("receipt.time")}:</span>
               <b style={{ textAlign: "right" }}>{dateStr}</b>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <span>Thanh toán:</span>
-              <b>{order.payment || "Tiền mặt"}</b>
+              <span>{t("receipt.payment")}:</span>
+              <b>{order.payment || t("checkout.cash")}</b>
             </div>
           </div>
 
-          {/* Items table */}
           <table
             style={{
               width: "100%",
@@ -300,7 +247,7 @@ export default function PrintReceipt({ order, onClose }) {
                     fontWeight: 700,
                   }}
                 >
-                  Món
+                  {t("receipt.colItem")}
                 </th>
                 <th
                   style={{
@@ -310,7 +257,7 @@ export default function PrintReceipt({ order, onClose }) {
                     fontWeight: 700,
                   }}
                 >
-                  SL
+                  {t("receipt.colQty")}
                 </th>
                 <th
                   style={{
@@ -320,7 +267,7 @@ export default function PrintReceipt({ order, onClose }) {
                     fontWeight: 700,
                   }}
                 >
-                  Tiền
+                  {t("receipt.colPrice")}
                 </th>
               </tr>
             </thead>
@@ -362,14 +309,13 @@ export default function PrintReceipt({ order, onClose }) {
                       fontSize: 11,
                     }}
                   >
-                    Không có món
+                    {t("order.noItems")}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
 
-          {/* Total */}
           <div
             style={{
               borderTop: "1px dashed #000",
@@ -384,12 +330,11 @@ export default function PrintReceipt({ order, onClose }) {
                 fontWeight: 700,
               }}
             >
-              <span>TỔNG CỘNG:</span>
+              <span>{t("receipt.totalLine")}</span>
               <span>{money(total)}</span>
             </div>
           </div>
 
-          {/* Footer */}
           <div
             style={{
               textAlign: "center",
@@ -397,23 +342,18 @@ export default function PrintReceipt({ order, onClose }) {
               fontSize: 11,
             }}
           >
-            <p style={{ margin: 0 }}>Cảm ơn quý khách!</p>
-            <p style={{ margin: "4px 0 0" }}>
-              Hẹn gặp lại tại Canteen VWA
-            </p>
+            <p style={{ margin: 0 }}>{t("receipt.thanks")}</p>
+            <p style={{ margin: "4px 0 0" }}>{t("receipt.seeYou")}</p>
           </div>
         </div>
       </div>
 
-      {/* ============ PRINT STYLES ============ */}
       <style>{`
         @media print {
-          /* Ẩn mọi thứ ngoài receipt */
           body > *:not(.receipt-overlay) {
             display: none !important;
           }
 
-          /* Overlay trở thành static */
           .receipt-overlay {
             position: static !important;
             background: #fff !important;
@@ -438,7 +378,6 @@ export default function PrintReceipt({ order, onClose }) {
             display: none !important;
           }
 
-          /* A5 page */
           @page {
             size: A5;
             margin: 0;

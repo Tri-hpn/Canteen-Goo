@@ -1,36 +1,13 @@
 ﻿// ============================================================
-// ORDERDETAILMODAL.JSX — Modal chi tiết đơn hàng
-// ============================================================
-// Props:
-//   order   — object đơn hàng
-//   onClose — callback đóng
-//   role    — "CUSTOMER" | "EMPLOYEE" | "ADMIN"
-//
-// Fixes (so với bản gốc):
-//   - 🔴 z-index chuẩn 2147483600
-//   - 🔴 ESC đóng modal
-//   - 🔴 role="dialog" + aria-modal + aria-label
-//   - 🔴 Guard NaN cho price × qty
-//   - 🔴 Guard Invalid Date cho created_at
-//   - 🟡 Bảng overflow-x cho mobile
-//   - 🟡 Nút "Đóng" ở dưới modal
-//   - 🟡 Extract InfoRow để giảm duplicate
-//   - 🟡 Guard order.items null
+// ORDERDETAILMODAL.JSX — Modal chi tiết đơn hàng (chung)
 // ============================================================
 
 import { useEffect, useMemo } from "react";
 import { X, Package } from "lucide-react";
 import { money } from "./UI";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const MODAL_Z = 2147483600;
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function fmtDateTime(iso) {
   if (!iso) return "—";
@@ -48,10 +25,6 @@ function calcLineTotal(price, qty) {
   const q = Number(qty) || 0;
   return p * q;
 }
-
-// ============================================================
-// SUB-COMPONENT: InfoRow
-// ============================================================
 
 function InfoRow({ label, value, last = false }) {
   return (
@@ -82,12 +55,9 @@ function InfoRow({ label, value, last = false }) {
   );
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function OrderDetailModal({ order, onClose, role }) {
-  // ---------- ESC đóng ----------
+  const { t } = useTranslation();
+
   useEffect(() => {
     if (!order) return;
 
@@ -97,8 +67,6 @@ export default function OrderDetailModal({ order, onClose, role }) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [order, onClose]);
-
-  // ---------- Computed ----------
 
   const canPrint = useMemo(
     () => role === "EMPLOYEE" || role === "ADMIN",
@@ -110,19 +78,14 @@ export default function OrderDetailModal({ order, onClose, role }) {
     return order.items;
   }, [order]);
 
-  // ---------- Early return ----------
   if (!order) return null;
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={`Chi tiết đơn hàng ${order.code || ""}`}
+      aria-label={t("order.detailAria").replace("{code}", order.code || "")}
       style={{
         position: "fixed",
         inset: 0,
@@ -146,7 +109,6 @@ export default function OrderDetailModal({ order, onClose, role }) {
           overflowY: "auto",
         }}
       >
-        {/* ============ HEADER ============ */}
         <div
           style={{
             display: "flex",
@@ -166,13 +128,13 @@ export default function OrderDetailModal({ order, onClose, role }) {
               fontSize: 16,
             }}
           >
-            <Package size={20} /> Chi tiết đơn hàng
+            <Package size={20} /> {t("order.detailTitle")}
           </h3>
 
           <button
             onClick={onClose}
             type="button"
-            aria-label="Đóng"
+            aria-label={t("common.close")}
             style={{
               background: "transparent",
               border: 0,
@@ -188,7 +150,6 @@ export default function OrderDetailModal({ order, onClose, role }) {
           </button>
         </div>
 
-        {/* ============ INFO ============ */}
         <div
           style={{
             display: "flex",
@@ -196,20 +157,19 @@ export default function OrderDetailModal({ order, onClose, role }) {
             marginBottom: 16,
           }}
         >
-          <InfoRow label="Mã đơn" value={order.code || "—"} />
+          <InfoRow label={t("orders.orderCode")} value={order.code || "—"} />
           <InfoRow
-            label="Thời gian"
+            label={t("common.time")}
             value={fmtDateTime(order.created_at)}
           />
-          <InfoRow label="Trạng thái" value={order.status || "—"} />
+          <InfoRow label={t("common.status")} value={order.status || "—"} />
           <InfoRow
-            label="Thanh toán"
-            value={order.payment || "Tiền mặt"}
+            label={t("checkout.payment")}
+            value={order.payment || t("checkout.cash")}
             last
           />
         </div>
 
-        {/* ============ ITEMS ============ */}
         <h4
           style={{
             margin: "16px 0 12px",
@@ -217,16 +177,16 @@ export default function OrderDetailModal({ order, onClose, role }) {
             fontSize: 14,
           }}
         >
-          Món đã đặt ({items.length})
+          {t("order.itemsCount").replace("{n}", items.length)}
         </h4>
 
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                <th style={thLeft}>Món</th>
-                <th style={thCenter}>SL</th>
-                <th style={thRight}>Tiền</th>
+                <th style={thLeft}>{t("menu.title")}</th>
+                <th style={thCenter}>{t("common.quantity")}</th>
+                <th style={thRight}>{t("common.price")}</th>
               </tr>
             </thead>
             <tbody>
@@ -269,7 +229,7 @@ export default function OrderDetailModal({ order, onClose, role }) {
                       fontSize: 13,
                     }}
                   >
-                    Đơn hàng không có món
+                    {t("order.noItems")}
                   </td>
                 </tr>
               )}
@@ -277,7 +237,6 @@ export default function OrderDetailModal({ order, onClose, role }) {
           </table>
         </div>
 
-        {/* ============ TOTAL ============ */}
         <div
           style={{
             display: "flex",
@@ -289,13 +248,14 @@ export default function OrderDetailModal({ order, onClose, role }) {
             gap: 10,
           }}
         >
-          <b style={{ color: "var(--text-primary, #172033)" }}>Tổng cộng</b>
+          <b style={{ color: "var(--text-primary, #172033)" }}>
+            {t("cart.total")}
+          </b>
           <strong style={{ color: "#2634d5", fontSize: 20 }}>
             {money(Number(order.total) || 0)}
           </strong>
         </div>
 
-        {/* ============ NOTE ============ */}
         {order.note && (
           <div
             style={{
@@ -308,12 +268,13 @@ export default function OrderDetailModal({ order, onClose, role }) {
               lineHeight: 1.5,
             }}
           >
-            <b style={{ color: "var(--text-primary, #172033)" }}>Ghi chú:</b>{" "}
+            <b style={{ color: "var(--text-primary, #172033)" }}>
+              {t("checkout.note")}:
+            </b>{" "}
             {order.note}
           </div>
         )}
 
-        {/* ============ HINT cho customer ============ */}
         {!canPrint && (
           <p
             style={{
@@ -327,11 +288,10 @@ export default function OrderDetailModal({ order, onClose, role }) {
               lineHeight: 1.5,
             }}
           >
-            ℹ️ Hóa đơn in sẽ do nhân viên Canteen thực hiện.
+            ℹ️ {t("order.printHint")}
           </p>
         )}
 
-        {/* ============ CLOSE BUTTON ============ */}
         <button
           onClick={onClose}
           type="button"
@@ -355,16 +315,12 @@ export default function OrderDetailModal({ order, onClose, role }) {
             e.currentTarget.style.background = "var(--card-bg, #fff)";
           }}
         >
-          Đóng
+          {t("common.close")}
         </button>
       </div>
     </div>
   );
 }
-
-// ============================================================
-// STYLE CONSTANTS
-// ============================================================
 
 const thBase = {
   padding: 8,

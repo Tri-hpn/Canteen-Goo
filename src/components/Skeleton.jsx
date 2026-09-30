@@ -1,33 +1,11 @@
 // ============================================================
 // SKELETON.JSX — Placeholder loading với shimmer effect
 // ============================================================
-// Components:
-//   <Skeleton />              — base block
-//   <SkeletonText />          — dòng text
-//   <SkeletonCircle />        — avatar
-//   <SkeletonCard />          — card cho grid (ảnh + text + button)
-//   <SkeletonTableRow />      — 1 row table
-//   <SkeletonList />          — list item cho transaction
-//
-// Cách dùng:
-//   {loading ? (
-//     <>
-//       {Array.from({ length: 8 }).map((_, i) => (
-//         <SkeletonCard key={i} />
-//       ))}
-//     </>
-//   ) : (
-//     items.map(...)
-//   )}
-//
-// CSS animation `shimmer` đã có trong styles.css (.skeleton).
+// Không có text hiển thị → KHÔNG cần i18n.
+// Giữ nguyên code gốc.
 // ============================================================
 
 import { useMemo } from "react";
-
-// ============================================================
-// BASE SKELETON
-// ============================================================
 
 export function Skeleton({
   width = "100%",
@@ -49,17 +27,9 @@ export function Skeleton({
   );
 }
 
-// ============================================================
-// TEXT LINE
-// ============================================================
-
 export function SkeletonText({ width = "100%", height = 12, style = {} }) {
   return <Skeleton width={width} height={height} radius={4} style={style} />;
 }
-
-// ============================================================
-// CIRCLE (AVATAR)
-// ============================================================
 
 export function SkeletonCircle({ size = 40, style = {} }) {
   return (
@@ -71,10 +41,6 @@ export function SkeletonCircle({ size = 40, style = {} }) {
     />
   );
 }
-
-// ============================================================
-// CARD (cho grid món ăn)
-// ============================================================
 
 export function SkeletonCard({ style = {} }) {
   return (
@@ -90,10 +56,8 @@ export function SkeletonCard({ style = {} }) {
         ...style,
       }}
     >
-      {/* Image */}
       <Skeleton width="100%" height={160} radius={0} />
 
-      {/* Body */}
       <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
         <Skeleton width="40%" height={10} />
         <Skeleton width="85%" height={14} />
@@ -111,12 +75,7 @@ export function SkeletonCard({ style = {} }) {
   );
 }
 
-// ============================================================
-// TABLE ROW
-// ============================================================
-
 export function SkeletonTableRow({ columns = 5 }) {
-  // Width ngẫu nhiên cho mỗi cell để trông tự nhiên
   const widths = useMemo(
     () =>
       Array.from({ length: columns }).map(
@@ -138,10 +97,6 @@ export function SkeletonTableRow({ columns = 5 }) {
     </tr>
   );
 }
-
-// ============================================================
-// LIST ITEM (transaction)
-// ============================================================
 
 export function SkeletonList({ style = {} }) {
   return (
@@ -169,9 +124,6 @@ export function SkeletonList({ style = {} }) {
     </div>
   );
 }
-// ============================================================
-// TABLE WRAPPER (thead + n rows)
-// ============================================================
 
 export function SkeletonTable({
   columns = 5,
@@ -208,9 +160,6 @@ export function SkeletonTable({
     </div>
   );
 }
-// ============================================================
-// STATS GRID (4 KPI cards)
-// ============================================================
 
 export function SkeletonStats({ count = 4, columns = "repeat(4, 1fr)" }) {
   return (

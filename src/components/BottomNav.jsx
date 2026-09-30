@@ -12,10 +12,6 @@ import { api, setToken } from "../api";
 import { useTranslation } from "../i18n";
 import ConfirmDialog, { LogoutIcon } from "./ConfirmDialog";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
 const CART_KEY = "canteen_cart";
 const ORDERS_SEEN_KEY = "orders_last_seen";
 
@@ -42,10 +38,6 @@ const ACTIVE_ORDER_STATUSES = [
 const POLL_MS = 30000;
 const BADGE_MAX = 99;
 
-// ============================================================
-// HELPERS
-// ============================================================
-
 function readCartFromStorage() {
   try {
     const raw = localStorage.getItem(CART_KEY);
@@ -66,10 +58,6 @@ function isPathActive(currentPath, targetPath) {
   return currentPath.startsWith(targetPath + "/");
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function BottomNav({ onLogout }) {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
@@ -84,12 +72,10 @@ export default function BottomNav({ onLogout }) {
 
   const orderReqIdRef = useRef(0);
 
-  // ---------- Read cart ----------
   const readCart = useCallback(() => {
     setCartCount(readCartFromStorage());
   }, []);
 
-  // ---------- Read orders ----------
   const readOrders = useCallback(async () => {
     const myReqId = ++orderReqIdRef.current;
 
@@ -101,6 +87,7 @@ export default function BottomNav({ onLogout }) {
       }
 
       const data = await api.orders.myOrders();
+
       if (myReqId !== orderReqIdRef.current) return;
 
       const lastSeen = parseInt(
@@ -120,7 +107,6 @@ export default function BottomNav({ onLogout }) {
     }
   }, []);
 
-  // ---------- Setup listeners + polling ----------
   useEffect(() => {
     readCart();
     readOrders();
@@ -144,12 +130,10 @@ export default function BottomNav({ onLogout }) {
     };
   }, [readCart, readOrders]);
 
-  // ---------- Close More menu khi đổi route ----------
   useEffect(() => {
     setShowMore(false);
   }, [location.pathname]);
 
-  // ---------- ESC đóng More + lock scroll ----------
   useEffect(() => {
     if (!showMore) return;
 
@@ -167,7 +151,6 @@ export default function BottomNav({ onLogout }) {
     };
   }, [showMore]);
 
-  // ---------- Handlers ----------
   const getBadge = (key) => {
     if (key === "cart") return cartCount;
     if (key === "orders") return orderCount;
@@ -215,25 +198,24 @@ export default function BottomNav({ onLogout }) {
 
   return (
     <>
-      {/* ============ MORE MENU ============ */}
       {showMore && (
         <div
           className="bottom-nav-more-overlay"
           onClick={() => setShowMore(false)}
           role="dialog"
           aria-modal="true"
-          aria-label={t("more.menuTitle")}
+          aria-label={t("nav.moreMenu")}
         >
           <div
             className="bottom-nav-more-menu"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bottom-nav-more-head">
-              <span>{t("more.menu")}</span>
+              <span>{t("nav.menu")}</span>
               <button
                 onClick={() => setShowMore(false)}
                 className="bottom-nav-more-close"
-                aria-label={t("common.close")}
+                aria-label={t("common.closeMenu")}
                 type="button"
               >
                 <X size={16} />
@@ -274,8 +256,7 @@ export default function BottomNav({ onLogout }) {
         </div>
       )}
 
-      {/* ============ BOTTOM NAV ============ */}
-      <nav className="bottom-nav" aria-label={t("nav.main")}>
+      <nav className="bottom-nav" aria-label={t("nav.mainNav")}>
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const badge = getBadge(tab.badge);
@@ -298,14 +279,13 @@ export default function BottomNav({ onLogout }) {
           );
         })}
 
-        {/* Nút "Thêm" */}
         <button
           type="button"
           className={
             "bottom-nav-item" + (isMoreActive || showMore ? " active" : "")
           }
           onClick={handleMoreToggle}
-          aria-label={t("nav.moreLabel")}
+          aria-label={t("nav.openMore")}
           aria-expanded={showMore}
           aria-haspopup="menu"
         >
@@ -316,12 +296,11 @@ export default function BottomNav({ onLogout }) {
         </button>
       </nav>
 
-      {/* ============ CONFIRM LOGOUT MODAL ============ */}
       <ConfirmDialog
         open={confirmLogout}
         icon={LogoutIcon}
-        title={t("logout.title")}
-        message={t("logout.messageCart")}
+        title={t("logout.confirmTitle")}
+        message={t("logout.confirmMessageCart")}
         confirmText={t("common.logout")}
         cancelText={t("logout.stay")}
         danger

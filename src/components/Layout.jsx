@@ -30,17 +30,47 @@ const FALLBACK_AVATAR =
     </svg>`
   );
 
+/**
+ * Auto page-heading theo pathname.
+ * Dùng KEY i18n, không hardcode text.
+ */
 const PAGE_HEADINGS = [
-  { path: "/customer/menu",       titleKey: "page.menu.title",       subtitleKey: "page.menu.subtitle" },
-  { path: "/customer/cart",       titleKey: "page.cart.title",       subtitleKey: "page.cart.subtitle" },
-  { path: "/customer/checkout",   titleKey: "page.checkout.title",   subtitleKey: "page.checkout.subtitle" },
-  { path: "/customer/orders",     titleKey: "page.orders.title",     subtitleKey: "page.orders.subtitle" },
-  { path: "/customer/profile",    titleKey: "page.profile.title",    subtitleKey: "page.profile.subtitle" },
-  { path: "/customer/promotions", titleKey: "page.promotions.title", subtitleKey: "page.promotions.subtitle" },
-  { path: "/customer/wallet",     titleKey: "page.wallet.title",     subtitleKey: "page.wallet.subtitle" },
-  { path: "/customer/chat",       titleKey: "page.chat.title",       subtitleKey: "page.chat.subtitle" },
-  { path: "/customer/signature",  titleKey: "page.signature.title",  subtitleKey: "page.signature.subtitle" },
-  { path: "/customer/success",    titleKey: "page.success.title",    subtitleKey: "page.success.subtitle" },
+  // ===== CUSTOMER =====
+  { path: "/customer/menu",       titleKey: "menu.title",            subtitleKey: "menu.subtitle" },
+  { path: "/customer/cart",       titleKey: "cart.title",            subtitleKey: "cart.subtitle" },
+  { path: "/customer/checkout",   titleKey: "checkout.title",        subtitleKey: "checkout.subtitle" },
+  { path: "/customer/orders",     titleKey: "orders.title",          subtitleKey: "orders.subtitle" },
+  { path: "/customer/profile",    titleKey: "profile.title",         subtitleKey: "profile.subtitle" },
+  { path: "/customer/promotions", titleKey: "promo.pageTitle",       subtitleKey: "promo.pageSubtitle" },
+  { path: "/customer/wallet",     titleKey: "wallet.title",          subtitleKey: "wallet.subtitle" },
+  { path: "/customer/chat",       titleKey: "chat.title",            subtitleKey: "chat.subtitle" },
+  { path: "/customer/signature",  titleKey: "signature.title",       subtitleKey: "signature.subtitle" },
+  { path: "/customer/success",    titleKey: "success.title",         subtitleKey: "success.subtitle" },
+
+  // ===== EMPLOYEE =====
+  { path: "/employee/attendance", titleKey: "owner.attendanceTitle", subtitleKey: "owner.attendanceDesc" },
+  { path: "/employee/orders",     titleKey: "employee.ordersTitle",  subtitleKey: "employee.ordersDesc" },
+  { path: "/employee/menu",       titleKey: "employee.menuTitle",    subtitleKey: "employee.menuDesc" },
+  { path: "/employee/profile",    titleKey: "profile.title",         subtitleKey: "profile.subtitle" },
+  { path: "/employee/chat",       titleKey: "employee.chatTitle",    subtitleKey: "employee.chatDesc" },
+
+  // ===== OWNER (ADMIN) =====
+  { path: "/owner/employees",     titleKey: "owner.employeesTitle",  subtitleKey: "owner.employeesDesc" },
+  { path: "/owner/shifts",        titleKey: "owner.shiftsTitle",     subtitleKey: "owner.shiftsDesc" },
+  { path: "/owner/attendance",    titleKey: "owner.attendanceTitle", subtitleKey: "owner.attendanceDesc" },
+  { path: "/owner/customers",     titleKey: "owner.customersTitle",  subtitleKey: "owner.customersDesc" },
+  { path: "/owner/menu",          titleKey: "owner.menuTitle",       subtitleKey: "owner.menuDesc" },
+  { path: "/owner/price-history", titleKey: "owner.priceHistoryTitle", subtitleKey: "owner.priceHistoryDesc" },
+  { path: "/owner/inventory",     titleKey: "owner.inventoryTitle",  subtitleKey: "owner.inventoryDesc" },
+  { path: "/owner/reports",       titleKey: "owner.reportsTitle",    subtitleKey: "owner.reportsDesc" },
+  { path: "/owner/permissions",   titleKey: "owner.permissionsTitle", subtitleKey: "owner.permissionsDesc" },
+  { path: "/owner/orders",        titleKey: "owner.ordersTitle",     subtitleKey: "owner.ordersDesc" },
+  { path: "/owner/vouchers",      titleKey: "owner.vouchersTitle",   subtitleKey: "owner.vouchersDesc" },
+  { path: "/owner/finance",       titleKey: "owner.financeTitle",    subtitleKey: "owner.financeDesc" },
+  { path: "/owner/wallet",        titleKey: "owner.walletAdminTitle", subtitleKey: "owner.walletAdminDesc" },
+  { path: "/owner/settings",      titleKey: "owner.settingsTitle",   subtitleKey: "owner.settingsDesc" },
+  { path: "/owner/profile",       titleKey: "profile.title",         subtitleKey: "profile.subtitle" },
+  { path: "/owner/backup",        titleKey: "owner.backupTitle",     subtitleKey: "owner.backupDesc" },
 ];
 
 function getHomePath(role) {
@@ -84,7 +114,7 @@ function lookupHeading(pathname) {
   );
   for (const h of sorted) {
     if (pathname === h.path || pathname.startsWith(h.path + "/")) {
-      return { titleKey: h.titleKey, subtitleKey: h.subtitleKey };
+      return h;
     }
   }
   return null;
@@ -112,6 +142,7 @@ function TopbarLogo({ role }) {
 }
 
 function CartTopbarIcon() {
+  const { t } = useTranslation();
   const [count, setCount] = useState(0);
   const { t } = useTranslation();
 
@@ -131,7 +162,11 @@ function CartTopbarIcon() {
       to="/customer/cart"
       className="cart-topbar-icon"
       title={t("nav.cart")}
-      aria-label={`${t("nav.cart")}${count > 0 ? `, ${count}` : ""}`}
+      aria-label={
+        count > 0
+          ? t("cart.ariaWithCount").replace("{n}", count)
+          : t("nav.cart")
+      }
     >
       <ShoppingCart size={18} />
       {count > 0 && (
@@ -144,6 +179,7 @@ function CartTopbarIcon() {
 }
 
 function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
+  const { t, lang, setLang } = useTranslation();
   const initials = useMemo(() => getInitials(user?.name), [user?.name]);
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState(() => {
@@ -153,7 +189,6 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
       : "light";
   });
   const dropdownRef = useRef(null);
-  const { t, lang, setLang } = useTranslation();
 
   useEffect(() => {
     const update = () => {
@@ -203,9 +238,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
     setTheme(isDark ? "light" : "dark");
   };
 
-  const toggleLang = () => {
-    setLang(lang === "vi" ? "en" : "vi");
-  };
+  const toggleLang = () => setLang(lang === "vi" ? "en" : "vi");
 
   const itemStyle = {
     display: "flex",
@@ -229,15 +262,15 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
         type="button"
         onClick={() => setOpen((s) => !s)}
         className="topbar-profile-btn"
-        title={t("account.menu")}
-        aria-label={t("account.menu")}
+        title={t("profile.menuTitle")}
+        aria-label={t("profile.menuTitle")}
         aria-haspopup="menu"
         aria-expanded={open}
       >
         {user?.avatar ? (
           <img
             src={user.avatar}
-            alt={user.name || "Avatar"}
+            alt={user.name || t("profile.avatar")}
             className="profile-avatar-img"
             onError={(e) => {
               e.target.onerror = null;
@@ -249,7 +282,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
         )}
 
         <span className="profile-info">
-          <b className="profile-name">{user?.name || t("account.user")}</b>
+          <b className="profile-name">{user?.name || t("profile.guest")}</b>
           <small className="profile-role">{roleLabel}</small>
         </span>
 
@@ -280,7 +313,6 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             zIndex: 2147483600,
           }}
         >
-          {/* Hồ sơ */}
           <button
             type="button"
             role="menuitem"
@@ -297,7 +329,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }
           >
             <UserIcon size={16} />
-            <span>{t("account.profile")}</span>
+            <span>{t("profile.title")}</span>
           </button>
 
           <div
@@ -308,7 +340,6 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }}
           />
 
-          {/* Ngôn ngữ */}
           <button
             type="button"
             role="menuitem"
@@ -322,9 +353,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }
           >
             <Globe size={16} />
-            <span style={{ flex: 1, textAlign: "left" }}>
-              {t("account.language")}
-            </span>
+            <span style={{ flex: 1, textAlign: "left" }}>{t("lang.select")}</span>
             <span
               style={{
                 fontSize: 12,
@@ -336,7 +365,6 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             </span>
           </button>
 
-          {/* Theme */}
           <button
             type="button"
             role="menuitem"
@@ -350,9 +378,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }
           >
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-            <span style={{ flex: 1, textAlign: "left" }}>
-              {t("account.theme")}
-            </span>
+            <span style={{ flex: 1, textAlign: "left" }}>{t("theme.label")}</span>
             <span
               style={{
                 fontSize: 12,
@@ -360,7 +386,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
                 fontWeight: 600,
               }}
             >
-              {theme === "dark" ? t("account.dark") : t("account.light")}
+              {theme === "dark" ? t("theme.dark") : t("theme.light")}
             </span>
           </button>
 
@@ -372,7 +398,6 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }}
           />
 
-          {/* Đăng xuất */}
           <button
             type="button"
             role="menuitem"
@@ -389,7 +414,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
             }
           >
             <LogOut size={16} />
-            <span>{t("account.logout")}</span>
+            <span>{t("common.logout")}</span>
           </button>
         </div>
       )}
@@ -426,20 +451,23 @@ export default function Layout({
     if (role === "ADMIN") return t("role.admin");
     if (role === "EMPLOYEE") return t("role.employee");
     return t("role.customer");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, t, lang]);
+  }, [role, t]);
 
+  /**
+   * Auto heading:
+   *   - Nếu prop title/subtitle → dịch trực tiếp (nếu là key i18n) hoặc dùng raw
+   *   - Nếu không → lookup theo path → dịch key
+   */
   const heading = useMemo(() => {
     if (title || subtitle) {
       return { title, subtitle };
     }
-    const raw = lookupHeading(location.pathname);
-    if (!raw) return null;
+    const found = lookupHeading(location.pathname);
+    if (!found) return null;
     return {
-      title: t(raw.titleKey),
-      subtitle: t(raw.subtitleKey),
+      title: t(found.titleKey),
+      subtitle: t(found.subtitleKey),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, subtitle, location.pathname, t, lang]);
 
   const openProfile = useCallback(() => {
@@ -490,11 +518,7 @@ export default function Layout({
 
           <div className="topbar-right">
             {role === "CUSTOMER" && <CartTopbarIcon />}
-
-            <LanguageToggle />
-
             <NotificationBell />
-
             {role === "CUSTOMER" && (
               <TopbarProfile
                 user={user}
@@ -527,8 +551,8 @@ export default function Layout({
       <ConfirmDialog
         open={showLogoutConfirm}
         icon={LogoutIcon}
-        title={t("logout.title")}
-        message={t("logout.message")}
+        title={t("logout.confirmTitle")}
+        message={t("logout.confirmMessage")}
         confirmText={t("common.logout")}
         cancelText={t("logout.stay")}
         danger

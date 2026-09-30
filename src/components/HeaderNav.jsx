@@ -1,17 +1,6 @@
 ﻿// ============================================================
 // HEADERNAV.JSX — Menu ngang cho Customer (desktop)
 // ============================================================
-// Hiện trên desktop (>= 901px). Tablet/Mobile dùng BottomNav.
-//
-// 6 tab chính: Trang chủ, Thực đơn, Giỏ hàng, Đơn hàng,
-//              Ví Canteen, Khuyến mãi
-// (Đã bỏ tab "Hồ sơ" vì thừa — đã có nút profile ở topbar phải)
-//
-// FIX v3:
-//   - 🔴 Bỏ tab "Hồ sơ"
-//   - 🔴 Ẩn hoàn toàn khi màn hình <= 900px
-//   - 🔴 Không render DOM khi mobile (tối ưu performance)
-// ============================================================
 
 import { useEffect, useState, useCallback } from "react";
 import { NavLink } from "react-router-dom";
@@ -21,13 +10,9 @@ import {
 import { api } from "../api";
 import { useTranslation } from "../i18n";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
 const CART_KEY = "canteen_cart";
 const ORDERS_SEEN_KEY = "orders_last_seen";
-const HIDE_BELOW_PX = 900; // ✅ Ẩn HeaderNav khi <= 900px
+const HIDE_BELOW_PX = 900;
 
 const ACTIVE_ORDER_STATUSES = [
   "Chờ xác nhận",
@@ -36,7 +21,6 @@ const ACTIVE_ORDER_STATUSES = [
   "Sẵn sàng nhận",
 ];
 
-// 5 tab chính — bỏ "Hồ sơ" (đã có ở topbar) và "Giỏ hàng" (đã có icon topbar)
 const TABS = [
   { key: "home",       labelKey: "nav.home",       icon: Home,            path: "/customer" },
   { key: "menu",       labelKey: "nav.menu",       icon: UtensilsCrossed, path: "/customer/menu" },
@@ -46,10 +30,6 @@ const TABS = [
 ];
 
 const BADGE_MAX = 99;
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function readCartCount() {
   try {
@@ -65,7 +45,6 @@ function readCartCount() {
   }
 }
 
-/** Hook: check màn hình có rộng không (>= HIDE_BELOW_PX) */
 function useIsWideScreen() {
   const [wide, setWide] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -83,7 +62,6 @@ function useIsWideScreen() {
       mq.addEventListener("change", handler);
       return () => mq.removeEventListener("change", handler);
     }
-    // Safari cũ
     mq.addListener?.(handler);
     return () => mq.removeListener?.(handler);
   }, []);
@@ -91,25 +69,16 @@ function useIsWideScreen() {
   return wide;
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function HeaderNav() {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
   const { t } = useTranslation();
 
-  // ✅ Check màn hình — không render DOM khi mobile
   const isWide = useIsWideScreen();
-
-  // ---------- Read cart ----------
 
   const readCart = useCallback(() => {
     setCartCount(readCartCount());
   }, []);
-
-  // ---------- Read orders ----------
 
   const readOrders = useCallback(async () => {
     try {
@@ -137,10 +106,8 @@ export default function HeaderNav() {
     }
   }, []);
 
-  // ---------- Listeners ----------
-
   useEffect(() => {
-    if (!isWide) return; // ✅ Không fetch khi mobile
+    if (!isWide) return;
 
     readCart();
     readOrders();
@@ -160,8 +127,6 @@ export default function HeaderNav() {
       window.removeEventListener("order-updated", onOrder);
     };
   }, [isWide, readCart, readOrders]);
-
-  // ---------- Badge render ----------
 
   const renderBadge = (count) => {
     if (!count || count <= 0) return null;
@@ -193,15 +158,10 @@ export default function HeaderNav() {
     );
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
-  // ✅ Không render gì khi màn hình nhỏ
   if (!isWide) return null;
 
   return (
-    <nav className="header-nav" aria-label="Menu chính">
+    <nav className="header-nav" aria-label={t("nav.mainMenu")}>
       <div
         className="header-nav-inner"
         style={{

@@ -9,10 +9,6 @@ import { api } from "../api";
 import { money } from "./UI";
 import { useTranslation } from "../i18n";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
 const DEBOUNCE_MS = 300;
 const MAX_RESULTS = 5;
 
@@ -24,10 +20,6 @@ const FALLBACK_IMG =
       <text x='50' y='58' font-size='40' text-anchor='middle'>🍽️</text>
     </svg>`
   );
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function getMenuPath(role) {
   if (role === "ADMIN") return "/owner/menu";
@@ -61,11 +53,8 @@ function highlightText(text, query) {
   );
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function GlobalSearch({ role }) {
+  const { t } = useTranslation();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [menuResults, setMenuResults] = useState([]);
@@ -80,7 +69,6 @@ export default function GlobalSearch({ role }) {
 
   const menuPath = useMemo(() => getMenuPath(role), [role]);
 
-  // ---------- Click outside ----------
   useEffect(() => {
     const handler = (e) => {
       if (boxRef.current && !boxRef.current.contains(e.target)) {
@@ -91,13 +79,11 @@ export default function GlobalSearch({ role }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ---------- Sync q với URL ----------
   useEffect(() => {
     const urlQ = new URLSearchParams(location.search).get("q") || "";
     setQ(urlQ);
   }, [location.pathname, location.search]);
 
-  // ---------- Search (debounced + race-safe) ----------
   useEffect(() => {
     const trimmed = q.trim();
 
@@ -137,7 +123,6 @@ export default function GlobalSearch({ role }) {
     setActiveIdx(-1);
   }, [menuResults]);
 
-  // ---------- Handlers ----------
   const handleInput = (e) => {
     const val = e.target.value;
     setQ(val);
@@ -231,7 +216,7 @@ export default function GlobalSearch({ role }) {
           onFocus={() => hasQuery && setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={t("search.placeholder")}
-          aria-label={t("search.aria")}
+          aria-label={t("search.placeholder")}
           aria-autocomplete="list"
           maxLength={100}
         />
@@ -294,7 +279,7 @@ export default function GlobalSearch({ role }) {
                   marginBottom: 6,
                 }}
               />
-              <div>{t("search.loading")}</div>
+              <div>{t("search.searching")}</div>
             </div>
           )}
 
@@ -307,14 +292,14 @@ export default function GlobalSearch({ role }) {
                 fontSize: 13,
               }}
             >
-              {t("search.notFound")} "{q}"
+              {t("search.noResults").replace("{q}", q)}
             </div>
           )}
 
           {total > 0 && (
             <div>
               <div className="dropdown-section-title">
-                <Utensils size={12} /> {t("search.dishes")} ({total})
+                <Utensils size={12} /> {t("search.dishesLabel")} ({total})
               </div>
 
               {menuResults.map((m, idx) => {
@@ -405,8 +390,8 @@ export default function GlobalSearch({ role }) {
               }}
             >
               <span>
-                <kbd>↑</kbd> <kbd>↓</kbd> {t("search.kbdChoose")} ·{" "}
-                <kbd>Enter</kbd> {t("search.kbdOpen")}
+                <kbd>↑</kbd> <kbd>↓</kbd> {t("search.navHintSelect")} ·{" "}
+                <kbd>Enter</kbd> {t("search.navHintOpen")}
               </span>
               <button
                 type="button"
@@ -420,7 +405,7 @@ export default function GlobalSearch({ role }) {
                   fontWeight: 600,
                 }}
               >
-                {t("search.viewAll")} →
+                {t("search.seeAll")} →
               </button>
             </div>
           )}

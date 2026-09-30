@@ -10,10 +10,6 @@ import {
 import { api } from "../api";
 import { useTranslation } from "../i18n";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
 const SOCIALS = [
   { Icon: Facebook,  href: "https://facebook.com/",  label: "Facebook", color: "#1877F2" },
   { Icon: Instagram, href: "https://instagram.com/", label: "Instagram", color: "#E4405F" },
@@ -28,11 +24,8 @@ const EMPTY_CONTACT = {
   address: "",
 };
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function Footer() {
+  const { t } = useTranslation();
   const [contact, setContact] = useState(EMPTY_CONTACT);
   const { t } = useTranslation();
 
@@ -83,12 +76,62 @@ export default function Footer() {
     return `tel:${cleaned}`;
   }, [contact.hotline]);
 
-  const notConfigured = t("footer.notConfigured");
+  const renderContact = (
+    { has, href, icon, labelKey, value, external }
+  ) => {
+    if (has) {
+      return (
+        <a
+          href={href}
+          {...(external
+            ? { target: "_blank", rel: "noopener noreferrer" }
+            : {})}
+          className="footer-contact-item"
+          title={t(labelKey) + ": " + value}
+        >
+          {icon}
+          <div>
+            <span
+              style={{
+                display: "block",
+                fontSize: 11,
+                color: "var(--text-light, #8993a3)",
+                marginBottom: 2,
+              }}
+            >
+              {t(labelKey)}
+            </span>
+            <b>{value}</b>
+          </div>
+        </a>
+      );
+    }
+    return (
+      <div className="footer-contact-item" style={{ opacity: 0.6 }}>
+        {icon}
+        <div>
+          <span
+            style={{
+              display: "block",
+              fontSize: 11,
+              color: "var(--text-light, #8993a3)",
+              marginBottom: 2,
+            }}
+          >
+            {t(labelKey)}
+          </span>
+          <b style={{ fontStyle: "italic", fontWeight: 500 }}>
+            {t("footer.notConfigured")}
+          </b>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <footer className="app-footer">
       <div className="footer-grid">
-        {/* ============ CỘT 1: BRAND ============ */}
+        {/* CỘT 1: BRAND */}
         <div className="footer-col">
           <div className="footer-brand">
             <div className="footer-logo">C</div>
@@ -100,143 +143,37 @@ export default function Footer() {
           <p className="footer-desc">{t("footer.description")}</p>
         </div>
 
-        {/* ============ CỘT 2: LIÊN HỆ ============ */}
+        {/* CỘT 2: LIÊN HỆ */}
         <div className="footer-col">
           <h4 className="footer-heading">{t("footer.contact")}</h4>
 
-          {/* Hotline */}
-          {hasHotline ? (
-            <a
-              href={telHref}
-              className="footer-contact-item"
-              title={`${t("footer.call")} ${contact.hotline}`}
-            >
-              <Phone size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  {t("footer.hotline")}
-                </span>
-                <b>{contact.hotline}</b>
-              </div>
-            </a>
-          ) : (
-            <div className="footer-contact-item" style={{ opacity: 0.6 }}>
-              <Phone size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  {t("footer.hotline")}
-                </span>
-                <b style={{ fontStyle: "italic", fontWeight: 500 }}>
-                  {notConfigured}
-                </b>
-              </div>
-            </div>
-          )}
+          {renderContact({
+            has: hasHotline,
+            href: telHref,
+            icon: <Phone size={14} />,
+            labelKey: "footer.hotline",
+            value: contact.hotline,
+          })}
 
-          {/* Email */}
-          {hasEmail ? (
-            <a
-              href={`mailto:${contact.email}`}
-              className="footer-contact-item"
-              title={`${t("footer.sendEmail")} ${contact.email}`}
-            >
-              <Mail size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  {t("footer.email")}
-                </span>
-                <b>{contact.email}</b>
-              </div>
-            </a>
-          ) : (
-            <div className="footer-contact-item" style={{ opacity: 0.6 }}>
-              <Mail size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  {t("footer.email")}
-                </span>
-                <b style={{ fontStyle: "italic", fontWeight: 500 }}>
-                  {notConfigured}
-                </b>
-              </div>
-            </div>
-          )}
+          {renderContact({
+            has: hasEmail,
+            href: `mailto:${contact.email}`,
+            icon: <Mail size={14} />,
+            labelKey: "footer.email",
+            value: contact.email,
+          })}
 
-          {/* Địa chỉ */}
-          {hasAddress ? (
-            <a
-              href={mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="footer-contact-item"
-              title={t("footer.openMaps")}
-            >
-              <MapPin size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  {t("footer.address")}
-                </span>
-                <b>{contact.address}</b>
-              </div>
-            </a>
-          ) : (
-            <div className="footer-contact-item" style={{ opacity: 0.6 }}>
-              <MapPin size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  {t("footer.address")}
-                </span>
-                <b style={{ fontStyle: "italic", fontWeight: 500 }}>
-                  {notConfigured}
-                </b>
-              </div>
-            </div>
-          )}
+          {renderContact({
+            has: hasAddress,
+            href: mapsUrl,
+            icon: <MapPin size={14} />,
+            labelKey: "footer.address",
+            value: contact.address,
+            external: true,
+          })}
         </div>
 
-        {/* ============ CỘT 3: SOCIAL + MAP ============ */}
+        {/* CỘT 3: SOCIAL + MAP */}
         <div className="footer-col footer-col-social-map">
           <div className="footer-socials">
             {SOCIALS.map(({ Icon, href, label, color }) => (
@@ -258,7 +195,7 @@ export default function Footer() {
           {hasAddress ? (
             <div className="footer-map" style={{ position: "relative" }}>
               <iframe
-                title={`${t("footer.mapOf")} ${contact.address}`}
+                title={t("footer.mapTitle").replace("{address}", contact.address)}
                 src={mapsEmbedUrl}
                 width="100%"
                 height="100%"
@@ -302,9 +239,8 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* ============ COPYRIGHT ============ */}
       <div className="footer-copyright">
-        © {new Date().getFullYear()} Canteen VWA · {t("footer.madeWith")}
+        © {new Date().getFullYear()} Canteen VWA · {t("footer.copyright")}
       </div>
     </footer>
   );

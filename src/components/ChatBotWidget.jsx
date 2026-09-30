@@ -13,19 +13,21 @@ import { toast } from "./Effects";
 import { getBotReply } from "./ChatBot";
 import { useTranslation } from "../i18n";
 import FoodDetailModal from "./FoodDetailModal";
+import { useTranslation } from "../i18n";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
+const QUICK_REPLIES_KEYS = [
+  "bot.quick.under30k",
+  "bot.quick.vegetarian",
+  "bot.quick.drinks",
+  "bot.quick.spicy",
+  "bot.quick.bestSeller",
+  "bot.quick.suggest",
+];
 
 const AI_REPLY_DELAY_MS = 600;
 const POLL_MS = 3000;
 const MAX_MESSAGE_LENGTH = 2000;
 const SCROLL_THRESHOLD_PX = 120;
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function makeId(prefix) {
   const rand =
@@ -52,25 +54,8 @@ function getMaxQty(item) {
   return 99;
 }
 
-// ============================================================
-// MAIN
-// ============================================================
-
 export default function ChatBotWidget({ cart, setCart, user }) {
-  const { t, lang } = useTranslation();
-
-  const QUICK_REPLIES = useMemo(
-    () => [
-      t("chat.quick.under30"),
-      t("chat.quick.veg"),
-      t("chat.quick.drinks"),
-      t("chat.quick.spicy"),
-      t("chat.quick.bestSeller"),
-      t("chat.quick.suggest"),
-    ],
-    [t, lang]
-  );
-
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("ai");
 
@@ -99,7 +84,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   const staffBottomRef = useRef(null);
   const lastUserIdRef = useRef(user?.id);
 
-  // Load menu + settings
   useEffect(() => {
     let cancelled = false;
 
@@ -122,7 +106,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     };
   }, []);
 
-  // Reset khi đổi user
   useEffect(() => {
     if (lastUserIdRef.current !== user?.id) {
       lastUserIdRef.current = user?.id;
@@ -133,7 +116,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     }
   }, [user?.id]);
 
-  // Welcome AI — dịch theo ngôn ngữ hiện tại
+  // Welcome AI
   useEffect(() => {
     if (!open || mode !== "ai") return;
     if (aiMessages.length > 0) return;
@@ -142,47 +125,42 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       {
         id: "welcome",
         from: "bot",
-        content: t("chat.welcomeMessage").replace(
+        content: t("chatbot.welcome").replace(
           "{name}",
-          user?.name || t("account.you")
+          user?.name || t("profile.guest")
         ),
         created_at: new Date().toISOString(),
       },
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, user?.name, t, lang]);
+  }, [open, mode, user?.name, aiMessages.length]);
 
-  // Cleanup timer
   useEffect(() => {
     return () => {
       if (aiTimerRef.current) clearTimeout(aiTimerRef.current);
     };
   }, []);
 
-  // Load staff
-  const loadStaff = useCallback(
-    async (silent = true) => {
-      const myReqId = ++staffReqIdRef.current;
+  const loadStaff = useCallback(async (silent = true) => {
+    const myReqId = ++staffReqIdRef.current;
 
-      if (!silent) {
-        setStaffLoading(true);
-        setStaffError("");
-      }
+    if (!silent) {
+      setStaffLoading(true);
+      setStaffError("");
+    }
 
-      try {
-        const data = await api.chat.myMessages();
-        if (myReqId !== staffReqIdRef.current) return;
-        setStaffMessages(Array.isArray(data) ? data : []);
-      } catch (e) {
-        if (myReqId === staffReqIdRef.current && !silent) {
-          setStaffError(e.message || t("chat.loadError"));
-        }
-      } finally {
-        if (myReqId === staffReqIdRef.current) setStaffLoading(false);
+    try {
+      const data = await api.chat.myMessages();
+      if (myReqId !== staffReqIdRef.current) return;
+      setStaffMessages(Array.isArray(data) ? data : []);
+    } catch (e) {
+      if (myReqId === staffReqIdRef.current && !silent) {
+        setStaffError(e.message || t("chat.loadError"));
       }
-    },
-    [t]
-  );
+    } finally {
+      if (myReqId === staffReqIdRef.current) setStaffLoading(false);
+    }
+  }, [t]);
 
   useEffect(() => {
     if (!open || mode !== "staff") return;
@@ -243,7 +221,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     lastStaffCountRef.current = staffMessages.length;
   }, [open, mode, staffMessages]);
 
-  // hasNew
   useEffect(() => {
     if (open) {
       setHasNew(false);
@@ -255,7 +232,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     }
   }, [open, staffMessages]);
 
-  // ESC + body lock
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
@@ -270,13 +246,15 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     };
   }, [open]);
 
-  // Handlers
   const sendAI = (value) => {
     const val = (value || aiText).trim();
     if (!val || aiTyping) return;
 
     if (val.length > MAX_MESSAGE_LENGTH) {
-      toast(t("chat.maxLength").replace("{n}", MAX_MESSAGE_LENGTH), "error");
+      toast(
+        t("chatbot.maxLength").replace("{n}", MAX_MESSAGE_LENGTH),
+        "error"
+      );
       return;
     }
 
@@ -317,7 +295,10 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     const val = staffText.trim();
     if (!val || staffSending) return;
     if (val.length > MAX_MESSAGE_LENGTH) {
-      toast(t("chat.maxLength").replace("{n}", MAX_MESSAGE_LENGTH), "error");
+      toast(
+        t("chatbot.maxLength").replace("{n}", MAX_MESSAGE_LENGTH),
+        "error"
+      );
       return;
     }
 
@@ -345,7 +326,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       const existing = c[key];
       const currentQty = Number(existing?.qty) || 0;
       if (currentQty >= maxQty) {
-        reason = t("chat.stockLeft").replace("{n}", maxQty);
+        reason = t("cart.onlyLeftMsg").replace("{n}", maxQty);
         return c;
       }
       added = true;
@@ -364,8 +345,11 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     });
 
     if (added) {
-      toast(t("chat.addedToCart").replace("{name}", m.name), "success");
-    } else if (reason) {
+      toast(
+        t("chatbot.addedToCart").replace("{name}", m.name),
+        "success"
+      );
+    } else {
       toast(reason, "error");
     }
   };
@@ -377,7 +361,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label={t("chat.openLabel")}
+          aria-label={t("chatbot.openAria")}
           className="chatbot-fab"
           style={{
             position: "fixed",
@@ -400,7 +384,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
           <MessageCircleHeart size={26} />
           {hasNew && (
             <span
-              aria-label={t("chat.hasNew")}
+              aria-label={t("chatbot.hasNew")}
               style={{
                 position: "absolute",
                 top: 0,
@@ -432,7 +416,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
           className="chatbot-panel"
           role="dialog"
           aria-modal="true"
-          aria-label={t("chat.title")}
+          aria-label={t("chatbot.title")}
           style={{
             position: "fixed",
             bottom: 24,
@@ -490,15 +474,17 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {mode === "ai" ? t("chat.botTitle") : t("chat.staffTitleTop")}
+                  {mode === "ai" ? t("chatbot.aiName") : t("chatbot.staffName")}
                 </b>
                 <span style={{ fontSize: 11, opacity: 0.92 }}>
-                  {mode === "ai" ? t("chat.botSubtitle") : t("chat.staffSubtitleTop")}
+                  {mode === "ai"
+                    ? t("chatbot.aiSubtitle")
+                    : t("chatbot.staffSubtitle")}
                 </span>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                aria-label={t("chat.closeLabel")}
+                aria-label={t("chatbot.closeAria")}
                 type="button"
                 style={{
                   background: "rgba(255,255,255,0.18)",
@@ -548,7 +534,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                   gap: 5,
                 }}
               >
-                <Bot size={14} /> {t("chat.tab.ai")}
+                <Bot size={14} /> {t("chatbot.tabAi")}
               </button>
               <button
                 onClick={() => setMode("staff")}
@@ -570,7 +556,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                   gap: 5,
                 }}
               >
-                <Store size={14} /> {t("chat.tab.staff")}
+                <Store size={14} /> {t("chatbot.tabStaff")}
               </button>
             </div>
           </div>
@@ -586,7 +572,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
               onView={setSelected}
               scrollRef={aiScrollRef}
               bottomRef={aiBottomRef}
-              quickReplies={QUICK_REPLIES}
               t={t}
             />
           ) : (
@@ -620,10 +605,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   );
 }
 
-// ============================================================
-// SUB: AIContent
-// ============================================================
-
 function AIContent({
   messages,
   typing,
@@ -634,7 +615,6 @@ function AIContent({
   onView,
   scrollRef,
   bottomRef,
-  quickReplies,
   t,
 }) {
   const handleKey = (e) => {
@@ -763,8 +743,8 @@ function AIContent({
                         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                           <button
                             onClick={() => onQuickAdd(it)}
-                            title={t("chat.addToCart")}
-                            aria-label={`${t("chat.addToCart")} ${it.name}`}
+                            title={t("chatbot.addToCart")}
+                            aria-label={t("chatbot.addToCart")}
                             type="button"
                             style={{
                               background: "#2634d5",
@@ -866,29 +846,32 @@ function AIContent({
           scrollbarWidth: "none",
         }}
       >
-        {quickReplies.map((q) => (
-          <button
-            key={q}
-            onClick={() => onSend(q)}
-            disabled={typing}
-            type="button"
-            style={{
-              padding: "5px 12px",
-              background: "var(--bg-tertiary, #f5f7fb)",
-              border: "1px solid var(--border-color, #e5e9ef)",
-              borderRadius: 20,
-              cursor: typing ? "not-allowed" : "pointer",
-              fontSize: 11.5,
-              color: "var(--text-muted, #475569)",
-              whiteSpace: "nowrap",
-              fontWeight: 500,
-              opacity: typing ? 0.5 : 1,
-              flexShrink: 0,
-            }}
-          >
-            {q}
-          </button>
-        ))}
+        {QUICK_REPLIES_KEYS.map((key) => {
+          const q = t(key);
+          return (
+            <button
+              key={key}
+              onClick={() => onSend(q)}
+              disabled={typing}
+              type="button"
+              style={{
+                padding: "5px 12px",
+                background: "var(--bg-tertiary, #f5f7fb)",
+                border: "1px solid var(--border-color, #e5e9ef)",
+                borderRadius: 20,
+                cursor: typing ? "not-allowed" : "pointer",
+                fontSize: 11.5,
+                color: "var(--text-muted, #475569)",
+                whiteSpace: "nowrap",
+                fontWeight: 500,
+                opacity: typing ? 0.5 : 1,
+                flexShrink: 0,
+              }}
+            >
+              {q}
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ padding: 10, display: "flex", gap: 6 }}>
@@ -896,7 +879,7 @@ function AIContent({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={t("chat.aiPlaceholder")}
+          placeholder={t("chatbot.inputPlaceholder")}
           disabled={typing}
           maxLength={MAX_MESSAGE_LENGTH}
           style={{
@@ -914,7 +897,7 @@ function AIContent({
         <button
           onClick={() => onSend()}
           disabled={typing || !text.trim()}
-          aria-label={t("chat.send")}
+          aria-label={t("chat.sendAria")}
           type="button"
           style={{
             width: 42,
@@ -935,10 +918,6 @@ function AIContent({
     </>
   );
 }
-
-// ============================================================
-// SUB: StaffContent
-// ============================================================
 
 function StaffContent({
   messages,
@@ -1049,9 +1028,9 @@ function StaffContent({
                 marginBottom: 6,
               }}
             >
-              {t("chat.staffTitle")}
+              {t("chatbot.staffEmptyTitle")}
             </b>
-            <p style={{ margin: 0 }}>{t("chat.staffDesc")}</p>
+            <p style={{ margin: 0 }}>{t("chatbot.staffEmptyDesc")}</p>
           </div>
         )}
 
@@ -1093,7 +1072,7 @@ function StaffContent({
                     marginBottom: 4,
                   }}
                 >
-                  {m.from_name || t("chat.staffName")}
+                  {m.from_name || t("chatbot.staffFallbackName")}
                 </div>
               )}
               <div style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
@@ -1121,7 +1100,7 @@ function StaffContent({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={t("chat.staffPlaceholder")}
+          placeholder={t("chatbot.staffInputPlaceholder")}
           disabled={sending}
           maxLength={MAX_MESSAGE_LENGTH}
           style={{
@@ -1139,7 +1118,7 @@ function StaffContent({
         <button
           onClick={onSend}
           disabled={sending || !text.trim()}
-          aria-label={t("chat.send")}
+          aria-label={t("chat.sendAria")}
           type="button"
           style={{
             width: 42,

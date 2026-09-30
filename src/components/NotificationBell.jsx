@@ -11,10 +11,6 @@ import {
 import { api } from "../api";
 import { useTranslation } from "../i18n";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
 const MODAL_Z = 2147483600;
 const POLL_MS = 30000;
 const DROPDOWN_WIDTH = 360;
@@ -28,10 +24,10 @@ const TYPE_CONFIG = {
   default: { Icon: Package,       bg: "rgba(100, 116, 139, 0.15)", color: "#64748b" },
 };
 
-// ============================================================
-// HELPERS
-// ============================================================
-
+/**
+ * Time ago với i18n.
+ * Truyền `t` để dịch.
+ */
 function timeAgo(dateInput, t) {
   if (!dateInput) return "—";
 
@@ -39,17 +35,17 @@ function timeAgo(dateInput, t) {
   if (isNaN(time)) return "—";
 
   const diff = Date.now() - time;
-  if (diff < 0) return t("notif.justNow");
+  if (diff < 0) return t("time.justNow");
 
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return t("notif.justNow");
-  if (mins < 60) return t("notif.minsAgo").replace("{n}", mins);
+  if (mins < 1) return t("time.justNow");
+  if (mins < 60) return t("time.minutesAgo").replace("{n}", mins);
 
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return t("notif.hoursAgo").replace("{n}", hours);
+  if (hours < 24) return t("time.hoursAgo").replace("{n}", hours);
 
   const days = Math.floor(hours / 24);
-  if (days < 7) return t("notif.daysAgo").replace("{n}", days);
+  if (days < 7) return t("time.daysAgo").replace("{n}", days);
 
   try {
     return new Date(dateInput).toLocaleDateString("vi-VN");
@@ -68,11 +64,8 @@ function normalizeData(res) {
   };
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function NotificationBell() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState({ list: [], unread: 0 });
   const [loading, setLoading] = useState(true);
@@ -87,33 +80,36 @@ export default function NotificationBell() {
   const inFlightRef = useRef(false);
   const navigate = useNavigate();
 
-  // ---------- Load (race-safe) ----------
-  const load = useCallback(async (silent = false) => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
+  const load = useCallback(
+    async (silent = false) => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
 
-    const myReqId = ++reqIdRef.current;
-    if (!silent) setError("");
+      const myReqId = ++reqIdRef.current;
+      if (!silent) setError("");
 
-    try {
-      const res = await api.notifications.list();
-      if (myReqId !== reqIdRef.current) return;
-      setData(normalizeData(res));
-    } catch (e) {
-      if (myReqId === reqIdRef.current && !silent) {
-        setError(e.message || t("notif.loadError"));
+      try {
+        const res = await api.notifications.list();
+
+        if (myReqId !== reqIdRef.current) return;
+
+        setData(normalizeData(res));
+      } catch (e) {
+        if (myReqId === reqIdRef.current && !silent) {
+          setError(e.message || t("notif.loadError"));
+        }
+      } finally {
+        if (myReqId === reqIdRef.current) setLoading(false);
+        inFlightRef.current = false;
       }
-    } finally {
-      if (myReqId === reqIdRef.current) setLoading(false);
-      inFlightRef.current = false;
-    }
-  }, [t]);
+    },
+    [t]
+  );
 
   useEffect(() => {
     load(false);
   }, [load]);
 
-  // ---------- Polling ----------
   useEffect(() => {
     if (!tabVisible) return;
     const timer = setInterval(() => load(true), POLL_MS);
@@ -126,7 +122,6 @@ export default function NotificationBell() {
     return () => document.removeEventListener("visibilitychange", handler);
   }, []);
 
-  // ---------- Click outside ----------
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
@@ -140,7 +135,6 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // ---------- ESC ----------
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
@@ -150,7 +144,6 @@ export default function NotificationBell() {
     return () => window.removeEventListener("keydown", handler);
   }, [open]);
 
-  // ---------- Handlers ----------
   const markRead = async (n) => {
     if (!n) return;
 
@@ -210,15 +203,16 @@ export default function NotificationBell() {
       className="notif-bell-wrap"
       style={{ position: "relative" }}
     >
-      {/* ============ BELL BUTTON ============ */}
       <button
         type="button"
         onClick={() => setOpen((s) => !s)}
         className="icon-btn topbar-icon-btn notif-bell-btn"
         title={t("notif.title")}
-        aria-label={`${t("notif.title")}${
-          data.unread > 0 ? `, ${data.unread} ${t("notif.unread")}` : ""
-        }`}
+        aria-label={
+          data.unread > 0
+            ? t("notif.ariaWithUnread").replace("{n}", data.unread)
+            : t("notif.title")
+        }
         aria-haspopup="true"
         aria-expanded={open}
         style={{ position: "relative" }}
@@ -252,11 +246,10 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* ============ DROPDOWN ============ */}
       {open && (
         <div
           role="dialog"
-          aria-label={t("notif.title")}
+          aria-label={t("notif.listAria")}
           style={{
             position: "absolute",
             top: "calc(100% + 10px)",
@@ -271,7 +264,6 @@ export default function NotificationBell() {
             zIndex: MODAL_Z,
           }}
         >
-          {/* ---------- HEADER ---------- */}
           <div
             style={{
               display: "flex",
@@ -306,7 +298,7 @@ export default function NotificationBell() {
                     borderRadius: 10,
                   }}
                 >
-                  {data.unread} {t("notif.new")}
+                  {t("notif.newCount").replace("{n}", data.unread)}
                 </span>
               )}
             </div>
@@ -327,12 +319,11 @@ export default function NotificationBell() {
                   flexShrink: 0,
                 }}
               >
-                <Check size={12} /> {t("notif.readAll")}
+                <Check size={12} /> {t("notif.markAllRead")}
               </button>
             )}
           </div>
 
-          {/* ---------- ERROR ---------- */}
           {error && (
             <div
               style={{
@@ -368,7 +359,6 @@ export default function NotificationBell() {
             </div>
           )}
 
-          {/* ---------- LOADING ---------- */}
           {loading && !error && (
             <div
               style={{
@@ -389,7 +379,6 @@ export default function NotificationBell() {
             </div>
           )}
 
-          {/* ---------- EMPTY ---------- */}
           {!loading && !error && data.list.length === 0 && (
             <div
               style={{
@@ -404,7 +393,6 @@ export default function NotificationBell() {
             </div>
           )}
 
-          {/* ---------- LIST ---------- */}
           {!loading &&
             data.list.map((n) => {
               const cfg = TYPE_CONFIG[n.type] || TYPE_CONFIG.default;
@@ -424,8 +412,7 @@ export default function NotificationBell() {
                   tabIndex={0}
                   style={{
                     padding: 14,
-                    borderBottom:
-                      "1px solid var(--border-color, #f5f7fb)",
+                    borderBottom: "1px solid var(--border-color, #f5f7fb)",
                     cursor: "pointer",
                     background: n.read
                       ? "var(--card-bg, #fff)"
@@ -469,7 +456,7 @@ export default function NotificationBell() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {n.title || t("notif.title")}
+                        {n.title || t("notif.defaultTitle")}
                       </div>
 
                       {n.content && (

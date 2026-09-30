@@ -11,8 +11,8 @@
 //   - QR truy cập menu (auto-detect origin)
 //
 // FIX v8:
-//   - Áp dụng i18n cho tất cả text
-//   - DEFAULT_FLASH_ITEMS và TESTIMONIALS dùng key i18n
+//   - ✅ Áp dụng i18n cho TẤT CẢ text
+//   - ✅ Flash promos fallback + testimonials lấy từ t()
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -40,6 +40,7 @@ const FLASH_PROMOS_LIMIT = 4;
 const FLASH_VOUCHERS_LIMIT = 2;
 const SKELETON_COUNT = 5;
 
+// Testimonials — chỉ giữ name + rating (text/role lấy từ i18n)
 const TESTIMONIAL_DATA = [
   { name: "Nguyễn Minh Anh", roleKey: "testimonial.1.role", rating: 5, textKey: "testimonial.1.text" },
   { name: "Trần Quốc Bảo",   roleKey: "testimonial.2.role", rating: 5, textKey: "testimonial.2.text" },
@@ -98,7 +99,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
   const inFlightRef = useRef(false);
 
-  // ---------- Default flash promos ----------
+  // ---------- Default flash promos (i18n) ----------
   const defaultFlashItems = useMemo(
     () => [
       { text: t("flash.default.1") },
@@ -142,17 +143,12 @@ export default function CustomerHome({ user, cart, setCart }) {
         const flash = [];
         (Array.isArray(pubVoucherRes) ? pubVoucherRes : []).forEach((v) => {
           flash.push({
-            text: t("flash.voucherText")
-              .replace("{value}", fmtNumber(v.value || 0))
-              .replace("{code}", v.code),
+            text: `🎁 GIẢM ${fmtNumber(v.value || 0)}đ — Mã ${v.code}`,
           });
         });
         (Array.isArray(promoRes) ? promoRes : []).forEach((m) => {
           flash.push({
-            text: t("flash.promoText")
-              .replace("{name}", m.name)
-              .replace("{percent}", m.discount_percent)
-              .replace("{price}", fmtNumber(m.price || 0)),
+            text: `🔥 ${m.name} GIẢM ${m.discount_percent}% (còn ${fmtNumber(m.price || 0)}đ)`,
           });
         });
         setFlashItems(flash.length > 0 ? flash : []);
@@ -203,6 +199,7 @@ export default function CustomerHome({ user, cart, setCart }) {
     )}&margin=0`;
   }, [publicMenuUrl]);
 
+  // Flash track: nếu chưa load xong → dùng default (i18n)
   const effectiveFlashItems = useMemo(() => {
     if (flashItems.length > 0) return flashItems;
     return defaultFlashItems;
