@@ -1,36 +1,19 @@
 ﻿// ============================================================
 // CUSTOMERWALLET.JSX — Ví Canteen (khách hàng)
 // ============================================================
-// Tính năng:
-//   - Hiển thị số dư, stats (nạp/rút/chi tiêu/chờ duyệt)
-//   - Nạp tiền (QR / Tiền mặt), Rút tiền, Liên kết NH
-//   - Lịch sử giao dịch với filter theo type
-//
-// Fixes (so với bản gốc):
-//   - 🔴 QR dùng thông tin ngân hàng THẬT của admin (api.settings)
-//     thay vì hardcode "VCB-1234567890"
-//   - Error state + retry (không silent fail)
-//   - Loading state ban đầu (không hiện "0đ" khi đang tải)
-//   - Bỏ setTimeout(800) hack trong DepositModal
-//   - Modals: ESC close, role/aria, disable khi submitting
-//   - z-index chuẩn (2147483600)
-//   - Race-safe loadAll (reqIdRef + inFlightRef)
-//   - Guard double-submit cho cả 3 modals
-//   - Handle tx.created_at undefined
-//   - Modal wrapper dùng chung (Modal, Field, ButtonRow)
-//   - Bỏ unused imports + user prop
-// ============================================================
+
 import { Skeleton, SkeletonList, SkeletonStats } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   Wallet, Plus, Minus, Link as LinkIcon, CreditCard, QrCode, Banknote,
   Clock, CheckCircle2, ArrowDownCircle, ArrowUpCircle, ShoppingBag,
   X, Building2, History, AlertTriangle, Loader2, AlertCircle,
-  RefreshCw, Copy, Check,
+  RefreshCw,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
+import { useTranslation } from "../../i18n";
 
 // ============================================================
 // CONSTANTS
@@ -58,18 +41,6 @@ const MIN_WITHDRAW = 20000;
 const QUICK_DEPOSIT = [50000, 100000, 200000, 500000, 1000000, 2000000];
 const QUICK_WITHDRAW = [50000, 100000, 200000];
 
-const TX_CONFIG = {
-  deposit:  { icon: ArrowDownCircle, color: "#18a967", bg: "#e8f9f1", label: "Nạp tiền",  sign: "+" },
-  withdraw: { icon: ArrowUpCircle,   color: "#f59e0b", bg: "#fef3c7", label: "Rút tiền",  sign: "-" },
-  payment:  { icon: ShoppingBag,     color: "#8b5cf6", bg: "#ede9fe", label: "Thanh toán", sign: "-" },
-};
-
-const STATUS_CONFIG = {
-  pending:  { label: "Chờ duyệt",  color: "#f59e0b", bg: "#fef3c7" },
-  approved: { label: "Thành công", color: "#18a967", bg: "#e8f9f1" },
-  rejected: { label: "Từ chối",    color: "#ef4444", bg: "#fee2e2" },
-};
-
 const EMPTY_WALLET = {
   balance: 0,
   bank_name: "",
@@ -96,30 +67,45 @@ function fmtDateTime(iso) {
 // ============================================================
 
 export default function CustomerWallet() {
-  // ---------- Data ----------
+  const { t } = useTranslation();
+
   const [wallet, setWallet] = useState(EMPTY_WALLET);
   const [transactions, setTransactions] = useState([]);
-  const [settings, setSettings] = useState(null); // bank info của admin
+  const [settings, setSettings] = useState(null);
 
-  // ---------- State ----------
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  // ---------- Filters ----------
   const [tab, setTab] = useState("all");
 
-  // ---------- Modals ----------
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showLinkBank, setShowLinkBank] = useState(false);
 
-  // ---------- Refs ----------
   const reqIdRef = useRef(0);
   const inFlightRef = useRef(false);
 
-  // ---------- Load ----------
+  // ---------- TX config ----------
+  const TX_CONFIG = useMemo(
+    () => ({
+      deposit:  { icon: ArrowDownCircle, color: "#18a967", bg: "#e8f9f1", label: t("wallet.tx.deposit"),  sign: "+" },
+      withdraw: { icon: ArrowUpCircle,   color: "#f59e0b", bg: "#fef3c7", label: t("wallet.tx.withdraw"), sign: "-" },
+      payment:  { icon: ShoppingBag,     color: "#8b5cf6", bg: "#ede9fe", label: t("wallet.tx.payment"),  sign: "-" },
+    }),
+    [t]
+  );
 
+  const STATUS_CONFIG = useMemo(
+    () => ({
+      pending:  { label: t("wallet.status.pending"),  color: "#f59e0b", bg: "#fef3c7" },
+      approved: { label: t("wallet.status.approved"), color: "#18a967", bg: "#e8f9f1" },
+      rejected: { label: t("wallet.status.rejected"), color: "#ef4444", bg: "#fee2e2" },
+    }),
+    [t]
+  );
+
+  // ---------- Load ----------
   const loadAll = useCallback(async (silent = false) => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
@@ -142,7 +128,7 @@ export default function CustomerWallet() {
       if (st) setSettings(st);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || "Không tải được dữ liệu ví");
+        setError(e.message || t("wallet.loadError"));
       }
     } finally {
       if (myReqId === reqIdRef.current) {
@@ -151,17 +137,16 @@ export default function CustomerWallet() {
       }
       inFlightRef.current = false;
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadAll(false);
   }, [loadAll]);
 
   // ---------- Derived ----------
-
   const filtered = useMemo(() => {
     if (tab === "all") return transactions;
-    return transactions.filter((t) => t.type === tab);
+    return transactions.filter((tx) => tx.type === tab);
   }, [transactions, tab]);
 
   const stats = useMemo(() => {
@@ -170,22 +155,20 @@ export default function CustomerWallet() {
     let paid = 0;
     let pending = 0;
 
-    for (const t of transactions) {
-      if (t.status === "pending") pending++;
-      if (t.status !== "approved") continue;
+    for (const tx of transactions) {
+      if (tx.status === "pending") pending++;
+      if (tx.status !== "approved") continue;
 
-      const amt = Number(t.amount) || 0;
-      if (t.type === "deposit") deposited += amt;
-      else if (t.type === "withdraw") withdrawn += amt;
-      else if (t.type === "payment") paid += amt;
+      const amt = Number(tx.amount) || 0;
+      if (tx.type === "deposit") deposited += amt;
+      else if (tx.type === "withdraw") withdrawn += amt;
+      else if (tx.type === "payment") paid += amt;
     }
     return { deposited, withdrawn, paid, pending };
   }, [transactions]);
 
   const isLinked = !!wallet.bank_account;
   const canWithdraw = isLinked && wallet.balance >= MIN_WITHDRAW;
-
-  // ---------- Handlers ----------
 
   const handleSuccessModal = useCallback(async () => {
     setShowDeposit(false);
@@ -194,13 +177,17 @@ export default function CustomerWallet() {
     await loadAll(true);
   }, [loadAll]);
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+  // ---------- Tabs config ----------
+  const TABS = [
+    { id: "all",      label: t("wallet.tab.all") },
+    { id: "deposit",  label: t("wallet.tab.deposit") },
+    { id: "withdraw", label: t("wallet.tab.withdraw") },
+    { id: "payment",  label: t("wallet.tab.payment") },
+  ];
 
   return (
     <div>
-      {/* ============ ERROR BANNER ============ */}
+      {/* ERROR BANNER */}
       {error && (
         <div
           style={{
@@ -234,12 +221,12 @@ export default function CustomerWallet() {
               gap: 4,
             }}
           >
-            <RefreshCw size={12} /> Thử lại
+            <RefreshCw size={12} /> {t("common.retry")}
           </button>
         </div>
       )}
 
-      {/* ============ HERO: SỐ DƯ ============ */}
+      {/* HERO: SỐ DƯ */}
       <div
         style={{
           background:
@@ -275,10 +262,10 @@ export default function CustomerWallet() {
               letterSpacing: 1,
             }}
           >
-            <Wallet size={14} /> VÍ CANTEEN
+            <Wallet size={14} /> {t("wallet.heroLabel")}
           </div>
           <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>
-            Số dư khả dụng
+            {t("wallet.balance")}
           </div>
           <div
             style={{
@@ -321,7 +308,7 @@ export default function CustomerWallet() {
                 gap: 6,
               }}
             >
-              <Plus size={16} /> Nạp tiền
+              <Plus size={16} /> {t("wallet.deposit")}
             </button>
 
             <button
@@ -329,10 +316,10 @@ export default function CustomerWallet() {
               disabled={!canWithdraw}
               title={
                 !isLinked
-                  ? "Cần liên kết tài khoản ngân hàng trước"
+                  ? t("wallet.tipLinkFirst")
                   : wallet.balance < MIN_WITHDRAW
-                  ? `Số dư tối thiểu ${money(MIN_WITHDRAW)} để rút`
-                  : "Rút tiền về ngân hàng"
+                  ? t("wallet.tipMinWithdraw").replace("{value}", money(MIN_WITHDRAW))
+                  : t("wallet.tipWithdraw")
               }
               style={{
                 padding: "11px 20px",
@@ -350,7 +337,7 @@ export default function CustomerWallet() {
                 gap: 6,
               }}
             >
-              <Minus size={16} /> Rút tiền
+              <Minus size={16} /> {t("wallet.withdraw")}
             </button>
 
             <button
@@ -370,13 +357,13 @@ export default function CustomerWallet() {
               }}
             >
               <LinkIcon size={16} />{" "}
-              {isLinked ? "Đổi tài khoản" : "Liên kết NH"}
+              {isLinked ? t("wallet.changeBank") : t("wallet.linkBank")}
             </button>
           </div>
         </div>
       </div>
 
-      {/* ============ STATS ============ */}      {/* ============ STATS ============ */}
+      {/* STATS */}
       {loading ? (
         <div style={{ marginBottom: 20 }}>
           <SkeletonStats count={4} columns="repeat(4, 1fr)" />
@@ -393,32 +380,32 @@ export default function CustomerWallet() {
         >
           <StatBox
             icon={<ArrowDownCircle size={18} />}
-            label="Đã nạp"
+            label={t("wallet.stat.deposited")}
             value={money(stats.deposited)}
             color="#18a967"
           />
           <StatBox
             icon={<ArrowUpCircle size={18} />}
-            label="Đã rút"
+            label={t("wallet.stat.withdrawn")}
             value={money(stats.withdrawn)}
             color="#f59e0b"
           />
           <StatBox
             icon={<ShoppingBag size={18} />}
-            label="Đã chi tiêu"
+            label={t("wallet.stat.paid")}
             value={money(stats.paid)}
             color="#8b5cf6"
           />
           <StatBox
             icon={<Clock size={18} />}
-            label="Chờ duyệt"
+            label={t("wallet.stat.pending")}
             value={stats.pending}
             color="#ef4444"
           />
         </div>
       )}
 
-      {/* ============ LINKED BANK INFO ============ */}
+      {/* LINKED BANK INFO */}
       {isLinked && (
         <div
           style={{
@@ -455,9 +442,10 @@ export default function CustomerWallet() {
                 color: "var(--text-light, #8993a3)",
                 fontWeight: 600,
                 marginBottom: 2,
+                textTransform: "uppercase",
               }}
             >
-              ĐÃ LIÊN KẾT TÀI KHOẢN
+              {t("wallet.linkedLabel")}
             </div>
             <div
               style={{
@@ -481,7 +469,7 @@ export default function CustomerWallet() {
         </div>
       )}
 
-      {/* ============ TRANSACTIONS ============ */}
+      {/* TRANSACTIONS */}
       <div
         style={{
           background: "var(--card-bg, #fff)",
@@ -509,7 +497,7 @@ export default function CustomerWallet() {
               gap: 8,
             }}
           >
-            <History size={18} /> Lịch sử giao dịch
+            <History size={18} /> {t("wallet.transactions")}
           </h3>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -522,20 +510,18 @@ export default function CustomerWallet() {
                 borderRadius: 10,
               }}
             >
-              {[
-                { id: "all", label: "Tất cả" },
-                { id: "deposit", label: "Nạp" },
-                { id: "withdraw", label: "Rút" },
-                { id: "payment", label: "Thanh toán" },
-              ].map((t) => (
+              {TABS.map((tItem) => (
                 <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
+                  key={tItem.id}
+                  onClick={() => setTab(tItem.id)}
                   style={{
                     padding: "7px 14px",
-                    background: tab === t.id ? "#2634d5" : "transparent",
+                    background:
+                      tab === tItem.id ? "#2634d5" : "transparent",
                     color:
-                      tab === t.id ? "#fff" : "var(--text-muted, #475569)",
+                      tab === tItem.id
+                        ? "#fff"
+                        : "var(--text-muted, #475569)",
                     border: 0,
                     borderRadius: 7,
                     cursor: "pointer",
@@ -544,7 +530,7 @@ export default function CustomerWallet() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {t.label}
+                  {tItem.label}
                 </button>
               ))}
             </div>
@@ -552,8 +538,8 @@ export default function CustomerWallet() {
             <button
               onClick={() => loadAll(false)}
               disabled={refreshing}
-              title="Làm mới"
-              aria-label="Làm mới"
+              title={t("common.refresh")}
+              aria-label={t("common.refresh")}
               style={{
                 padding: "6px 12px",
                 background: "var(--bg-tertiary, #f5f7fb)",
@@ -580,7 +566,6 @@ export default function CustomerWallet() {
           </div>
         </div>
 
-                {/* Loading — skeleton list */}
         {loading && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {Array.from({ length: 5 }).map((_, i) => (
@@ -589,7 +574,6 @@ export default function CustomerWallet() {
           </div>
         )}
 
-        {/* Empty */}
         {!loading && filtered.length === 0 && (
           <div
             style={{
@@ -603,23 +587,36 @@ export default function CustomerWallet() {
             <Wallet size={40} style={{ opacity: 0.3, marginBottom: 8 }} />
             <p style={{ margin: 0, fontSize: 13 }}>
               {tab === "all"
-                ? "Chưa có giao dịch nào"
-                : `Chưa có giao dịch "${tab}"`}
+                ? t("wallet.noTx")
+                : t("wallet.noTxType").replace(
+                    "{type}",
+                    TABS.find((x) => x.id === tab)?.label || ""
+                  )}
             </p>
           </div>
         )}
 
-        {/* Data */}
         {!loading && filtered.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {filtered.map((t) => (
-              <TransactionRow key={t.id} tx={t} />
+            {filtered.map((tx) => (
+              <TransactionRow
+                key={tx.id}
+                tx={tx}
+                TX_CONFIG={TX_CONFIG}
+                STATUS_CONFIG={STATUS_CONFIG}
+                methodLabels={{
+                  QR: t("wallet.method.qr"),
+                  CASH: t("wallet.method.cash"),
+                  BANK: t("wallet.method.bank"),
+                  WALLET: t("wallet.method.wallet"),
+                }}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {/* ============ MODALS ============ */}
+      {/* MODALS */}
       {showDeposit && (
         <DepositModal
           settings={settings}
@@ -663,15 +660,15 @@ export default function CustomerWallet() {
 }
 
 // ============================================================
-// SUB-COMPONENT: TransactionRow
+// SUB: TransactionRow
 // ============================================================
 
-function TransactionRow({ tx }) {
+function TransactionRow({ tx, TX_CONFIG, STATUS_CONFIG, methodLabels }) {
   const config = TX_CONFIG[tx.type] || {
     icon: Wallet,
     color: "#2634d5",
     bg: "#eef2ff",
-    label: "Giao dịch",
+    label: "—",
     sign: "",
   };
   const statusCfg = STATUS_CONFIG[tx.status] || {
@@ -681,12 +678,7 @@ function TransactionRow({ tx }) {
   };
   const Icon = config.icon;
 
-  const methodLabel = {
-    QR: "VietQR",
-    CASH: "Tiền mặt",
-    BANK: "Chuyển khoản",
-    WALLET: "Ví",
-  }[tx.method];
+  const methodLabel = methodLabels[tx.method];
 
   return (
     <div
@@ -779,7 +771,7 @@ function TransactionRow({ tx }) {
 }
 
 // ============================================================
-// SUB-COMPONENT: StatBox
+// SUB: StatBox
 // ============================================================
 
 function StatBox({ icon, label, value, color }) {
@@ -830,11 +822,10 @@ function StatBox({ icon, label, value, color }) {
 }
 
 // ============================================================
-// MODAL WRAPPER (dùng chung)
+// MODAL WRAPPER
 // ============================================================
 
 function Modal({ children, onClose, busy = false, maxWidth = 460, label }) {
-  // ESC đóng
   useEffect(() => {
     const handler = (e) => {
       if (e.key === "Escape" && !busy) onClose();
@@ -883,20 +874,23 @@ function Modal({ children, onClose, busy = false, maxWidth = 460, label }) {
 // ============================================================
 
 function DepositModal({ settings, onClose, onSuccess }) {
-  const [step, setStep] = useState(1); // 1: form, 2: QR confirm
+  const { t } = useTranslation();
+  const [step, setStep] = useState(1);
   const [amount, setAmount] = useState(100000);
   const [method, setMethod] = useState("QR");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [tx, setTx] = useState(null);
 
-  // Không cho close khi đang submit
   const busy = submitting;
 
   const submit = async () => {
     if (submitting) return;
     if (amount < MIN_DEPOSIT) {
-      toast(`Số tiền tối thiểu ${money(MIN_DEPOSIT)}`, "error");
+      toast(
+        t("wallet.minDeposit").replace("{value}", money(MIN_DEPOSIT)),
+        "error"
+      );
       return;
     }
 
@@ -904,25 +898,22 @@ function DepositModal({ settings, onClose, onSuccess }) {
     try {
       const res = await api.wallet.deposit({ amount, method, note });
       setTx(res.transaction);
-      toast("Đã tạo yêu cầu nạp tiền", "success");
+      toast(t("wallet.depositCreated"), "success");
 
-      // Cash → đóng ngay; QR → sang step 2
       if (method === "CASH") {
         onSuccess();
       } else {
         setStep(2);
       }
     } catch (e) {
-      toast(e.message || "Không tạo được yêu cầu", "error");
+      toast(e.message || t("wallet.depositError"), "error");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ---------- STEP 2: QR confirm ----------
-
+  // ---------- STEP 2: QR ----------
   if (step === 2 && tx && method === "QR") {
-    // QR dùng thông tin bank admin (từ settings) — không hardcode
     const bankCode = settings?.bank || "VCB";
     const bankAccount = settings?.account || "";
     const bankName = settings?.accountName || "CANTEEN VWA";
@@ -932,7 +923,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
       : null;
 
     return (
-      <Modal onClose={onClose} busy={busy} label="Xác nhận nạp tiền">
+      <Modal onClose={onClose} busy={busy} label={t("wallet.depositQrTitle")}>
         <div style={{ textAlign: "center", marginBottom: 16 }}>
           <div
             style={{
@@ -948,13 +939,8 @@ function DepositModal({ settings, onClose, onSuccess }) {
           >
             <QrCode size={28} />
           </div>
-          <h3
-            style={{
-              margin: "0 0 6px",
-              color: "var(--text-primary, #172033)",
-            }}
-          >
-            Quét mã để nạp tiền
+          <h3 style={{ margin: "0 0 6px", color: "var(--text-primary, #172033)" }}>
+            {t("wallet.depositQrTitle")}
           </h3>
           <p
             style={{
@@ -963,8 +949,9 @@ function DepositModal({ settings, onClose, onSuccess }) {
               fontSize: 13,
             }}
           >
-            Chuyển <b style={{ color: "#2634d5" }}>{money(tx.amount)}</b> với
-            nội dung <b>{tx.code}</b>
+            {t("wallet.depositQrDesc")
+              .replace("{amount}", money(tx.amount))
+              .replace("{code}", tx.code)}
           </p>
         </div>
 
@@ -982,7 +969,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
           >
             <img
               src={qrUrl}
-              alt="QR nạp tiền"
+              alt="QR"
               style={{ width: 240, height: 240 }}
               onError={(e) => {
                 e.target.style.display = "none";
@@ -998,13 +985,13 @@ function DepositModal({ settings, onClose, onSuccess }) {
                 padding: 20,
               }}
             >
-              Không tải được QR. Vui lòng chuyển khoản thủ công tới:
+              {t("wallet.depositQrFail")}
               <br />
               <b>
                 {bankCode} · {bankAccount}
               </b>
               <br />
-              Nội dung: <b>{tx.code}</b>
+              {t("wallet.transferContent")}: <b>{tx.code}</b>
             </div>
           </div>
         ) : (
@@ -1020,7 +1007,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
               textAlign: "center",
             }}
           >
-            Chưa có thông tin ngân hàng nhận tiền. Vui lòng liên hệ admin.
+            {t("wallet.noBankInfo")}
           </div>
         )}
 
@@ -1038,10 +1025,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
           }}
         >
           <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>
-            Sau khi chuyển khoản, admin sẽ xác nhận trong vòng 5-15 phút.
-            Số dư sẽ cập nhật tự động.
-          </span>
+          <span>{t("wallet.depositNotice")}</span>
         </div>
 
         <button
@@ -1058,20 +1042,15 @@ function DepositModal({ settings, onClose, onSuccess }) {
             fontSize: 13,
           }}
         >
-          Đã hiểu
+          {t("wallet.understood")}
         </button>
       </Modal>
     );
   }
 
   // ---------- STEP 1: form ----------
-
   return (
-    <Modal
-      onClose={onClose}
-      busy={busy}
-      label="Nạp tiền vào ví"
-    >
+    <Modal onClose={onClose} busy={busy} label={t("wallet.depositTitle")}>
       <div
         style={{
           display: "flex",
@@ -1089,19 +1068,19 @@ function DepositModal({ settings, onClose, onSuccess }) {
             gap: 8,
           }}
         >
-          <Plus size={20} style={{ color: "#18a967" }} /> Nạp tiền vào ví
+          <Plus size={20} style={{ color: "#18a967" }} /> {t("wallet.depositTitle")}
         </h3>
         <button
           onClick={onClose}
           disabled={busy}
-          aria-label="Đóng"
+          aria-label={t("common.close")}
           style={closeBtnStyle(busy)}
         >
           <X size={20} />
         </button>
       </div>
 
-      <label style={labelStyle}>Số tiền *</label>
+      <label style={labelStyle}>{t("wallet.amount")} *</label>
       <div style={{ position: "relative", marginBottom: 10 }}>
         <input
           type="number"
@@ -1153,7 +1132,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
         ))}
       </div>
 
-      <label style={labelStyle}>Phương thức nạp</label>
+      <label style={labelStyle}>{t("wallet.method")}</label>
       <div
         style={{
           display: "grid",
@@ -1166,15 +1145,15 @@ function DepositModal({ settings, onClose, onSuccess }) {
           {
             id: "QR",
             icon: QrCode,
-            label: "Chuyển khoản",
+            label: t("wallet.method.qr"),
             desc: "VietQR",
             color: "#2634d5",
           },
           {
             id: "CASH",
             icon: Banknote,
-            label: "Tiền mặt",
-            desc: "Tại quầy",
+            label: t("wallet.method.cash"),
+            desc: t("wallet.atCounter"),
             color: "#18a967",
           },
         ].map((m) => {
@@ -1188,9 +1167,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
               disabled={busy}
               style={{
                 padding: 14,
-                background: active
-                  ? m.color + "15"
-                  : "var(--card-bg, #fff)",
+                background: active ? m.color + "15" : "var(--card-bg, #fff)",
                 border: active
                   ? `2px solid ${m.color}`
                   : "1px solid var(--border-color, #e5e9ef)",
@@ -1212,9 +1189,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
               <b
                 style={{
                   fontSize: 12,
-                  color: active
-                    ? m.color
-                    : "var(--text-primary, #475569)",
+                  color: active ? m.color : "var(--text-primary, #475569)",
                 }}
               >
                 {m.label}
@@ -1227,11 +1202,11 @@ function DepositModal({ settings, onClose, onSuccess }) {
         })}
       </div>
 
-      <label style={labelStyle}>Ghi chú</label>
+      <label style={labelStyle}>{t("wallet.note")}</label>
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder="VD: Nạp để mua đồ ăn sáng..."
+        placeholder={t("wallet.notePlaceholder")}
         maxLength={200}
         disabled={busy}
         style={inputStyle}
@@ -1244,15 +1219,13 @@ function DepositModal({ settings, onClose, onSuccess }) {
           disabled={busy}
           style={btnCancelStyle(busy)}
         >
-          Hủy
+          {t("common.cancel")}
         </button>
         <button
           type="button"
           onClick={submit}
           disabled={busy || amount < MIN_DEPOSIT}
-          style={{
-            ...btnPrimaryStyle(busy || amount < MIN_DEPOSIT, "#18a967"),
-          }}
+          style={btnPrimaryStyle(busy || amount < MIN_DEPOSIT, "#18a967")}
         >
           {submitting ? (
             <>
@@ -1260,10 +1233,10 @@ function DepositModal({ settings, onClose, onSuccess }) {
                 size={14}
                 style={{ animation: "spin 1s linear infinite" }}
               />
-              Đang tạo...
+              {t("common.processing")}
             </>
           ) : (
-            `Nạp ${amount.toLocaleString("vi-VN")}đ`
+            `${t("wallet.deposit")} ${amount.toLocaleString("vi-VN")}đ`
           )}
         </button>
       </div>
@@ -1276,6 +1249,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
 // ============================================================
 
 function WithdrawModal({ balance, bank, onClose, onSuccess }) {
+  const { t } = useTranslation();
   const [amount, setAmount] = useState(50000);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -1286,28 +1260,31 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
     if (submitting) return;
 
     if (amount < MIN_WITHDRAW) {
-      toast(`Số tiền tối thiểu ${money(MIN_WITHDRAW)}`, "error");
+      toast(
+        t("wallet.minWithdraw").replace("{value}", money(MIN_WITHDRAW)),
+        "error"
+      );
       return;
     }
     if (amount > balance) {
-      toast("Số dư không đủ", "error");
+      toast(t("wallet.notEnough"), "error");
       return;
     }
 
     setSubmitting(true);
     try {
       await api.wallet.withdraw({ amount, note });
-      toast("Đã tạo yêu cầu rút tiền", "success");
+      toast(t("wallet.withdrawCreated"), "success");
       onSuccess();
     } catch (e) {
-      toast(e.message || "Không gửi được yêu cầu", "error");
+      toast(e.message || t("wallet.withdrawError"), "error");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal onClose={onClose} busy={busy} label="Rút tiền về ngân hàng">
+    <Modal onClose={onClose} busy={busy} label={t("wallet.withdrawTitle")}>
       <div
         style={{
           display: "flex",
@@ -1325,12 +1302,12 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
             gap: 8,
           }}
         >
-          <Minus size={20} style={{ color: "#f59e0b" }} /> Rút tiền về ngân hàng
+          <Minus size={20} style={{ color: "#f59e0b" }} /> {t("wallet.withdrawTitle")}
         </h3>
         <button
           onClick={onClose}
           disabled={busy}
-          aria-label="Đóng"
+          aria-label={t("common.close")}
           style={closeBtnStyle(busy)}
         >
           <X size={20} />
@@ -1349,11 +1326,11 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
         }}
       >
         <div>
-          <b>Số dư khả dụng:</b> {money(balance)}
+          <b>{t("wallet.availableBalance")}:</b> {money(balance)}
         </div>
       </div>
 
-      <label style={labelStyle}>Số tiền rút *</label>
+      <label style={labelStyle}>{t("wallet.amount")} *</label>
       <div style={{ position: "relative", marginBottom: 10 }}>
         <input
           type="number"
@@ -1399,11 +1376,7 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
             type="button"
             onClick={() => setAmount(a)}
             disabled={busy || a > balance}
-            style={quickBtnStyle(
-              amount === a,
-              "#f59e0b",
-              busy || a > balance
-            )}
+            style={quickBtnStyle(amount === a, "#f59e0b", busy || a > balance)}
           >
             {a.toLocaleString("vi-VN")}đ
           </button>
@@ -1428,10 +1401,10 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
           opacity: busy ? 0.6 : 1,
         }}
       >
-        Rút hết {money(balance)}
+        {t("wallet.withdrawAll")} {money(balance)}
       </button>
 
-      <label style={labelStyle}>Tài khoản nhận</label>
+      <label style={labelStyle}>{t("wallet.receiveAccount")}</label>
       <div
         style={{
           background: "var(--bg-tertiary, #f5f7fb)",
@@ -1463,11 +1436,11 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
         </div>
       </div>
 
-      <label style={labelStyle}>Ghi chú</label>
+      <label style={labelStyle}>{t("wallet.note")}</label>
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder="VD: Cần tiền mặt gấp..."
+        placeholder={t("wallet.withdrawNotePlaceholder")}
         maxLength={200}
         disabled={busy}
         style={inputStyle}
@@ -1480,18 +1453,16 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
           disabled={busy}
           style={btnCancelStyle(busy)}
         >
-          Hủy
+          {t("common.cancel")}
         </button>
         <button
           type="button"
           onClick={submit}
           disabled={busy || amount < MIN_WITHDRAW || amount > balance}
-          style={{
-            ...btnPrimaryStyle(
-              busy || amount < MIN_WITHDRAW || amount > balance,
-              "#f59e0b"
-            ),
-          }}
+          style={btnPrimaryStyle(
+            busy || amount < MIN_WITHDRAW || amount > balance,
+            "#f59e0b"
+          )}
         >
           {submitting ? (
             <>
@@ -1499,10 +1470,10 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
                 size={14}
                 style={{ animation: "spin 1s linear infinite" }}
               />
-              Đang gửi...
+              {t("common.processing")}
             </>
           ) : (
-            "Yêu cầu rút"
+            t("wallet.requestWithdraw")
           )}
         </button>
       </div>
@@ -1515,28 +1486,23 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
 // ============================================================
 
 function LinkBankModal({ wallet, onClose, onSuccess }) {
+  const { t } = useTranslation();
   const [bankName, setBankName] = useState(wallet.bank_name || "VCB");
   const [account, setAccount] = useState(wallet.bank_account || "");
-  const [accountName, setAccountName] = useState(
-    wallet.bank_account_name || ""
-  );
+  const [accountName, setAccountName] = useState(wallet.bank_account_name || "");
   const [submitting, setSubmitting] = useState(false);
 
   const busy = submitting;
-
-  const normalizeAccountName = () => {
-    setAccountName((s) => s.toUpperCase().trim());
-  };
 
   const submit = async () => {
     if (submitting) return;
 
     if (!account.trim() || account.trim().length < 6) {
-      toast("Số tài khoản không hợp lệ (>= 6 số)", "error");
+      toast(t("wallet.invalidAccount"), "error");
       return;
     }
     if (!accountName.trim()) {
-      toast("Vui lòng nhập tên chủ tài khoản", "error");
+      toast(t("wallet.enterAccountName"), "error");
       return;
     }
 
@@ -1547,17 +1513,17 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
         bank_account: account.trim(),
         bank_account_name: accountName.trim().toUpperCase(),
       });
-      toast("Đã liên kết tài khoản", "success");
+      toast(t("wallet.linkSuccess"), "success");
       onSuccess();
     } catch (e) {
-      toast(e.message || "Không liên kết được", "error");
+      toast(e.message || t("wallet.linkError"), "error");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal onClose={onClose} busy={busy} label="Liên kết tài khoản ngân hàng">
+    <Modal onClose={onClose} busy={busy} label={t("wallet.linkBankTitle")}>
       <div
         style={{
           display: "flex",
@@ -1575,13 +1541,12 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
             gap: 8,
           }}
         >
-          <CreditCard size={20} style={{ color: "#2634d5" }} /> Liên kết tài
-          khoản ngân hàng
+          <CreditCard size={20} style={{ color: "#2634d5" }} /> {t("wallet.linkBankTitle")}
         </h3>
         <button
           onClick={onClose}
           disabled={busy}
-          aria-label="Đóng"
+          aria-label={t("common.close")}
           style={closeBtnStyle(busy)}
         >
           <X size={20} />
@@ -1602,13 +1567,10 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
         }}
       >
         <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>
-          Tài khoản này dùng để <b>rút tiền</b> từ ví Canteen. Đảm bảo thông tin
-          chính xác để tránh mất tiền.
-        </span>
+        <span>{t("wallet.linkNotice")}</span>
       </div>
 
-      <label style={labelStyle}>Ngân hàng *</label>
+      <label style={labelStyle}>{t("wallet.bank")} *</label>
       <select
         value={bankName}
         onChange={(e) => setBankName(e.target.value)}
@@ -1622,7 +1584,7 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
         ))}
       </select>
 
-      <label style={labelStyle}>Số tài khoản *</label>
+      <label style={labelStyle}>{t("wallet.accountNumber")} *</label>
       <input
         value={account}
         onChange={(e) => setAccount(e.target.value.replace(/[^0-9]/g, ""))}
@@ -1633,11 +1595,11 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
         style={{ ...inputStyle, fontFamily: "monospace" }}
       />
 
-      <label style={labelStyle}>Tên chủ tài khoản *</label>
+      <label style={labelStyle}>{t("wallet.accountHolder")} *</label>
       <input
         value={accountName}
         onChange={(e) => setAccountName(e.target.value)}
-        onBlur={normalizeAccountName}
+        onBlur={() => setAccountName((s) => s.toUpperCase().trim())}
         placeholder="NGUYEN VAN A"
         maxLength={100}
         disabled={busy}
@@ -1651,7 +1613,7 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
           disabled={busy}
           style={btnCancelStyle(busy)}
         >
-          Hủy
+          {t("common.cancel")}
         </button>
         <button
           type="button"
@@ -1659,12 +1621,10 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
           disabled={
             busy || !account.trim() || !accountName.trim() || account.length < 6
           }
-          style={{
-            ...btnPrimaryStyle(
-              busy || !account.trim() || !accountName.trim() || account.length < 6,
-              "#2634d5"
-            ),
-          }}
+          style={btnPrimaryStyle(
+            busy || !account.trim() || !accountName.trim() || account.length < 6,
+            "#2634d5"
+          )}
         >
           {submitting ? (
             <>
@@ -1672,10 +1632,10 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
                 size={14}
                 style={{ animation: "spin 1s linear infinite" }}
               />
-              Đang lưu...
+              {t("common.saving")}
             </>
           ) : (
-            "Lưu tài khoản"
+            t("wallet.saveAccount")
           )}
         </button>
       </div>

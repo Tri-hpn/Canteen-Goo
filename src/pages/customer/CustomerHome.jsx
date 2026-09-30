@@ -76,7 +76,7 @@ function fmtNumber(n) {
 
 export default function CustomerHome({ user, cart, setCart }) {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
 
   const [items, setItems] = useState([]);
   const [newItems, setNewItems] = useState([]);
@@ -187,8 +187,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
   // ---------- Carousel controls ----------
   const goNext = () => setIdx((i) => (i + 1) % SLIDES.length);
-  const goPrev = () =>
-    setIdx((i) => (i - 1 + SLIDES.length) % SLIDES.length);
+  const goPrev = () => setIdx((i) => (i - 1 + SLIDES.length) % SLIDES.length);
 
   // ---------- Derived ----------
   const publicMenuUrl = useMemo(() => getPublicMenuUrl(), []);
@@ -329,7 +328,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
         role="region"
-        aria-label="Banner khuyến mãi"
+        aria-label={t("customer.bannerAria")}
       >
         <div
           style={{
@@ -475,14 +474,14 @@ export default function CustomerHome({ user, cart, setCart }) {
 
         <button
           onClick={goPrev}
-          aria-label="Slide trước"
+          aria-label={t("customer.prevSlide")}
           className="banner-nav banner-nav-left"
         >
           <ChevronLeft size={20} />
         </button>
         <button
           onClick={goNext}
-          aria-label="Slide tiếp theo"
+          aria-label={t("customer.nextSlide")}
           className="banner-nav banner-nav-right"
         >
           <ChevronRight size={20} />
@@ -493,7 +492,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             <button
               key={i}
               onClick={() => setIdx(i)}
-              aria-label={`Đi đến slide ${i + 1}`}
+              aria-label={t("customer.goToSlide").replace("{n}", i + 1)}
               aria-current={i === idx ? "true" : "false"}
               style={{
                 width: i === idx ? 28 : 10,
@@ -593,7 +592,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
           <div style={{ marginBottom: 26 }}>
             <div className="home-food-grid-5">
-              {/* ===== VOUCHER — HÌNH VUÔNG ===== */}
+              {/* ===== VOUCHER ===== */}
               {publicVouchers.slice(0, FLASH_VOUCHERS_LIMIT).map((v) => (
                 <Link
                   key={`voucher-${v.id}`}
@@ -628,7 +627,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 </Link>
               ))}
 
-              {/* ===== PROMO — MÓN GIẢM GIÁ ===== */}
+              {/* ===== PROMO ===== */}
               {promotions.slice(0, FLASH_PROMOS_LIMIT).map((m) => (
                 <div
                   key={`promo-${m.id}`}
@@ -745,7 +744,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         {items.map(renderFoodCard)}
       </div>
 
-      {/* ============ MÓN MỚI LÊN KỆ ============ */}
+      {/* ============ MÓN MỚI ============ */}
       {newItems.length > 0 && (
         <div style={{ marginBottom: 26 }}>
           <div

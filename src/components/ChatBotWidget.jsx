@@ -2,7 +2,7 @@
 // CHATBOTWIDGET.JSX — Widget chat nổi (góc phải dưới)
 // ============================================================
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   Bot, X, Send, ShoppingCart, Store, MessageCircleHeart,
   Loader2, AlertCircle, RefreshCw,
@@ -11,6 +11,7 @@ import { api } from "../api";
 import { money } from "./UI";
 import { toast } from "./Effects";
 import { getBotReply } from "./ChatBot";
+import { useTranslation } from "../i18n";
 import FoodDetailModal from "./FoodDetailModal";
 import { useTranslation } from "../i18n";
 
@@ -49,9 +50,7 @@ function fmtTime(iso) {
 }
 
 function getMaxQty(item) {
-  if (typeof item?.stock === "number") {
-    return Math.max(1, item.stock);
-  }
+  if (typeof item?.stock === "number") return Math.max(1, item.stock);
   return 99;
 }
 
@@ -95,21 +94,12 @@ export default function ChatBotWidget({ cart, setCart, user }) {
         const list = Array.isArray(d) ? d : [];
         setMenuItems(list.filter((m) => m.active));
       })
-      .catch(() => {
-        if (cancelled) return;
-        setMenuItems([]);
-      });
+      .catch(() => !cancelled && setMenuItems([]));
 
     api.settings
       .get()
-      .then((d) => {
-        if (cancelled) return;
-        setSettings(d);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setSettings(null);
-      });
+      .then((d) => !cancelled && setSettings(d))
+      .catch(() => !cancelled && setSettings(null));
 
     return () => {
       cancelled = true;
@@ -174,7 +164,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
 
   useEffect(() => {
     if (!open || mode !== "staff") return;
-
     loadStaff(false);
     const timer = setInterval(() => loadStaff(true), POLL_MS);
     return () => clearInterval(timer);
@@ -245,15 +234,12 @@ export default function ChatBotWidget({ cart, setCart, user }) {
 
   useEffect(() => {
     if (!open) return;
-
     const handler = (e) => {
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", handler);
-
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
     return () => {
       window.removeEventListener("keydown", handler);
       document.body.style.overflow = prevOverflow;
@@ -308,7 +294,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   const sendStaff = async () => {
     const val = staffText.trim();
     if (!val || staffSending) return;
-
     if (val.length > MAX_MESSAGE_LENGTH) {
       toast(
         t("chatbot.maxLength").replace("{n}", MAX_MESSAGE_LENGTH),
@@ -340,15 +325,12 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     setCart((c) => {
       const existing = c[key];
       const currentQty = Number(existing?.qty) || 0;
-
       if (currentQty >= maxQty) {
         reason = t("cart.onlyLeftMsg").replace("{n}", maxQty);
         return c;
       }
-
       added = true;
       const newQty = Math.min(maxQty, currentQty + 1);
-
       return {
         ...c,
         [key]: {
@@ -398,15 +380,8 @@ export default function ChatBotWidget({ cart, setCart, user }) {
             zIndex: 45,
             transition: "transform 0.2s",
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.transform = "scale(1.08)")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.transform = "scale(1)")
-          }
         >
           <MessageCircleHeart size={26} />
-
           {hasNew && (
             <span
               aria-label={t("chatbot.hasNew")}
@@ -432,7 +407,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
               1
             </span>
           )}
-
           <span className="chatbot-pulse" />
         </button>
       )}
@@ -558,7 +532,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 5,
-                  transition: "all 0.2s",
                 }}
               >
                 <Bot size={14} /> {t("chatbot.tabAi")}
@@ -581,7 +554,6 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 5,
-                  transition: "all 0.2s",
                 }}
               >
                 <Store size={14} /> {t("chatbot.tabStaff")}
@@ -701,9 +673,7 @@ function AIContent({
                   borderRadius: isUser
                     ? "14px 14px 4px 14px"
                     : "14px 14px 14px 4px",
-                  background: isUser
-                    ? "#2634d5"
-                    : "var(--card-bg, #fff)",
+                  background: isUser ? "#2634d5" : "var(--card-bg, #fff)",
                   color: isUser ? "#fff" : "var(--text-primary, #172033)",
                   fontSize: 13,
                   boxShadow: "0 2px 8px rgba(0,0,0,0.06)",

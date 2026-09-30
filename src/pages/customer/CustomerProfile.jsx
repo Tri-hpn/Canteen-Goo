@@ -1,21 +1,6 @@
 // ============================================================
 // CUSTOMERPROFILE.JSX — Hồ sơ khách hàng
 // ============================================================
-// - View / Edit thông tin cá nhân (tên, email, SĐT, địa chỉ)
-// - Upload avatar (base64, max 2MB)
-// - Modal đổi mật khẩu
-//
-// Fixes (so với bản gốc):
-//   - Form sync khi user prop đổi (nhưng KHÔNG khi đang edit)
-//   - Modal đổi mật khẩu: ESC đóng, z-index chuẩn, role/aria
-//   - Double-submit guard cho save() và changePassword()
-//   - Disable modal close khi pwdLoading
-//   - InfoRow fallback "—" khi value rỗng/undefined
-//   - initials/displayName dùng useMemo
-//   - Avatar URL escape quotes
-//   - FileReader onerror handler
-//   - Bỏ fragment thừa
-// ============================================================
 
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -24,10 +9,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../../i18n";
 
 const MODAL_Z = 2147483600;
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
@@ -38,14 +20,6 @@ const ALLOWED_AVATAR_TYPES = [
   "image/webp",
 ];
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-/**
- * Build form data từ user object.
- * Dùng cho cả khởi tạo + reset.
- */
 function buildFormFromUser(u) {
   return {
     name: u?.name || "",
@@ -56,18 +30,11 @@ function buildFormFromUser(u) {
   };
 }
 
-/**
- * Escape dấu " trong URL để tránh vỡ CSS background.
- * URL data:image thường có base64, có thể chứa ký tự đặc biệt.
- */
 function escapeForCssUrl(url) {
   if (!url) return "";
   return url.replace(/"/g, '\\"').replace(/\)/g, "\\)");
 }
 
-/**
- * Tính initials từ tên: "Nguyễn Văn A" → "NA".
- */
 function getInitials(name) {
   const n = (name || "VWA").trim();
   const parts = n.split(/\s+/).filter(Boolean);
@@ -76,18 +43,14 @@ function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function CustomerProfile({ user, setUser }) {
-  // ---------- Edit state ----------
+  const { t } = useTranslation();
+
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(() => buildFormFromUser(user));
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // ---------- Password modal ----------
   const [showPwdModal, setShowPwdModal] = useState(false);
   const [pwdForm, setPwdForm] = useState({
     currentPassword: "",
@@ -98,27 +61,22 @@ export default function CustomerProfile({ user, setUser }) {
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState("");
 
-  // ---------- Sync form khi user prop đổi (chỉ khi không đang edit) ----------
-
   useEffect(() => {
     if (!editing) {
       setForm(buildFormFromUser(user));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]); // không thêm `editing` vào deps để tránh reset form khi bắt đầu edit
-
-  // ---------- Derived (memo) ----------
+  }, [user]);
 
   const displayName = editing ? form.name : user?.name || "";
   const avatarSrc = editing ? form.avatar : user?.avatar;
-
   const initials = useMemo(() => getInitials(displayName), [displayName]);
 
   const roleLabel = useMemo(() => {
-    if (user?.role === "ADMIN") return "Quản trị viên";
-    if (user?.role === "EMPLOYEE") return "Nhân viên";
-    return "Khách hàng";
-  }, [user?.role]);
+    if (user?.role === "ADMIN") return t("role.admin");
+    if (user?.role === "EMPLOYEE") return t("role.employee");
+    return t("role.customer");
+  }, [user?.role, t]);
 
   const avatarStyle = useMemo(() => {
     if (avatarSrc) {
@@ -130,8 +88,6 @@ export default function CustomerProfile({ user, setUser }) {
       background: "linear-gradient(135deg, #2634d5, #20c779)",
     };
   }, [avatarSrc]);
-
-  // ---------- Handlers ----------
 
   const resetForm = () => {
     setForm(buildFormFromUser(user));
@@ -154,21 +110,17 @@ export default function CustomerProfile({ user, setUser }) {
     if (errors[k]) setErrors((er) => ({ ...er, [k]: "" }));
   };
 
-  // ---------- Avatar ----------
-
   const handleAvatar = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Reset input để có thể chọn lại cùng file
     e.target.value = "";
 
     if (file.size > MAX_AVATAR_SIZE) {
-      toast("Ảnh vượt quá 2MB", "error");
+      toast(t("profile.avatarTooLarge"), "error");
       return;
     }
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
-      toast("Chỉ chấp nhận ảnh JPG/PNG/WebP", "error");
+      toast(t("profile.avatarInvalidType"), "error");
       return;
     }
 
@@ -176,39 +128,34 @@ export default function CustomerProfile({ user, setUser }) {
     reader.onload = () => {
       if (typeof reader.result === "string") {
         setForm((f) => ({ ...f, avatar: reader.result }));
-        toast("Đã chọn ảnh mới", "success");
+        toast(t("profile.avatarSelected"), "success");
       }
     };
     reader.onerror = () => {
-      toast("Không đọc được file", "error");
+      toast(t("profile.avatarReadError"), "error");
     };
     reader.readAsDataURL(file);
   };
 
-  // ---------- Validate ----------
-
   const validate = () => {
     const errs = {};
-    if (!form.name.trim()) errs.name = "Vui lòng nhập họ tên";
+    if (!form.name.trim()) errs.name = t("profile.errNameRequired");
     if (!form.email.trim()) {
-      errs.email = "Vui lòng nhập email";
+      errs.email = t("profile.errEmailRequired");
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      errs.email = "Email không hợp lệ";
+      errs.email = t("profile.errEmailInvalid");
     }
     if (form.phone && !/^[0-9]{10,11}$/.test(form.phone.trim())) {
-      errs.phone = "SĐT phải 10-11 chữ số";
+      errs.phone = t("profile.errPhoneInvalid");
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  // ---------- Save profile ----------
-
   const save = async () => {
     if (loading) return;
-
     if (!validate()) {
-      toast("Vui lòng kiểm tra lại thông tin", "error");
+      toast(t("profile.checkInfo"), "error");
       return;
     }
 
@@ -229,16 +176,14 @@ export default function CustomerProfile({ user, setUser }) {
         localStorage.setItem("canteen_user", JSON.stringify(updated));
       } catch {}
 
-      toast("Đã lưu thay đổi!", "success");
+      toast(t("profile.updated"), "success");
       setEditing(false);
     } catch (err) {
-      toast(err.message || "Không lưu được", "error");
+      toast(err.message || t("profile.saveError"), "error");
     } finally {
       setLoading(false);
     }
   };
-
-  // ---------- Change password ----------
 
   const openPwdModal = () => {
     setPwdForm({
@@ -258,19 +203,18 @@ export default function CustomerProfile({ user, setUser }) {
 
   const changePassword = async () => {
     if (pwdLoading) return;
-
     setPwdError("");
 
     if (!pwdForm.currentPassword || !pwdForm.newPassword) {
-      setPwdError("Vui lòng nhập đầy đủ thông tin");
+      setPwdError(t("profile.errPwdRequired"));
       return;
     }
     if (pwdForm.newPassword.length < 6) {
-      setPwdError("Mật khẩu mới phải từ 6 ký tự");
+      setPwdError(t("profile.errPwdMin"));
       return;
     }
     if (pwdForm.newPassword !== pwdForm.confirmPassword) {
-      setPwdError("Xác nhận mật khẩu không khớp");
+      setPwdError(t("profile.errPwdMismatch"));
       return;
     }
 
@@ -280,7 +224,7 @@ export default function CustomerProfile({ user, setUser }) {
         currentPassword: pwdForm.currentPassword,
         newPassword: pwdForm.newPassword,
       });
-      toast("Đổi mật khẩu thành công!", "success");
+      toast(t("profile.pwdChanged"), "success");
       setShowPwdModal(false);
       setPwdForm({
         currentPassword: "",
@@ -288,13 +232,12 @@ export default function CustomerProfile({ user, setUser }) {
         confirmPassword: "",
       });
     } catch (e) {
-      setPwdError(e.message || "Lỗi đổi mật khẩu");
+      setPwdError(e.message || t("profile.pwdChangeError"));
     } finally {
       setPwdLoading(false);
     }
   };
 
-  // ESC đóng modal đổi mật khẩu
   useEffect(() => {
     if (!showPwdModal) return;
     const handler = (e) => {
@@ -304,10 +247,6 @@ export default function CustomerProfile({ user, setUser }) {
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPwdModal, pwdLoading]);
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <>
@@ -319,9 +258,8 @@ export default function CustomerProfile({ user, setUser }) {
           gap: 20,
         }}
       >
-        {/* ========== CỘT TRÁI: AVATAR + ĐIỂM ========== */}
+        {/* CỘT TRÁI */}
         <div className="profile-card-left" style={cardStyle}>
-          {/* Avatar */}
           <div
             className="profile-avatar-wrap"
             style={{
@@ -352,7 +290,7 @@ export default function CustomerProfile({ user, setUser }) {
 
             {editing && (
               <label
-                title="Đổi ảnh đại diện"
+                title={t("profile.changeAvatar")}
                 style={{
                   position: "absolute",
                   bottom: 0,
@@ -389,7 +327,7 @@ export default function CustomerProfile({ user, setUser }) {
               textAlign: "center",
             }}
           >
-            {user?.name || "Người dùng"}
+            {user?.name || t("account.user")}
           </h3>
           <p
             style={{
@@ -428,16 +366,13 @@ export default function CustomerProfile({ user, setUser }) {
             style={{
               marginTop: 20,
               padding: 16,
-              background:
-                "linear-gradient(135deg, #f59e0b20, #ef444420)",
+              background: "linear-gradient(135deg, #f59e0b20, #ef444420)",
               borderRadius: 12,
               border: "1px solid #f59e0b40",
             }}
           >
-            <span
-              style={{ fontSize: 12, color: "var(--text-light, #8993a3)" }}
-            >
-              Điểm tích lũy của bạn
+            <span style={{ fontSize: 12, color: "var(--text-light, #8993a3)" }}>
+              {t("profile.pointsLabel")}
             </span>
             <div
               style={{
@@ -449,14 +384,11 @@ export default function CustomerProfile({ user, setUser }) {
             >
               {user?.points || 0}
             </div>
-            <span
-              style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}
-            >
-              1 điểm = 100đ khi đổi voucher
+            <span style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}>
+              {t("profile.pointsRate")}
             </span>
           </div>
 
-          {/* Đổi mật khẩu */}
           <button
             onClick={openPwdModal}
             style={{
@@ -475,15 +407,13 @@ export default function CustomerProfile({ user, setUser }) {
               justifyContent: "center",
               gap: 6,
             }}
-            className="btn-change-pwd"
           >
-            <KeyRound size={15} /> Đổi mật khẩu
+            <KeyRound size={15} /> {t("profile.changePassword")}
           </button>
         </div>
 
-        {/* ========== CỘT PHẢI: THÔNG TIN / FORM ========== */}
+        {/* CỘT PHẢI */}
         <div className="profile-card-right" style={cardStyle}>
-          {/* Header */}
           <div
             style={{
               display: "flex",
@@ -495,10 +425,8 @@ export default function CustomerProfile({ user, setUser }) {
             }}
           >
             <div>
-              <h3
-                style={{ margin: 0, color: "var(--text-primary, #172033)" }}
-              >
-                Hồ sơ cá nhân
+              <h3 style={{ margin: 0, color: "var(--text-primary, #172033)" }}>
+                {t("profile.title")}
               </h3>
               <p
                 style={{
@@ -507,35 +435,31 @@ export default function CustomerProfile({ user, setUser }) {
                   fontSize: 13,
                 }}
               >
-                {editing
-                  ? "Chỉnh sửa thông tin bên dưới"
-                  : "Thông tin tài khoản của bạn"}
+                {editing ? t("profile.editHint") : t("profile.viewHint")}
               </p>
             </div>
 
             <div style={{ display: "flex", gap: 8 }}>
               {!editing ? (
                 <button onClick={startEdit} style={btnEdit}>
-                  <Pencil size={14} /> Sửa
+                  <Pencil size={14} /> {t("common.edit")}
                 </button>
               ) : (
                 <>
                   <button
                     onClick={cancelEdit}
                     disabled={loading}
-                    className="btn-cancel"
                     style={{
                       ...btnCancel,
                       opacity: loading ? 0.6 : 1,
                       cursor: loading ? "not-allowed" : "pointer",
                     }}
                   >
-                    <X size={14} /> Hủy
+                    <X size={14} /> {t("common.cancel")}
                   </button>
                   <button
                     onClick={save}
                     disabled={loading}
-                    className="btn-save"
                     style={{
                       ...btnSave,
                       opacity: loading ? 0.6 : 1,
@@ -551,11 +475,11 @@ export default function CustomerProfile({ user, setUser }) {
                           size={14}
                           style={{ animation: "spin 1s linear infinite" }}
                         />
-                        Đang lưu...
+                        {t("common.saving")}
                       </>
                     ) : (
                       <>
-                        <Save size={14} /> Lưu thay đổi
+                        <Save size={14} /> {t("common.save")}
                       </>
                     )}
                   </button>
@@ -569,22 +493,22 @@ export default function CustomerProfile({ user, setUser }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <InfoRow
                 icon={<User size={16} />}
-                label="Họ và tên"
+                label={t("profile.name")}
                 value={user?.name}
               />
               <InfoRow
                 icon={<Mail size={16} />}
-                label="Email"
+                label={t("profile.email")}
                 value={user?.email}
               />
               <InfoRow
                 icon={<Phone size={16} />}
-                label="Số điện thoại"
+                label={t("profile.phone")}
                 value={user?.phone}
               />
               <InfoRow
                 icon={<MapPin size={16} />}
-                label="Địa chỉ"
+                label={t("profile.address")}
                 value={user?.address}
               />
             </div>
@@ -593,20 +517,20 @@ export default function CustomerProfile({ user, setUser }) {
           {/* EDIT MODE */}
           {editing && (
             <div>
-              <label style={labelStyle}>Họ và tên *</label>
+              <label style={labelStyle}>{t("profile.name")} *</label>
               <div style={inputWrapStyle(errors.name)}>
                 <User size={16} style={iconStyle} />
                 <input
                   value={form.name}
                   onChange={update("name")}
                   style={inputInnerStyle}
-                  placeholder="Nguyễn Văn A"
+                  placeholder={t("checkout.namePlaceholder")}
                   disabled={loading}
                 />
               </div>
               {errors.name && <div style={errStyle}>{errors.name}</div>}
 
-              <label style={labelStyle}>Email *</label>
+              <label style={labelStyle}>{t("profile.email")} *</label>
               <div style={inputWrapStyle(errors.email)}>
                 <Mail size={16} style={iconStyle} />
                 <input
@@ -620,28 +544,28 @@ export default function CustomerProfile({ user, setUser }) {
               </div>
               {errors.email && <div style={errStyle}>{errors.email}</div>}
 
-              <label style={labelStyle}>Số điện thoại</label>
+              <label style={labelStyle}>{t("profile.phone")}</label>
               <div style={inputWrapStyle(errors.phone)}>
                 <Phone size={16} style={iconStyle} />
                 <input
                   value={form.phone}
                   onChange={update("phone")}
                   style={inputInnerStyle}
-                  placeholder="0901234567"
+                  placeholder={t("checkout.phonePlaceholder")}
                   inputMode="numeric"
                   disabled={loading}
                 />
               </div>
               {errors.phone && <div style={errStyle}>{errors.phone}</div>}
 
-              <label style={labelStyle}>Địa chỉ</label>
+              <label style={labelStyle}>{t("profile.address")}</label>
               <div style={inputWrapStyle()}>
                 <MapPin size={16} style={iconStyle} />
                 <input
                   value={form.address}
                   onChange={update("address")}
                   style={inputInnerStyle}
-                  placeholder="Ký túc xá VWA, Hà Nội"
+                  placeholder={t("profile.addressPlaceholder")}
                   disabled={loading}
                 />
               </div>
@@ -650,13 +574,13 @@ export default function CustomerProfile({ user, setUser }) {
         </div>
       </div>
 
-      {/* ========== MODAL ĐỔI MẬT KHẨU ========== */}
+      {/* MODAL ĐỔI MẬT KHẨU */}
       {showPwdModal && (
         <div
           onClick={closePwdModal}
           role="dialog"
           aria-modal="true"
-          aria-label="Đổi mật khẩu"
+          aria-label={t("profile.changePassword")}
           style={{
             position: "fixed",
             inset: 0,
@@ -680,7 +604,6 @@ export default function CustomerProfile({ user, setUser }) {
               overflowY: "auto",
             }}
           >
-            {/* Header */}
             <div
               style={{
                 display: "flex",
@@ -698,12 +621,12 @@ export default function CustomerProfile({ user, setUser }) {
                   gap: 8,
                 }}
               >
-                <Lock size={20} /> Đổi mật khẩu
+                <Lock size={20} /> {t("profile.changePassword")}
               </h3>
               <button
                 onClick={closePwdModal}
                 disabled={pwdLoading}
-                aria-label="Đóng"
+                aria-label={t("common.close")}
                 style={{
                   background: "transparent",
                   border: 0,
@@ -719,7 +642,6 @@ export default function CustomerProfile({ user, setUser }) {
               </button>
             </div>
 
-            {/* Error */}
             {pwdError && (
               <div
                 style={{
@@ -735,8 +657,7 @@ export default function CustomerProfile({ user, setUser }) {
               </div>
             )}
 
-            {/* Current password */}
-            <label style={labelStyle}>Mật khẩu hiện tại</label>
+            <label style={labelStyle}>{t("profile.currentPassword")}</label>
             <div style={inputWrapStyle()}>
               <Lock size={16} style={iconStyle} />
               <input
@@ -749,15 +670,14 @@ export default function CustomerProfile({ user, setUser }) {
                   }))
                 }
                 style={inputInnerStyle}
-                placeholder="Nhập mật khẩu hiện tại"
+                placeholder={t("profile.enterCurrentPwd")}
                 autoComplete="current-password"
                 disabled={pwdLoading}
                 autoFocus
               />
             </div>
 
-            {/* New password */}
-            <label style={labelStyle}>Mật khẩu mới</label>
+            <label style={labelStyle}>{t("profile.newPassword")}</label>
             <div style={inputWrapStyle()}>
               <KeyRound size={16} style={iconStyle} />
               <input
@@ -767,14 +687,16 @@ export default function CustomerProfile({ user, setUser }) {
                   setPwdForm((f) => ({ ...f, newPassword: e.target.value }))
                 }
                 style={inputInnerStyle}
-                placeholder="Tối thiểu 6 ký tự"
+                placeholder={t("profile.pwdMin6")}
                 autoComplete="new-password"
                 disabled={pwdLoading}
               />
               <button
                 type="button"
                 onClick={() => setShowPwd(!showPwd)}
-                aria-label={showPwd ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                aria-label={
+                  showPwd ? t("login.hidePassword") : t("login.showPassword")
+                }
                 style={{
                   background: "transparent",
                   border: 0,
@@ -787,8 +709,7 @@ export default function CustomerProfile({ user, setUser }) {
               </button>
             </div>
 
-            {/* Confirm password */}
-            <label style={labelStyle}>Xác nhận mật khẩu mới</label>
+            <label style={labelStyle}>{t("profile.confirmPassword")}</label>
             <div style={inputWrapStyle()}>
               <Check size={16} style={iconStyle} />
               <input
@@ -801,7 +722,7 @@ export default function CustomerProfile({ user, setUser }) {
                   }))
                 }
                 style={inputInnerStyle}
-                placeholder="Nhập lại mật khẩu mới"
+                placeholder={t("profile.enterNewPwdAgain")}
                 autoComplete="new-password"
                 disabled={pwdLoading}
                 onKeyDown={(e) => {
@@ -810,7 +731,6 @@ export default function CustomerProfile({ user, setUser }) {
               />
             </div>
 
-            {/* Buttons */}
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
               <button
                 type="button"
@@ -828,7 +748,7 @@ export default function CustomerProfile({ user, setUser }) {
                   opacity: pwdLoading ? 0.6 : 1,
                 }}
               >
-                Hủy
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -855,10 +775,10 @@ export default function CustomerProfile({ user, setUser }) {
                       size={14}
                       style={{ animation: "spin 1s linear infinite" }}
                     />
-                    Đang xử lý...
+                    {t("common.processing")}
                   </>
                 ) : (
-                  "Đổi mật khẩu"
+                  t("profile.changePassword")
                 )}
               </button>
             </div>
@@ -876,12 +796,7 @@ export default function CustomerProfile({ user, setUser }) {
   );
 }
 
-// ============================================================
-// SUB-COMPONENT: InfoRow
-// ============================================================
-
 function InfoRow({ icon, label, value }) {
-  // Fallback "—" nếu value rỗng/undefined
   const display =
     value === undefined || value === null || value === "" ? "—" : value;
 
@@ -936,10 +851,6 @@ function InfoRow({ icon, label, value }) {
     </div>
   );
 }
-
-// ============================================================
-// STYLE CONSTANTS
-// ============================================================
 
 const cardStyle = {
   background: "var(--card-bg, #fff)",
