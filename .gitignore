@@ -13,3 +13,6 @@ canteen-db-auto-backup-*.json
 data/
 *.log
 .DS_Store
+# Personal scripts
+merge-main.ps1
+check-conflict.ps1
