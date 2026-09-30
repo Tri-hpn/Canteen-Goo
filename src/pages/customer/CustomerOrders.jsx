@@ -1,22 +1,7 @@
 ﻿// ============================================================
 // CUSTOMERORDERS.JSX — Danh sách đơn hàng của khách
 // ============================================================
-// Tính năng:
-//   - 4 KPI: tổng đơn, đang xử lý, hoàn thành, tổng chi tiêu
-//   - Filter theo trạng thái (chip có badge số lượng)
-//   - Card đơn hàng + modal chi tiết
-//   - Auto-refresh 15s, race-safe
-//
-// Fixes (so với bản gốc):
-//   - Race-safe polling: reqIdRef + inFlightRef
-//   - Error state + retry (không silent fail, không xoá data cũ)
-//   - Loading tách: initial load vs refreshing
-//   - Memo filtered
-//   - Bỏ dead code (previewItems, remaining)
-//   - Toast "Đã làm mới" chỉ hiện sau khi request xong
-//   - Cleanup khi unmount (cancelled flag)
-//   - Sort rõ ràng hơn
-// ============================================================
+
 import { Skeleton, SkeletonText } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
@@ -26,8 +11,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
-import { toast } from "../../components/Effects";
 import { money } from "../../components/UI";
+import { useTranslation } from "../../i18n";
 import CustomerOrderDetail from "../../components/CustomerOrderDetail";
 
 // ============================================================
@@ -35,16 +20,6 @@ import CustomerOrderDetail from "../../components/CustomerOrderDetail";
 // ============================================================
 
 const POLL_MS = 15000;
-
-const STATUS_LIST = [
-  { id: "Tất cả",        label: "Tất cả",        icon: Package,       color: "#2634d5" },
-  { id: "Chờ xác nhận",  label: "Chờ xác nhận",  icon: Bell,          color: "#f59e0b" },
-  { id: "Đã xác nhận",   label: "Đã xác nhận",   icon: CheckCircle2,  color: "#2634d5" },
-  { id: "Đang chuẩn bị", label: "Đang chuẩn bị", icon: ChefHat,       color: "#8b5cf6" },
-  { id: "Sẵn sàng nhận", label: "Sẵn sàng nhận", icon: ShoppingBag,   color: "#18a967" },
-  { id: "Hoàn thành",    label: "Hoàn thành",    icon: CheckCircle2,  color: "#18a967" },
-  { id: "Đã hủy",        label: "Đã hủy",        icon: XCircle,       color: "#ef4444" },
-];
 
 const ACTIVE_STATUSES = [
   "Chờ xác nhận",
@@ -67,22 +42,33 @@ const STATUS_COLORS = {
 // ============================================================
 
 export default function CustomerOrders() {
-  // ---------- Data ----------
+  const { t } = useTranslation();
+
+  const STATUS_LIST = useMemo(
+    () => [
+      { id: "Tất cả",        label: t("orders.status.all"),      icon: Package,      color: "#2634d5" },
+      { id: "Chờ xác nhận",  label: t("status.pending"),          icon: Bell,         color: "#f59e0b" },
+      { id: "Đã xác nhận",   label: t("status.confirmed"),        icon: CheckCircle2, color: "#2634d5" },
+      { id: "Đang chuẩn bị", label: t("status.preparing"),        icon: ChefHat,      color: "#8b5cf6" },
+      { id: "Sẵn sàng nhận", label: t("status.ready"),            icon: ShoppingBag,  color: "#18a967" },
+      { id: "Hoàn thành",    label: t("status.done"),             icon: CheckCircle2, color: "#18a967" },
+      { id: "Đã hủy",        label: t("status.cancelled"),        icon: XCircle,      color: "#ef4444" },
+    ],
+    [t]
+  );
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  // ---------- UI ----------
   const [status, setStatus] = useState("Tất cả");
   const [selected, setSelected] = useState(null);
 
-  // ---------- Refs ----------
   const reqIdRef = useRef(0);
   const inFlightRef = useRef(false);
 
   // ---------- Load ----------
-
   const load = useCallback(async (silent = false) => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
@@ -94,19 +80,17 @@ export default function CustomerOrders() {
     try {
       const data = await api.orders.myOrders();
 
-      // Bỏ qua nếu có request mới hơn
       if (myReqId !== reqIdRef.current) return;
 
       const sorted = [...(data || [])].sort((a, b) => {
         const ta = new Date(a.created_at || 0).getTime();
         const tb = new Date(b.created_at || 0).getTime();
-        return tb - ta; // mới nhất trước
+        return tb - ta;
       });
       setOrders(sorted);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || "Không tải được đơn hàng");
-        // KHÔNG xoá orders cũ — giữ context cho user
+        setError(e.message || t("orders.loadError"));
       }
     } finally {
       if (myReqId === reqIdRef.current) {
@@ -115,17 +99,14 @@ export default function CustomerOrders() {
       }
       inFlightRef.current = false;
     }
-  }, []);
+  }, [t]);
 
-  // Initial + polling
   useEffect(() => {
     load(false);
-
     const interval = setInterval(() => load(true), POLL_MS);
     return () => clearInterval(interval);
   }, [load]);
 
-  // Mark "đã xem" đơn → xoá badge sidebar
   useEffect(() => {
     try {
       localStorage.setItem("orders_last_seen", Date.now().toString());
@@ -134,7 +115,6 @@ export default function CustomerOrders() {
   }, []);
 
   // ---------- Memoized derived ----------
-
   const filtered = useMemo(() => {
     if (status === "Tất cả") return orders;
     return orders.filter((o) => o.status === status);
@@ -169,21 +149,9 @@ export default function CustomerOrders() {
     return map;
   }, [orders]);
 
-  // ---------- Handlers ----------
-
-  const handleRefresh = async () => {
-    await load(false);
-    // Chỉ báo thành công nếu không có lỗi sau khi load
-    // (error sẽ được set trong load())
-  };
-
-  // ============================================================
-  // RENDER
-  // ============================================================
-
   return (
     <div>
-      {/* ============ ERROR BANNER ============ */}
+      {/* ERROR BANNER */}
       {error && (
         <div
           style={{
@@ -214,12 +182,12 @@ export default function CustomerOrders() {
               fontSize: 12,
             }}
           >
-            Thử lại
+            {t("common.retry")}
           </button>
         </div>
       )}
 
-      {/* ============ STATS ============ */}
+      {/* STATS */}
       <div
         style={{
           display: "grid",
@@ -230,31 +198,31 @@ export default function CustomerOrders() {
       >
         <StatCard
           icon={<Package size={20} />}
-          label="Tổng đơn"
+          label={t("orders.stat.total")}
           value={stats.total}
           color="#2634d5"
         />
         <StatCard
           icon={<Clock size={20} />}
-          label="Đang xử lý"
+          label={t("orders.stat.active")}
           value={stats.active}
           color="#f59e0b"
         />
         <StatCard
           icon={<CheckCircle2 size={20} />}
-          label="Hoàn thành"
+          label={t("orders.stat.completed")}
           value={stats.completed}
           color="#18a967"
         />
         <StatCard
           icon={<DollarSign size={20} />}
-          label="Tổng chi tiêu"
+          label={t("orders.stat.spent")}
           value={money(stats.totalSpent)}
           color="#8b5cf6"
         />
       </div>
 
-      {/* ============ FILTER CHIPS ============ */}
+      {/* FILTER CHIPS */}
       <div
         className="order-filter-box"
         style={{
@@ -325,7 +293,7 @@ export default function CustomerOrders() {
         </div>
       </div>
 
-      {/* ============ HEADER ============ */}
+      {/* HEADER */}
       <div
         style={{
           display: "flex",
@@ -346,7 +314,7 @@ export default function CustomerOrders() {
             gap: 8,
           }}
         >
-          📦 Danh sách đơn hàng
+          📦 {t("orders.listTitle")}
           <span
             style={{
               fontSize: 12,
@@ -354,11 +322,11 @@ export default function CustomerOrders() {
               fontWeight: 400,
             }}
           >
-            ({filtered.length} đơn)
+            ({filtered.length} {t("orders.count")})
           </span>
         </h3>
         <button
-          onClick={handleRefresh}
+          onClick={() => load(false)}
           disabled={refreshing}
           style={{
             padding: "8px 14px",
@@ -379,11 +347,11 @@ export default function CustomerOrders() {
           ) : (
             <RefreshCw size={13} />
           )}
-          {refreshing ? "Đang tải..." : "Làm mới"}
+          {refreshing ? t("common.loading") : t("common.refresh")}
         </button>
       </div>
 
-          {/* ============ LOADING LẦN ĐẦU (skeleton cards) ============ */}
+      {/* LOADING SKELETON */}
       {loading && !orders.length && (
         <div
           className="orders-grid"
@@ -407,13 +375,11 @@ export default function CustomerOrders() {
                 gap: 12,
               }}
             >
-              {/* Header: mã đơn + status */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <SkeletonText width="35%" height={14} />
                 <Skeleton width={90} height={22} radius={20} />
               </div>
 
-              {/* Item preview */}
               <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 <Skeleton width={60} height={60} radius={14} />
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -422,7 +388,6 @@ export default function CustomerOrders() {
                 </div>
               </div>
 
-              {/* Footer */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
                 <SkeletonText width={100} height={12} />
                 <Skeleton width={90} height={34} radius={9} />
@@ -432,7 +397,7 @@ export default function CustomerOrders() {
         </div>
       )}
 
-      {/* ============ EMPTY ============ */}
+      {/* EMPTY */}
       {!loading && filtered.length === 0 && (
         <div
           className="order-card"
@@ -460,8 +425,8 @@ export default function CustomerOrders() {
             }}
           >
             {status === "Tất cả"
-              ? "Chưa có đơn hàng nào"
-              : `Không có đơn "${status}"`}
+              ? t("orders.emptyAll")
+              : t("orders.emptyStatus").replace("{status}", t("status." + statusMapKey(status)))}
           </h3>
           <p
             style={{
@@ -471,8 +436,8 @@ export default function CustomerOrders() {
             }}
           >
             {status === "Tất cả"
-              ? "Đặt món để bắt đầu trải nghiệm nhé!"
-              : "Thử chọn trạng thái khác"}
+              ? t("orders.emptyAllDesc")
+              : t("orders.emptyStatusDesc")}
           </p>
           {status === "Tất cả" && (
             <Link
@@ -490,13 +455,13 @@ export default function CustomerOrders() {
                 fontSize: 13,
               }}
             >
-              <ShoppingBag size={15} /> Đặt món ngay
+              <ShoppingBag size={15} /> {t("orders.orderNow")}
             </Link>
           )}
         </div>
       )}
 
-      {/* ============ ORDERS GRID ============ */}
+      {/* ORDERS GRID */}
       {!loading && filtered.length > 0 && (
         <div
           className="orders-grid"
@@ -516,7 +481,7 @@ export default function CustomerOrders() {
         </div>
       )}
 
-      {/* ============ DETAIL MODAL ============ */}
+      {/* DETAIL MODAL */}
       {selected && (
         <CustomerOrderDetail
           order={selected}
@@ -541,10 +506,26 @@ export default function CustomerOrders() {
 }
 
 // ============================================================
+// HELPERS
+// ============================================================
+
+function statusMapKey(viStatus) {
+  return {
+    "Chờ xác nhận": "pending",
+    "Đã xác nhận": "confirmed",
+    "Đang chuẩn bị": "preparing",
+    "Sẵn sàng nhận": "ready",
+    "Hoàn thành": "done",
+    "Đã hủy": "cancelled",
+  }[viStatus] || "pending";
+}
+
+// ============================================================
 // SUB-COMPONENT: OrderCard
 // ============================================================
 
 function OrderCard({ order, onView }) {
+  const { t } = useTranslation();
   const colors = STATUS_COLORS[order.status] || {
     color: "#64748b",
     bg: "#f1f5f9",
@@ -552,7 +533,10 @@ function OrderCard({ order, onView }) {
 
   const items = order.items || [];
   const totalQty = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
-  const firstItemName = items[0]?.name || "Đơn hàng";
+  const firstItemName = items[0]?.name || t("orders.orderLabel");
+
+  const statusLabel =
+    t("status." + statusMapKey(order.status)) || order.status;
 
   return (
     <div
@@ -567,7 +551,7 @@ function OrderCard({ order, onView }) {
         transition: "all 0.2s",
       }}
     >
-      {/* Header: mã đơn + status */}
+      {/* Header */}
       <div
         style={{
           padding: "14px 16px",
@@ -585,9 +569,10 @@ function OrderCard({ order, onView }) {
               color: "var(--text-light, #8993a3)",
               fontWeight: 600,
               marginBottom: 2,
+              textTransform: "uppercase",
             }}
           >
-            MÃ ĐƠN
+            {t("orders.code")}
           </div>
           <b
             style={{
@@ -610,7 +595,7 @@ function OrderCard({ order, onView }) {
             whiteSpace: "nowrap",
           }}
         >
-          {order.status}
+          {statusLabel}
         </span>
       </div>
 
@@ -704,12 +689,12 @@ function OrderCard({ order, onView }) {
                     fontWeight: 400,
                   }}
                 >
-                  {" "}+{items.length - 1} món
+                  {" "}+{items.length - 1} {t("orders.moreItems")}
                 </span>
               )}
             </b>
             <span style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}>
-              {totalQty} phần
+              {totalQty} {t("cart.parts")}
             </span>
           </div>
         </div>
@@ -745,7 +730,7 @@ function OrderCard({ order, onView }) {
         </div>
       </div>
 
-      {/* Footer: tổng + button */}
+      {/* Footer */}
       <div
         style={{
           padding: "12px 16px",
@@ -762,9 +747,10 @@ function OrderCard({ order, onView }) {
               fontSize: 10,
               color: "var(--text-light, #8993a3)",
               display: "block",
+              textTransform: "uppercase",
             }}
           >
-            TỔNG CỘNG
+            {t("cart.total")}
           </span>
           <b style={{ fontSize: 17, color: "#2634d5" }}>
             {money(order.total)}
@@ -786,7 +772,7 @@ function OrderCard({ order, onView }) {
             gap: 6,
           }}
         >
-          <Eye size={14} /> Chi tiết
+          <Eye size={14} /> {t("orders.detail")}
         </button>
       </div>
     </div>

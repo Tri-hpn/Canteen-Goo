@@ -1,27 +1,7 @@
 // ============================================================
 // OWNEREMPLOYEES.JSX — Quản lý nhân viên (Admin)
 // ============================================================
-// Tính năng:
-//   - Danh sách nhân viên + tìm kiếm (tên / email)
-//   - Xem chi tiết, Sửa, Reset mật khẩu, Xoá
-//   - Thêm nhân viên mới
-//
-// Endpoints:
-//   - api.users.list("EMPLOYEE")
-//   - api.users.create / update / remove
-//
-// Lưu ý:
-//   - Không có race condition: detail + mode được set trong 1 batch
-//   - ESC đóng modal
-//   - Save button disable khi đang request
-//   - Thay confirm() native bằng ConfirmDialog custom
-//
-// Batch 5A fixes:
-//   - ✅ #10.1: Validate trùng email phía client khi thêm NV
-//     (check với toàn bộ users list, không chỉ EMPLOYEE)
-//   - ✅ #10.2: Lưu trữ email set để lookup O(1)
-//   - ✅ #10.3: Normalize search không dấu (tìm "Tran" match "Trần")
-// ============================================================
+
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import {
@@ -45,10 +25,6 @@ const MODAL_Z = 2147483600;
 // HELPERS
 // ============================================================
 
-/**
- * ✅ #10.3: Bỏ dấu tiếng Việt + lowercase để search chính xác.
- * "Cơm Gà" → "com ga"
- */
 function normalize(s) {
   return String(s || "")
     .toLowerCase()
@@ -63,26 +39,23 @@ function normalize(s) {
 // ============================================================
 
 export default function OwnerEmployees() {
-  // ---------- List state ----------
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
 
-  // ---------- Detail modal ----------
   const [detailModal, setDetailModal] = useState(null);
   const [showPw, setShowPw] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // ---------- Add modal ----------
   const [addModal, setAddModal] = useState(false);
   const [adding, setAdding] = useState(false);
 
-  // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
-  // ---------- Load list ----------
+  // ✅ FIX: allUsers chỉ load 1 lần, không phụ thuộc `list`
+  const [allUsers, setAllUsers] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,11 +71,22 @@ export default function OwnerEmployees() {
     }
   }, []);
 
+  // ✅ FIX: loadAllUsers không phụ thuộc vào `list` → chỉ gọi 1 lần khi mount
+  const loadAllUsers = useCallback(async () => {
+    try {
+      const data = await api.users.list(); // không filter → lấy hết
+      setAllUsers(Array.isArray(data) ? data : []);
+    } catch {
+      // Fallback: dùng list employee
+      setAllUsers([]);
+    }
+  }, []);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadAllUsers();
+  }, [load, loadAllUsers]);
 
-  // ESC đóng modal
   useEffect(() => {
     const handler = (e) => {
       if (e.key !== "Escape") return;
@@ -113,24 +97,6 @@ export default function OwnerEmployees() {
     return () => window.removeEventListener("keydown", handler);
   }, [addModal, detailModal, adding, saving]);
 
-  // ---------- ✅ #10.2: Email set để lookup O(1) ----------
-  // Load ALL users (kể cả customer) để check trùng email
-  const [allUsers, setAllUsers] = useState([]);
-
-  const loadAllUsers = useCallback(async () => {
-    try {
-      const data = await api.users.list(); // không filter → lấy hết
-      setAllUsers(Array.isArray(data) ? data : []);
-    } catch {
-      // Fallback: dùng list employee
-      setAllUsers(list);
-    }
-  }, [list]);
-
-  useEffect(() => {
-    loadAllUsers();
-  }, [loadAllUsers]);
-
   const existingEmails = useMemo(() => {
     const set = new Set();
     for (const u of allUsers) {
@@ -138,8 +104,6 @@ export default function OwnerEmployees() {
     }
     return set;
   }, [allUsers]);
-
-  // ---------- Filter (memo) ✅ #10.3 ----------
 
   const filtered = useMemo(() => {
     if (!q.trim()) return list;
@@ -150,8 +114,6 @@ export default function OwnerEmployees() {
         normalize(e.email).includes(s)
     );
   }, [list, q]);
-
-  // ---------- Modal handlers ----------
 
   const openDetail = (emp, mode = "view") => {
     setDetailModal({ employee: emp, mode });
@@ -174,8 +136,6 @@ export default function OwnerEmployees() {
     setDetailModal({ ...detailModal, mode: "view" });
     setShowPw(false);
   };
-
-  // ---------- Save (add / edit) ----------
 
   const saveEdit = async (e) => {
     e.preventDefault();
@@ -238,7 +198,6 @@ export default function OwnerEmployees() {
     if (password.length < 6)
       return toast("Mật khẩu phải từ 6 ký tự", "error");
 
-    // ✅ #10.1: Validate trùng email (check toàn bộ users, không chỉ EMPLOYEE)
     if (existingEmails.has(email)) {
       return toast(
         `Email "${email}" đã được sử dụng — vui lòng dùng email khác`,
@@ -267,8 +226,6 @@ export default function OwnerEmployees() {
     }
   };
 
-  // ---------- Confirm dialog helpers ----------
-
   const closeConfirm = useCallback(() => {
     if (confirmBusy) return;
     setConfirm(null);
@@ -283,8 +240,6 @@ export default function OwnerEmployees() {
       setConfirmBusy(false);
     }
   }, [confirm, confirmBusy]);
-
-  // ---------- Destructive actions ----------
 
   const remove = (emp) => {
     setConfirm({
@@ -324,20 +279,11 @@ export default function OwnerEmployees() {
     });
   };
 
-  // ---------- Utils ----------
-
   const getInitials = (name) => (name || "?").slice(0, 2).toUpperCase();
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <>
       <div>
-        {/* ============================================================
-            TOOLBAR
-            ============================================================ */}
         <div
           style={{
             display: "flex",
@@ -411,9 +357,6 @@ export default function OwnerEmployees() {
           </button>
         </div>
 
-        {/* ============================================================
-            TABLE
-            ============================================================ */}
         <div
           style={{
             background: "var(--card-bg, #fff)",
@@ -422,7 +365,6 @@ export default function OwnerEmployees() {
             padding: 20,
           }}
         >
-          {/* Loading — skeleton table */}
           {loading && (
             <SkeletonTable
               columns={6}
@@ -431,7 +373,6 @@ export default function OwnerEmployees() {
             />
           )}
 
-          {/* Error */}
           {!loading && error && (
             <div
               style={{
@@ -468,7 +409,6 @@ export default function OwnerEmployees() {
             </div>
           )}
 
-          {/* Data */}
           {!loading && !error && (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -599,12 +539,8 @@ export default function OwnerEmployees() {
           )}
         </div>
 
-        {/* ============================================================
-            DETAIL MODAL (View / Edit)
-            ============================================================ */}
         {detailModal && (
           <Modal onClose={() => !saving && closeDetail()} maxWidth={480}>
-            {/* ---------- VIEW MODE ---------- */}
             {detailModal.mode === "view" && (
               <>
                 <div style={modalHeaderStyle}>
@@ -786,7 +722,6 @@ export default function OwnerEmployees() {
               </>
             )}
 
-            {/* ---------- EDIT MODE ---------- */}
             {detailModal.mode === "edit" && (
               <>
                 <div style={modalHeaderStyle}>
@@ -905,9 +840,6 @@ export default function OwnerEmployees() {
           </Modal>
         )}
 
-        {/* ============================================================
-            ADD MODAL
-            ============================================================ */}
         {addModal && (
           <Modal onClose={() => !adding && setAddModal(false)} maxWidth={480}>
             <div style={modalHeaderStyle}>
@@ -988,7 +920,6 @@ export default function OwnerEmployees() {
         `}</style>
       </div>
 
-      {/* ConfirmDialog */}
       {confirm && (
         <ConfirmDialog
           open
@@ -1144,10 +1075,6 @@ function Modal({ children, onClose, maxWidth = 480 }) {
     </div>
   );
 }
-
-// ============================================================
-// STYLE CONSTANTS
-// ============================================================
 
 const thStyle = {
   padding: 11,

@@ -1,44 +1,17 @@
 ﻿// ============================================================
 // TOPPINGSELECTOR.JSX — Chọn size + topping cho món ăn
 // ============================================================
-// Props:
-//   category          — danh mục món (để filter toppings)
-//   basePrice         — giá gốc món
-//   onToppingsChange  — callback(selectedToppings) khi thay đổi
-//   onSizeChange      — callback(selectedSize) khi thay đổi
-//   onTotalChange     — callback(total) khi thay đổi
-//   initialToppings   — array topping ids (cho edit mode)
-//   initialSize       — size ban đầu (cho edit mode)
-//
-// Fixes (so với bản gốc):
-//   - 🔴🔴 Fix loop: so sánh prev value trước khi fire callback
-//   - 🔴 Fix type mismatch: normalize id thành string để so sánh
-//   - 🔴 Race-safe fetch (reqIdRef)
-//   - 🔴 Sync initialToppings/initialSize khi prop đổi
-//   - 🔴 Guard NaN cho basePrice
-//   - 🔴 Guard Array.isArray cho toppings/sizes
-//   - 🔴 Cleanup "mồ côi" toppings khi đổi category
-//   - 🟡 Fix render: chỉ cần 1 trong 2 có data là render
-//   - 🟡 role="radiogroup" + aria cho size
-//   - 🟡 Memo total computation
-//   - 🟢 Loading/error state cho fetch
-// ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { api } from "../api";
 import { money } from "./UI";
+import { useTranslation } from "../i18n";
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-/** Normalize id thành string để so sánh an toàn (1 vs "1"). */
 function normalizeId(id) {
   return id === null || id === undefined ? "" : String(id);
 }
 
-/** So sánh 2 array id (đã normalize). */
 function isSameIdArray(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b)) return false;
   if (a.length !== b.length) return false;
@@ -51,10 +24,6 @@ function isSameIdArray(a, b) {
   return true;
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function ToppingSelector({
   category,
   onToppingsChange,
@@ -64,29 +33,24 @@ export default function ToppingSelector({
   initialToppings,
   initialSize,
 }) {
+  const { t } = useTranslation();
   const [toppings, setToppings] = useState([]);
   const [sizes, setSizes] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Selected (lưu dưới dạng array id gốc, không normalize)
   const [selectedToppings, setSelectedToppings] = useState([]);
   const [selectedSize, setSelectedSize] = useState("S");
 
-  // Refs
   const reqIdRef = useRef(0);
 
-  // Track last-fired values để tránh loop
   const lastFiredToppingsRef = useRef(null);
   const lastFiredSizeRef = useRef(null);
   const lastFiredTotalRef = useRef(null);
 
-  // ---------- Safe base price ----------
   const safeBasePrice = useMemo(() => {
     const n = Number(basePrice);
     return isFinite(n) && n >= 0 ? n : 0;
   }, [basePrice]);
-
-  // ---------- Fetch toppings + sizes (race-safe) ----------
 
   useEffect(() => {
     const myReqId = ++reqIdRef.current;
@@ -99,7 +63,6 @@ export default function ToppingSelector({
           api.sizes.list().catch(() => []),
         ]);
 
-        // Bỏ qua nếu có request mới hơn
         if (myReqId !== reqIdRef.current) return;
 
         setToppings(Array.isArray(toppingsRes) ? toppingsRes : []);
@@ -109,8 +72,6 @@ export default function ToppingSelector({
       }
     })();
   }, [category]);
-
-  // ---------- Sync initial values khi prop đổi ----------
 
   useEffect(() => {
     if (Array.isArray(initialToppings)) {
@@ -124,22 +85,17 @@ export default function ToppingSelector({
     }
   }, [initialSize]);
 
-  // ---------- Cleanup "mồ côi" toppings khi toppings list đổi ----------
-  // (VD: đổi category → topping cũ không còn trong list mới)
   useEffect(() => {
     if (toppings.length === 0) return;
 
     setSelectedToppings((cur) => {
-      const validIds = new Set(toppings.map((t) => normalizeId(t.id)));
+      const validIds = new Set(toppings.map((tp) => normalizeId(tp.id)));
       const filtered = cur.filter((id) => validIds.has(normalizeId(id)));
 
-      // Nếu không thay đổi gì → giữ nguyên reference (tránh re-render)
       if (filtered.length === cur.length) return cur;
       return filtered;
     });
   }, [toppings]);
-
-  // ---------- Compute total (memo) ----------
 
   const toppingsTotal = useMemo(() => {
     if (!Array.isArray(selectedToppings) || selectedToppings.length === 0) {
@@ -148,10 +104,10 @@ export default function ToppingSelector({
 
     const selectedSet = new Set(selectedToppings.map(normalizeId));
 
-    return toppings.reduce((sum, t) => {
-      const id = normalizeId(t.id);
+    return toppings.reduce((sum, tp) => {
+      const id = normalizeId(tp.id);
       if (!selectedSet.has(id)) return sum;
-      const price = Number(t.price);
+      const price = Number(tp.price);
       return sum + (isFinite(price) ? price : 0);
     }, 0);
   }, [selectedToppings, toppings]);
@@ -170,41 +126,26 @@ export default function ToppingSelector({
     [safeBasePrice, toppingsTotal, sizeExtra]
   );
 
-  // ---------- Fire callbacks chỉ khi value thực sự đổi ----------
-  //
-  // Đây là fix quan trọng nhất để tránh loop vô hạn.
-  // Parent có thể setState trong callback → re-render → effect chạy lại
-  // → nếu không so sánh, lại fire callback → loop.
-
   useEffect(() => {
     if (!onToppingsChange) return;
-
-    // So sánh với lần fire trước
     if (isSameIdArray(lastFiredToppingsRef.current, selectedToppings)) return;
-
     lastFiredToppingsRef.current = selectedToppings;
     onToppingsChange(selectedToppings);
   }, [selectedToppings, onToppingsChange]);
 
   useEffect(() => {
     if (!onSizeChange) return;
-
     if (lastFiredSizeRef.current === selectedSize) return;
-
     lastFiredSizeRef.current = selectedSize;
     onSizeChange(selectedSize);
   }, [selectedSize, onSizeChange]);
 
   useEffect(() => {
     if (!onTotalChange) return;
-
     if (lastFiredTotalRef.current === total) return;
-
     lastFiredTotalRef.current = total;
     onTotalChange(total);
   }, [total, onTotalChange]);
-
-  // ---------- Handlers ----------
 
   const toggleTopping = useCallback((id) => {
     setSelectedToppings((cur) => {
@@ -221,8 +162,6 @@ export default function ToppingSelector({
   const selectSize = useCallback((id) => {
     setSelectedSize(id);
   }, []);
-
-  // ---------- Early returns ----------
 
   if (loading) {
     return (
@@ -244,7 +183,7 @@ export default function ToppingSelector({
             marginBottom: 6,
           }}
         />
-        <div>Đang tải tùy chọn...</div>
+        <div>{t("topping.loading")}</div>
         <style>{`
           @keyframes toppingSpin {
             from { transform: rotate(0deg); }
@@ -255,14 +194,9 @@ export default function ToppingSelector({
     );
   }
 
-  // Nếu không có size và không có topping → không render gì
   if (toppings.length === 0 && sizes.length === 0) {
     return null;
   }
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div
@@ -272,7 +206,6 @@ export default function ToppingSelector({
         borderTop: "1px dashed var(--border-color, #eef2f7)",
       }}
     >
-      {/* ============ SIZE ============ */}
       {sizes.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <h4
@@ -283,12 +216,12 @@ export default function ToppingSelector({
               fontWeight: 600,
             }}
           >
-            Chọn size
+            {t("topping.chooseSize")}
           </h4>
 
           <div
             role="radiogroup"
-            aria-label="Chọn size"
+            aria-label={t("topping.chooseSize")}
             style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
           >
             {sizes.map((s) => {
@@ -302,9 +235,13 @@ export default function ToppingSelector({
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  aria-label={`Size ${s.name}${
-                    extra > 0 ? `, cộng ${money(extra)}` : ""
-                  }`}
+                  aria-label={
+                    extra > 0
+                      ? t("topping.sizeAriaWithExtra")
+                          .replace("{name}", s.name)
+                          .replace("{extra}", money(extra))
+                      : t("topping.sizeAria").replace("{name}", s.name)
+                  }
                   onClick={() => selectSize(s.id)}
                   style={{
                     padding: "8px 16px",
@@ -343,7 +280,6 @@ export default function ToppingSelector({
         </div>
       )}
 
-      {/* ============ TOPPINGS ============ */}
       {toppings.length > 0 && (
         <div>
           <h4
@@ -354,33 +290,35 @@ export default function ToppingSelector({
               fontWeight: 600,
             }}
           >
-            Thêm topping
+            {t("topping.addToppings")}
           </h4>
 
           <div
             role="group"
-            aria-label="Chọn topping"
+            aria-label={t("topping.addToppings")}
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(2, 1fr)",
               gap: 8,
             }}
           >
-            {toppings.map((t) => {
-              const idStr = normalizeId(t.id);
+            {toppings.map((tp) => {
+              const idStr = normalizeId(tp.id);
               const active = selectedToppings.some(
                 (x) => normalizeId(x) === idStr
               );
-              const price = Number(t.price) || 0;
+              const price = Number(tp.price) || 0;
 
               return (
                 <button
-                  key={t.id}
+                  key={tp.id}
                   type="button"
                   role="checkbox"
                   aria-checked={active}
-                  aria-label={`${t.name}, cộng ${money(price)}`}
-                  onClick={() => toggleTopping(t.id)}
+                  aria-label={t("topping.toppingAria")
+                    .replace("{name}", tp.name)
+                    .replace("{price}", money(price))}
+                  onClick={() => toggleTopping(tp.id)}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -427,7 +365,7 @@ export default function ToppingSelector({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {t.name}
+                      {tp.name}
                     </div>
                   </div>
 

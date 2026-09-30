@@ -1,46 +1,33 @@
 // ============================================================
 // CONFIRMDIALOG.JSX — Modal xác nhận (thay cho confirm() native)
 // ============================================================
-// Props:
-//   open         — boolean, hiện/ẩn
-//   title        — tiêu đề (VD: "Xác nhận đăng xuất?")
-//   message      — mô tả chi tiết
-//   confirmText  — label nút xác nhận (default: "Xác nhận")
-//   cancelText   — label nút hủy (default: "Hủy")
-//   danger       — boolean, dùng màu đỏ (cho hành động nguy hiểm)
-//   loading      — boolean, disable + show spinner (từ parent khi đang async)
-//   onConfirm    — callback khi bấm nút xác nhận
-//   onClose      — callback khi đóng (bấm Hủy / overlay / ESC)
-//
-// Đặc điểm:
-//   - ESC đóng (khi không loading)
-//   - Auto-focus nút Hủy (an toàn hơn focus nút nguy hiểm)
-//   - Body scroll lock
-//   - Animation vào/ra
-//   - role="alertdialog" cho a11y
-//   - Overlay click có guard (không đóng khi loading)
-// ============================================================
 
 import { useEffect, useRef } from "react";
 import { AlertTriangle, LogOut, Loader2 } from "lucide-react";
+import { useTranslation } from "../i18n";
 
 const MODAL_Z = 2147483600;
 
 export default function ConfirmDialog({
   open,
-  title = "Xác nhận",
+  title,
   message = "",
-  confirmText = "Xác nhận",
-  cancelText = "Hủy",
+  confirmText,
+  cancelText,
   danger = false,
   loading = false,
-  icon = null,       // optional: ReactNode, mặc định là AlertTriangle
+  icon = null,
   onConfirm,
   onClose,
 }) {
+  const { t } = useTranslation();
   const cancelRef = useRef(null);
 
-  // ESC đóng (khi không loading)
+  // Fallback default
+  const finalTitle = title || t("confirm.title");
+  const finalConfirm = confirmText || t("common.confirm");
+  const finalCancel = cancelText || t("common.cancel");
+
   useEffect(() => {
     if (!open) return;
 
@@ -51,24 +38,20 @@ export default function ConfirmDialog({
     return () => window.removeEventListener("keydown", handler);
   }, [open, loading, onClose]);
 
-  // Auto-focus nút Hủy khi mở
   useEffect(() => {
     if (open) cancelRef.current?.focus();
   }, [open]);
 
-  // Body scroll lock
- useEffect(() => {
-  if (!open) return;
-  const prev = document.body.style.overflow;
-  document.body.style.overflow = "hidden";
-  return () => {
-    // Chỉ restore nếu body.overflow vẫn đang là "hidden" (do chính mình set)
-    // → tránh ghi đè giá trị của component khác
-    if (document.body.style.overflow === "hidden") {
-      document.body.style.overflow = prev;
-    }
-  };
-}, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      if (document.body.style.overflow === "hidden") {
+        document.body.style.overflow = prev;
+      }
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -106,8 +89,14 @@ export default function ConfirmDialog({
           animation: "confirmPop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
         }}
       >
-        {/* ===== ICON + TITLE + MESSAGE ===== */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 14,
+            marginBottom: 20,
+          }}
+        >
           <div
             style={{
               width: 48,
@@ -135,7 +124,7 @@ export default function ConfirmDialog({
                 lineHeight: 1.3,
               }}
             >
-              {title}
+              {finalTitle}
             </h3>
 
             {message && (
@@ -154,7 +143,6 @@ export default function ConfirmDialog({
           </div>
         </div>
 
-        {/* ===== ACTIONS ===== */}
         <div style={{ display: "flex", gap: 10 }}>
           <button
             ref={cancelRef}
@@ -175,13 +163,14 @@ export default function ConfirmDialog({
               transition: "background 0.15s",
             }}
             onMouseEnter={(e) => {
-              if (!loading) e.currentTarget.style.background = "var(--bg-tertiary, #f5f7fb)";
+              if (!loading)
+                e.currentTarget.style.background = "var(--bg-tertiary, #f5f7fb)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "var(--card-bg, #fff)";
             }}
           >
-            {cancelText}
+            {finalCancel}
           </button>
 
           <button
@@ -217,10 +206,10 @@ export default function ConfirmDialog({
                   size={14}
                   style={{ animation: "confirmSpin 1s linear infinite" }}
                 />
-                Đang xử lý...
+                {t("common.processing")}
               </>
             ) : (
-              confirmText
+              finalConfirm
             )}
           </button>
         </div>
@@ -243,13 +232,5 @@ export default function ConfirmDialog({
     </div>
   );
 }
-
-// ============================================================
-// EXPORT ICON PRESETS (cho tiện dùng)
-// ============================================================
-// Ví dụ:
-//   import { LogoutIcon } from "./ConfirmDialog";
-//   <ConfirmDialog icon={LogoutIcon} ... />
-// ============================================================
 
 export const LogoutIcon = <LogOut size={24} />;

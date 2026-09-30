@@ -1,25 +1,6 @@
 ﻿// ============================================================
 // FOOTER.JSX — Footer toàn cục
 // ============================================================
-// Gồm 3 cột:
-//   1. Brand + mô tả
-//   2. Liên hệ (hotline, email, địa chỉ) — từ settings admin
-//   3. Social icons + Google Maps preview
-//
-// Fixes (so với bản gốc):
-//   - 🔴 Fix class mismatch: .footer-row → .footer-contact-item (match CSS)
-//   - 🔴 Lấy hotline/email/address từ api.settings (không hardcode)
-//   - 🔴 Bỏ <a> bọc iframe — dùng overlay click mở Maps
-//   - 🔴 Thêm copyright (đã có CSS sẵn)
-//   - 🟡 Địa chỉ click mở Google Maps
-//   - 🟡 Bỏ class không có CSS (.footer-col-brand, .footer-col-contact)
-//   - 🟡 Fallback khi settings chưa load
-//
-// Batch 6C:
-//   - ✅ Không hardcode fallback — hiện "Chưa cấu hình" nếu thiếu
-//   - ✅ Ẩn map nếu chưa có address
-//   - ✅ Thêm mapsEmbedUrl để embed iframe
-// ============================================================
 
 import { useEffect, useState, useMemo } from "react";
 import {
@@ -27,10 +8,7 @@ import {
   Send, Globe,
 } from "lucide-react";
 import { api } from "../api";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const SOCIALS = [
   { Icon: Facebook,  href: "https://facebook.com/",  label: "Facebook", color: "#1877F2" },
@@ -40,18 +18,14 @@ const SOCIALS = [
   { Icon: Globe,     href: "https://vwa.vn/",        label: "Website",  color: "#20c779" },
 ];
 
-// ✅ Batch 6C: Không hardcode fallback — hiện "Chưa cấu hình" nếu thiếu
 const EMPTY_CONTACT = {
   hotline: "",
   email: "",
   address: "",
 };
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function Footer() {
+  const { t } = useTranslation();
   const [contact, setContact] = useState(EMPTY_CONTACT);
 
   useEffect(() => {
@@ -67,23 +41,17 @@ export default function Footer() {
           address: s.address?.trim() || "",
         });
       })
-      .catch(() => {
-        /* Giữ EMPTY_CONTACT */
-      });
+      .catch(() => {});
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Check có info để hiện không
   const hasHotline = !!contact.hotline;
   const hasEmail = !!contact.email;
   const hasAddress = !!contact.address;
 
-  // ---------- Computed ----------
-
-  // Link Google Maps từ địa chỉ
   const mapsUrl = useMemo(() => {
     if (!contact.address) return "";
     return (
@@ -92,7 +60,6 @@ export default function Footer() {
     );
   }, [contact.address]);
 
-  // ✅ Batch 6C: URL embed iframe (khác với mapsUrl — dùng output=embed)
   const mapsEmbedUrl = useMemo(() => {
     if (!contact.address) return "";
     return (
@@ -102,21 +69,68 @@ export default function Footer() {
     );
   }, [contact.address]);
 
-  // Link tel (chỉ giữ số và dấu +)
   const telHref = useMemo(() => {
     if (!contact.hotline) return "";
     const cleaned = contact.hotline.replace(/[^\d+]/g, "");
     return `tel:${cleaned}`;
   }, [contact.hotline]);
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+  const renderContact = (
+    { has, href, icon, labelKey, value, external }
+  ) => {
+    if (has) {
+      return (
+        <a
+          href={href}
+          {...(external
+            ? { target: "_blank", rel: "noopener noreferrer" }
+            : {})}
+          className="footer-contact-item"
+          title={t(labelKey) + ": " + value}
+        >
+          {icon}
+          <div>
+            <span
+              style={{
+                display: "block",
+                fontSize: 11,
+                color: "var(--text-light, #8993a3)",
+                marginBottom: 2,
+              }}
+            >
+              {t(labelKey)}
+            </span>
+            <b>{value}</b>
+          </div>
+        </a>
+      );
+    }
+    return (
+      <div className="footer-contact-item" style={{ opacity: 0.6 }}>
+        {icon}
+        <div>
+          <span
+            style={{
+              display: "block",
+              fontSize: 11,
+              color: "var(--text-light, #8993a3)",
+              marginBottom: 2,
+            }}
+          >
+            {t(labelKey)}
+          </span>
+          <b style={{ fontStyle: "italic", fontWeight: 500 }}>
+            {t("footer.notConfigured")}
+          </b>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <footer className="app-footer">
       <div className="footer-grid">
-        {/* ============ CỘT 1: BRAND + MÔ TẢ ============ */}
+        {/* CỘT 1: BRAND */}
         <div className="footer-col">
           <div className="footer-brand">
             <div className="footer-logo">C</div>
@@ -125,151 +139,41 @@ export default function Footer() {
               <small>SMART MANAGEMENT</small>
             </div>
           </div>
-          <p className="footer-desc">
-            Đặt món nhanh — Quản lý gọn — Phục vụ tận tâm cho sinh viên & cán
-            bộ.
-          </p>
+          <p className="footer-desc">{t("footer.description")}</p>
         </div>
 
-        {/* ============ CỘT 2: LIÊN HỆ ============ */}
+        {/* CỘT 2: LIÊN HỆ */}
         <div className="footer-col">
-          <h4 className="footer-heading">Liên hệ</h4>
+          <h4 className="footer-heading">{t("footer.contact")}</h4>
 
-          {/* Hotline */}
-          {hasHotline ? (
-            <a
-              href={telHref}
-              className="footer-contact-item"
-              title={`Gọi ${contact.hotline}`}
-            >
-              <Phone size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  Hotline
-                </span>
-                <b>{contact.hotline}</b>
-              </div>
-            </a>
-          ) : (
-            <div className="footer-contact-item" style={{ opacity: 0.6 }}>
-              <Phone size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  Hotline
-                </span>
-                <b style={{ fontStyle: "italic", fontWeight: 500 }}>
-                  Chưa cấu hình
-                </b>
-              </div>
-            </div>
-          )}
+          {renderContact({
+            has: hasHotline,
+            href: telHref,
+            icon: <Phone size={14} />,
+            labelKey: "footer.hotline",
+            value: contact.hotline,
+          })}
 
-          {/* Email */}
-          {hasEmail ? (
-            <a
-              href={`mailto:${contact.email}`}
-              className="footer-contact-item"
-              title={`Gửi email tới ${contact.email}`}
-            >
-              <Mail size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  Email
-                </span>
-                <b>{contact.email}</b>
-              </div>
-            </a>
-          ) : (
-            <div className="footer-contact-item" style={{ opacity: 0.6 }}>
-              <Mail size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  Email
-                </span>
-                <b style={{ fontStyle: "italic", fontWeight: 500 }}>
-                  Chưa cấu hình
-                </b>
-              </div>
-            </div>
-          )}
+          {renderContact({
+            has: hasEmail,
+            href: `mailto:${contact.email}`,
+            icon: <Mail size={14} />,
+            labelKey: "footer.email",
+            value: contact.email,
+          })}
 
-          {/* Địa chỉ */}
-          {hasAddress ? (
-            <a
-              href={mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="footer-contact-item"
-              title="Mở Google Maps"
-            >
-              <MapPin size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  Địa chỉ
-                </span>
-                <b>{contact.address}</b>
-              </div>
-            </a>
-          ) : (
-            <div className="footer-contact-item" style={{ opacity: 0.6 }}>
-              <MapPin size={14} />
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--text-light, #8993a3)",
-                    marginBottom: 2,
-                  }}
-                >
-                  Địa chỉ
-                </span>
-                <b style={{ fontStyle: "italic", fontWeight: 500 }}>
-                  Chưa cấu hình
-                </b>
-              </div>
-            </div>
-          )}
+          {renderContact({
+            has: hasAddress,
+            href: mapsUrl,
+            icon: <MapPin size={14} />,
+            labelKey: "footer.address",
+            value: contact.address,
+            external: true,
+          })}
         </div>
 
-        {/* ============ CỘT 3: SOCIAL + MAP ============ */}
+        {/* CỘT 3: SOCIAL + MAP */}
         <div className="footer-col footer-col-social-map">
-          {/* Social icons */}
           <div className="footer-socials">
             {SOCIALS.map(({ Icon, href, label, color }) => (
               <a
@@ -287,14 +191,10 @@ export default function Footer() {
             ))}
           </div>
 
-          {/* Bản đồ preview — chỉ render khi có address */}
           {hasAddress ? (
-            <div
-              className="footer-map"
-              style={{ position: "relative" }}
-            >
+            <div className="footer-map" style={{ position: "relative" }}>
               <iframe
-                title={`Bản đồ ${contact.address}`}
+                title={t("footer.mapTitle").replace("{address}", contact.address)}
                 src={mapsEmbedUrl}
                 width="100%"
                 height="100%"
@@ -308,12 +208,11 @@ export default function Footer() {
                 tabIndex={-1}
               />
 
-              {/* Overlay link phủ lên iframe — để click mở Maps */}
               <a
                 href={mapsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Mở Canteen VWA trên Google Maps"
+                aria-label={t("footer.openMaps")}
                 style={{
                   position: "absolute",
                   inset: 0,
@@ -333,15 +232,14 @@ export default function Footer() {
                 fontStyle: "italic",
               }}
             >
-              Chưa có địa chỉ
+              {t("footer.noAddress")}
             </div>
           )}
         </div>
       </div>
 
-      {/* ============ COPYRIGHT ============ */}
       <div className="footer-copyright">
-        © {new Date().getFullYear()} Canteen VWA · Made with ❤️ for VWA students
+        © {new Date().getFullYear()} Canteen VWA · {t("footer.copyright")}
       </div>
     </footer>
   );

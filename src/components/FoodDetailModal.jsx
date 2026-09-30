@@ -1,31 +1,6 @@
 ﻿// ============================================================
 // FOODDETAILMODAL.JSX — Modal chi tiết món ăn
 // ============================================================
-// Props:
-//   item           — object món ăn
-//   cart, setCart  — state giỏ hàng
-//   user           — user hiện tại (cho ReviewSection)
-//   mode           — "cart" (thêm vào giỏ) | "buy" (mua ngay)
-//   onClose        — callback đóng modal
-//   editingKey     — key cũ nếu đang sửa item (edit mode)
-//   initialToppings, initialSize, initialQty — giá trị khởi tạo
-//   onUpdate       — callback cập nhật (chỉ dùng trong edit mode)
-//
-// Fixes (so với bản gốc):
-//   - 🔴 Apply initialQty khi edit
-//   - 🔴 Fix encoding tiếng Việt "S? lu?ng" → "Số lượng"
-//   - 🔴 Fix stock=0 → không cho tăng qty, không ghi stock=99
-//   - 🔴 Sort toppings trong key → tránh duplicate
-//   - 🔴 ESC đóng + role/aria + z-index chuẩn
-//   - 🔴 Re-validate qty khi item.stock đổi
-//   - 🟡 "Tổng:" = totalWithToppings × qty
-//   - 🟡 Reset đúng khi edit (total = base + toppings)
-//   - 🟡 Image fallback + description fallback
-//   - 🟡 Memo buildKey/buildName
-//   - 🟢 Guard stock trong edit mode
-//   - ✅ Chuyển ReviewSection LÊN TRƯỚC action button
-//     (đọc review → rồi mới bấm mua/thêm vào giỏ)
-// ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -34,10 +9,7 @@ import { money } from "./UI";
 import { toast } from "./Effects";
 import ToppingSelector from "./ToppingSelector";
 import ReviewSection from "./ReviewSection";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const MODAL_Z = 2147483600;
 const DEFAULT_MAX_QTY = 99;
@@ -50,10 +22,6 @@ const FALLBACK_IMG =
       <text x='50' y='58' font-size='40' text-anchor='middle'>🍽️</text>
     </svg>`
   );
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function getMaxQty(item) {
   if (!item) return 0;
@@ -68,10 +36,6 @@ function sortToppings(toppings) {
   return [...toppings].sort();
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function FoodDetailModal({
   item,
   cart,
@@ -85,19 +49,17 @@ export default function FoodDetailModal({
   initialQty,
   onUpdate,
 }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
-  // ---------- State ----------
   const [selectedToppings, setSelectedToppings] = useState([]);
   const [selectedSize, setSelectedSize] = useState("S");
   const [totalWithToppings, setTotalWithToppings] = useState(item?.price || 0);
   const [qty, setQty] = useState(1);
 
-  // ---------- Max qty ----------
   const maxQty = useMemo(() => getMaxQty(item), [item]);
   const isOutOfStock = maxQty === 0;
 
-  // ---------- Sync khi item/mode đổi ----------
   const itemId = item?._id || item?.id;
 
   useEffect(() => {
@@ -114,13 +76,11 @@ export default function FoodDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemId]);
 
-  // ---------- Re-validate qty khi stock đổi ----------
   useEffect(() => {
     if (isOutOfStock) return;
     setQty((q) => Math.min(Math.max(1, q), maxQty));
   }, [maxQty, isOutOfStock]);
 
-  // ---------- ESC đóng modal ----------
   useEffect(() => {
     const handler = (e) => {
       if (e.key === "Escape") onClose?.();
@@ -128,8 +88,6 @@ export default function FoodDetailModal({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
-
-  // ---------- Build key + name (memo) ----------
 
   const sortedToppings = useMemo(
     () => sortToppings(selectedToppings),
@@ -146,15 +104,15 @@ export default function FoodDetailModal({
     const sizePart = selectedSize !== "S" ? ` (${selectedSize})` : "";
     const topPart =
       selectedToppings.length > 0
-        ? ` + ${selectedToppings.length} topping`
+        ? t("food.nameWithToppings").replace(
+            "{n}",
+            selectedToppings.length
+          )
         : "";
     return `${item.name}${sizePart}${topPart}`;
-  }, [item, selectedSize, selectedToppings.length]);
+  }, [item, selectedSize, selectedToppings.length, t]);
 
-  // ---------- Guard early return ----------
   if (!item) return null;
-
-  // ---------- Handlers ----------
 
   const buildCartEntry = (quantity) => ({
     ...item,
@@ -169,7 +127,7 @@ export default function FoodDetailModal({
 
   const addToCart = () => {
     if (isOutOfStock) {
-      toast("Món này đã hết hàng", "error");
+      toast(t("food.outOfStock"), "error");
       return null;
     }
 
@@ -197,32 +155,32 @@ export default function FoodDetailModal({
   const handleAddToCart = () => {
     if (editingKey && onUpdate) {
       if (isOutOfStock) {
-        toast("Món này đã hết hàng", "error");
+        toast(t("food.outOfStock"), "error");
         return;
       }
 
       if (qty > maxQty) {
-        toast(`Chỉ còn ${maxQty} phần trong kho`, "error");
+        toast(t("cart.onlyLeftMsg").replace("{n}", maxQty), "error");
         return;
       }
 
       const key = buildKey();
       const entry = buildCartEntry(qty);
       onUpdate(editingKey, key, entry);
-      toast("Đã cập nhật " + entry.name, "success");
+      toast(t("food.updated").replace("{name}", entry.name), "success");
       onClose?.();
       return;
     }
 
     if (isOutOfStock) {
-      toast("Món này đã hết hàng", "error");
+      toast(t("food.outOfStock"), "error");
       return;
     }
 
     const key = buildKey();
     const existing = cart?.[key];
     if (existing && Number(existing.qty) >= maxQty) {
-      toast(`Chỉ còn ${maxQty} phần trong kho`, "error");
+      toast(t("cart.onlyLeftMsg").replace("{n}", maxQty), "error");
       return;
     }
 
@@ -238,13 +196,13 @@ export default function FoodDetailModal({
       });
     }
 
-    toast(`Đã thêm ${name} vào giỏ!`, "success");
+    toast(t("food.addedToCart").replace("{name}", name), "success");
     onClose?.();
   };
 
   const handleBuyNow = () => {
     if (isOutOfStock) {
-      toast("Món này đã hết hàng", "error");
+      toast(t("food.outOfStock"), "error");
       return;
     }
 
@@ -261,7 +219,7 @@ export default function FoodDetailModal({
       });
     }
 
-    toast(`Đã thêm ${name}! Chuyển sang thanh toán...`, "success");
+    toast(t("food.buyNowToast").replace("{name}", name), "success");
     onClose?.();
     navigate("/customer/checkout");
   };
@@ -270,23 +228,17 @@ export default function FoodDetailModal({
   const handleQtyPlus = () => {
     setQty((q) => {
       if (q >= maxQty) {
-        toast(`Chỉ còn ${maxQty} phần trong kho`, "error");
+        toast(t("cart.onlyLeftMsg").replace("{n}", maxQty), "error");
         return q;
       }
       return q + 1;
     });
   };
 
-  // ---------- Computed ----------
-
   const unitPrice = Number(totalWithToppings) || Number(item.price) || 0;
   const grandTotal = unitPrice * qty;
   const atMax = qty >= maxQty;
   const atMin = qty <= 1;
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div
@@ -294,7 +246,7 @@ export default function FoodDetailModal({
       className="food-detail-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={`Chi tiết ${item.name}`}
+      aria-label={t("food.detailAria").replace("{name}", item.name)}
       style={{
         position: "fixed",
         inset: 0,
@@ -319,7 +271,7 @@ export default function FoodDetailModal({
           overflowY: "auto",
         }}
       >
-        {/* ============ HEADER ============ */}
+        {/* HEADER */}
         <div
           style={{
             display: "flex",
@@ -342,7 +294,7 @@ export default function FoodDetailModal({
           </h3>
           <button
             onClick={onClose}
-            aria-label="Đóng"
+            aria-label={t("common.close")}
             type="button"
             style={{
               background: "transparent",
@@ -359,7 +311,7 @@ export default function FoodDetailModal({
           </button>
         </div>
 
-        {/* ============ IMAGE ============ */}
+        {/* IMAGE */}
         <img
           src={item.image || FALLBACK_IMG}
           alt={item.name}
@@ -378,7 +330,7 @@ export default function FoodDetailModal({
           }}
         />
 
-        {/* ============ DESCRIPTION ============ */}
+        {/* DESCRIPTION */}
         {item.description && (
           <p
             style={{
@@ -392,7 +344,7 @@ export default function FoodDetailModal({
           </p>
         )}
 
-        {/* ============ PRICE + STOCK ============ */}
+        {/* PRICE + STOCK */}
         <div
           style={{
             display: "flex",
@@ -413,12 +365,14 @@ export default function FoodDetailModal({
                 fontWeight: isOutOfStock ? 700 : 400,
               }}
             >
-              {isOutOfStock ? "Hết hàng" : `Còn ${item.stock} phần`}
+              {isOutOfStock
+                ? t("food.outOfStock")
+                : t("food.stockLeft").replace("{n}", item.stock)}
             </span>
           )}
         </div>
 
-        {/* ============ RATING ============ */}
+        {/* RATING */}
         {item.rating && (
           <div
             style={{
@@ -434,12 +388,15 @@ export default function FoodDetailModal({
               {item.rating}
             </b>
             <span style={{ color: "var(--text-light, #8993a3)" }}>
-              ({item.review_count || 0} đánh giá)
+              {t("food.reviewCount").replace(
+                "{n}",
+                item.review_count || 0
+              )}
             </span>
           </div>
         )}
 
-        {/* ============ TOPPING + SIZE ============ */}
+        {/* TOPPING + SIZE */}
         <ToppingSelector
           category={item.category}
           basePrice={item.price}
@@ -448,7 +405,7 @@ export default function FoodDetailModal({
           onTotalChange={setTotalWithToppings}
         />
 
-        {/* ============ QTY ============ */}
+        {/* QTY */}
         <div
           style={{
             display: "flex",
@@ -468,7 +425,7 @@ export default function FoodDetailModal({
               fontWeight: 600,
             }}
           >
-            Số lượng:
+            {t("common.quantity")}:
           </span>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -476,7 +433,7 @@ export default function FoodDetailModal({
               type="button"
               onClick={handleQtyMinus}
               disabled={atMin}
-              aria-label="Giảm số lượng"
+              aria-label={t("cart.decreaseQty")}
               style={{
                 width: 32,
                 height: 32,
@@ -509,7 +466,7 @@ export default function FoodDetailModal({
               type="button"
               onClick={handleQtyPlus}
               disabled={atMax || isOutOfStock}
-              aria-label="Tăng số lượng"
+              aria-label={t("cart.increaseQty")}
               style={{
                 width: 32,
                 height: 32,
@@ -536,11 +493,11 @@ export default function FoodDetailModal({
               color: "var(--text-light, #8993a3)",
             }}
           >
-            Tối đa: {maxQty}
+            {t("cart.maxQty")}: {maxQty}
           </span>
         </div>
 
-        {/* ============ TOTAL ============ */}
+        {/* TOTAL */}
         <div
           style={{
             display: "flex",
@@ -559,7 +516,7 @@ export default function FoodDetailModal({
                 color: "var(--text-muted, #64748b)",
               }}
             >
-              Tổng:
+              {t("cart.total")}:
             </div>
             {qty > 1 && (
               <div
@@ -578,14 +535,14 @@ export default function FoodDetailModal({
           </b>
         </div>
 
-        {/* ============ ✅ REVIEWS — chuyển lên TRƯỚC action button ============ */}
+        {/* REVIEWS */}
         <ReviewSection
           menuItemId={item._id || item.id}
           currentUser={user}
           readOnly={true}
         />
 
-        {/* ============ ✅ ACTION BUTTON (sticky) — giữ cuối ============ */}
+        {/* ACTION BUTTON */}
         <div
           style={{
             position: "sticky",
@@ -623,7 +580,7 @@ export default function FoodDetailModal({
                 gap: 8,
               }}
             >
-              Hết hàng
+              {t("food.outOfStock")}
             </button>
           ) : mode === "buy" ? (
             <button
@@ -645,7 +602,7 @@ export default function FoodDetailModal({
                 gap: 8,
               }}
             >
-              <ShoppingBag size={16} /> Mua ngay
+              <ShoppingBag size={16} /> {t("food.buyNow")}
             </button>
           ) : (
             <button
@@ -668,7 +625,7 @@ export default function FoodDetailModal({
               }}
             >
               {editingKey ? <Save size={16} /> : <Plus size={16} />}
-              {editingKey ? "Cập nhật" : "Thêm vào giỏ"}
+              {editingKey ? t("food.updateBtn") : t("food.addToCartBtn")}
             </button>
           )}
         </div>

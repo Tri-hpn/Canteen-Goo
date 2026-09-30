@@ -898,11 +898,15 @@ app.post("/api/orders", auth(), (req, res) => {
 
       const m = db.menu_items.find(x => x.id == it.menuItem);
       if (!m) {
-        return res.status(400).json({ message: "Món không tồn tại (id=" + it.menuItem + ")" });
+        return res.status(400).json({
+          message: "Món không tồn tại (id=" + it.menuItem + ")"
+        });
       }
 
       if (!m.active) {
-        return res.status(400).json({ message: `${m.name} đã tạm ngừng bán` });
+        return res.status(400).json({
+          message: `${m.name} đã tạm ngừng bán`
+        });
       }
 
       if ((m.stock || 0) < q) {
@@ -911,11 +915,75 @@ app.post("/api/orders", auth(), (req, res) => {
         });
       }
 
-      subtotal += m.price * q;
-      detailed.push({ menu_item_id: m.id, name: m.name, price: m.price, qty: q });
+      const sizeId = String(it.size || "S");
+      const size = (db.sizes || []).find(
+        s => String(s.id) === sizeId
+      );
+
+      if (!size) {
+        return res.status(400).json({
+          message: `${m.name}: kích thước không hợp lệ`,
+        });
+      }
+
+      const toppingIds = Array.isArray(it.toppings) ? it.toppings : [];
+      const selectedToppings = [];
+
+      for (const toppingId of toppingIds) {
+        const topping = (db.toppings || []).find(
+          t => String(t.id) === String(toppingId)
+        );
+
+        if (!topping) {
+          return res.status(400).json({
+            message: `${m.name}: topping không tồn tại (id=${toppingId})`,
+          });
+        }
+
+        if (
+          Array.isArray(topping.applies_to) &&
+          topping.applies_to.length > 0 &&
+          !topping.applies_to.includes(m.category)
+        ) {
+          return res.status(400).json({
+            message: `${topping.name} không áp dụng cho ${m.category}`,
+          });
+        }
+
+        selectedToppings.push({
+          id: topping.id,
+          name: topping.name,
+          price: Number(topping.price) || 0,
+        });
+      }
+
+      const basePrice = Number(m.price) || 0;
+      const sizeExtra = Number(size.extra_price) || 0;
+
+      const toppingsTotal = selectedToppings.reduce(
+        (sum, topping) => sum + topping.price,
+        0
+      );
+
+      const unitPrice = basePrice + sizeExtra + toppingsTotal;
+
+      subtotal += unitPrice * q;
+
+      detailed.push({
+        menu_item_id: m.id,
+        name: m.name,
+        price: unitPrice,
+        qty: q,
+        size: {
+          id: size.id,
+          name: size.name,
+          extra_price: sizeExtra,
+        },
+        toppings: selectedToppings,
+      });
+
       touchedItems.push({ m, q });
     }
-
     if (note) {
       const match = String(note).match(/Nhận lúc\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
       if (match) {

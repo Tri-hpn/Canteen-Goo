@@ -1,22 +1,6 @@
 ﻿// ============================================================
 // BOTTOMNAV.JSX — Bottom navigation cho Customer (mobile)
 // ============================================================
-// 4 tab chính + nút "Thêm" mở menu phụ (Ví, Khuyến mãi, Hồ sơ, Đăng xuất).
-//
-// Badge động:
-//   - Giỏ hàng: tổng qty trong localStorage
-//   - Đơn hàng: số đơn MỚI hơn last_seen (chỉ đếm status active)
-//
-// Fixes (so với bản gốc):
-//   - Dùng api.orders.myOrders() thay vì fetch hardcode
-//   - Race-safe readOrders (reqIdRef)
-//   - Đếm đơn chỉ status "active" (không tính Hoàn thành/Đã hủy)
-//   - ✅ Logout có confirm modal (tránh lỡ tay mất cart)
-//   - ESC đóng More menu + body scroll lock
-//   - isMoreActive match chính xác hơn
-//   - aria-label cho nav, aria-expanded cho nút "Thêm"
-//   - Cleanup interval khi unmount
-// ============================================================
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
@@ -28,40 +12,14 @@ import { api, setToken } from "../api";
 import { useTranslation } from "../i18n";
 import ConfirmDialog, { LogoutIcon } from "./ConfirmDialog";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
 const CART_KEY = "canteen_cart";
 const ORDERS_SEEN_KEY = "orders_last_seen";
 
 const TABS = [
-  {
-    key: "home",
-    labelKey: "nav.home",
-    icon: Home,
-    path: "/customer",
-  },
-  {
-    key: "menu",
-    labelKey: "nav.menu",
-    icon: UtensilsCrossed,
-    path: "/customer/menu",
-  },
-  {
-    key: "cart",
-    labelKey: "nav.cart",
-    icon: ShoppingCart,
-    path: "/customer/cart",
-    badge: "cart",
-  },
-  {
-    key: "orders",
-    labelKey: "nav.orders",
-    icon: Package,
-    path: "/customer/orders",
-    badge: "orders",
-  },
+  { key: "home",   labelKey: "nav.home",   icon: Home,            path: "/customer" },
+  { key: "menu",   labelKey: "nav.menu",   icon: UtensilsCrossed, path: "/customer/menu" },
+  { key: "cart",   labelKey: "nav.cart",   icon: ShoppingCart,    path: "/customer/cart",   badge: "cart" },
+  { key: "orders", labelKey: "nav.orders", icon: Package,         path: "/customer/orders", badge: "orders" },
 ];
 
 const MORE_ITEMS = [
@@ -70,7 +28,6 @@ const MORE_ITEMS = [
   { key: "profile",    labelKey: "nav.profile",    icon: User,   path: "/customer/profile" },
 ];
 
-// Các status đơn được coi là "đang xử lý" (cần nhắc user)
 const ACTIVE_ORDER_STATUSES = [
   "Chờ xác nhận",
   "Đã xác nhận",
@@ -80,10 +37,6 @@ const ACTIVE_ORDER_STATUSES = [
 
 const POLL_MS = 30000;
 const BADGE_MAX = 99;
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function readCartFromStorage() {
   try {
@@ -99,41 +52,29 @@ function readCartFromStorage() {
   }
 }
 
-/** Check path có khớp chính xác route không (tránh startsWith nhầm). */
 function isPathActive(currentPath, targetPath) {
   if (!currentPath || !targetPath) return false;
   if (currentPath === targetPath) return true;
-  // Chỉ match sub-route nếu sau targetPath là "/"
   return currentPath.startsWith(targetPath + "/");
 }
-
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
 
 export default function BottomNav({ onLogout }) {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
   const [showMore, setShowMore] = useState(false);
-   const { t } = useTranslation();
+  const { t } = useTranslation();
 
-  // ✅ Confirm logout state
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Race-safe cho readOrders
   const orderReqIdRef = useRef(0);
-
-  // ---------- Read cart ----------
 
   const readCart = useCallback(() => {
     setCartCount(readCartFromStorage());
   }, []);
-
-  // ---------- Read orders ----------
 
   const readOrders = useCallback(async () => {
     const myReqId = ++orderReqIdRef.current;
@@ -147,7 +88,6 @@ export default function BottomNav({ onLogout }) {
 
       const data = await api.orders.myOrders();
 
-      // Bỏ qua nếu có request mới hơn
       if (myReqId !== orderReqIdRef.current) return;
 
       const lastSeen = parseInt(
@@ -156,10 +96,7 @@ export default function BottomNav({ onLogout }) {
       );
 
       const count = (Array.isArray(data) ? data : []).filter((o) => {
-        // Chỉ đếm đơn đang xử lý
         if (!ACTIVE_ORDER_STATUSES.includes(o.status)) return false;
-
-        // Chỉ đếm đơn mới hơn last_seen
         const created = new Date(o.created_at || 0).getTime();
         return created > lastSeen;
       }).length;
@@ -170,14 +107,10 @@ export default function BottomNav({ onLogout }) {
     }
   }, []);
 
-  // ---------- Setup listeners + polling ----------
-
   useEffect(() => {
-    // Initial load
     readCart();
     readOrders();
 
-    // Event listeners
     const onCart = () => readCart();
     const onOrder = () => readOrders();
 
@@ -186,7 +119,6 @@ export default function BottomNav({ onLogout }) {
     window.addEventListener("orders-seen", onOrder);
     window.addEventListener("order-updated", onOrder);
 
-    // Polling
     const timer = setInterval(readOrders, POLL_MS);
 
     return () => {
@@ -198,13 +130,9 @@ export default function BottomNav({ onLogout }) {
     };
   }, [readCart, readOrders]);
 
-  // ---------- Close More menu khi đổi route ----------
-
   useEffect(() => {
     setShowMore(false);
   }, [location.pathname]);
-
-  // ---------- ESC đóng More + lock scroll ----------
 
   useEffect(() => {
     if (!showMore) return;
@@ -214,7 +142,6 @@ export default function BottomNav({ onLogout }) {
     };
     window.addEventListener("keydown", handler);
 
-    // Lock body scroll
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -223,8 +150,6 @@ export default function BottomNav({ onLogout }) {
       document.body.style.overflow = prevOverflow;
     };
   }, [showMore]);
-
-  // ---------- Handlers ----------
 
   const getBadge = (key) => {
     if (key === "cart") return cartCount;
@@ -236,40 +161,31 @@ export default function BottomNav({ onLogout }) {
     isPathActive(location.pathname, i.path)
   );
 
-  /**
-   * ✅ Mở confirm modal thay vì logout ngay.
-   * Tránh user lỡ bấm → mất cart không kịp cancel.
-   */
   const openLogoutConfirm = () => {
-    setShowMore(false); // đóng More menu trước
+    setShowMore(false);
     setConfirmLogout(true);
   };
 
-  /**
-   * Thực hiện logout (sau khi user xác nhận).
-   */
   const performLogout = () => {
-  setLoggingOut(true);
-  try {
-    localStorage.removeItem(ORDERS_SEEN_KEY);
-    localStorage.removeItem("canteen_cart_selected");
-  } catch {}
+    setLoggingOut(true);
+    try {
+      localStorage.removeItem(ORDERS_SEEN_KEY);
+      localStorage.removeItem("canteen_cart_selected");
+    } catch {}
 
-  // ✅ Force clean body
-  document.body.style.overflow = "";
-  document.body.classList.remove("has-bottom-nav");
-  document.body.classList.remove("mobile-open");
+    document.body.style.overflow = "";
+    document.body.classList.remove("has-bottom-nav");
+    document.body.classList.remove("mobile-open");
 
-  if (onLogout) {
-    onLogout();
-  } else {
-    setToken(null);
-    navigate("/");
-  }
-};
+    if (onLogout) {
+      onLogout();
+    } else {
+      setToken(null);
+      navigate("/");
+    }
+  };
+
   const handleMoreToggle = () => setShowMore((s) => !s);
-
-  // ---------- Render badge ----------
 
   const renderBadge = (count) => {
     if (!count || count <= 0) return null;
@@ -280,31 +196,26 @@ export default function BottomNav({ onLogout }) {
     );
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
   return (
     <>
-      {/* ============ MORE MENU ============ */}
       {showMore && (
         <div
           className="bottom-nav-more-overlay"
           onClick={() => setShowMore(false)}
           role="dialog"
           aria-modal="true"
-          aria-label="Menu mở rộng"
+          aria-label={t("nav.moreMenu")}
         >
           <div
             className="bottom-nav-more-menu"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bottom-nav-more-head">
-              <span>Menu</span>
+              <span>{t("nav.menu")}</span>
               <button
                 onClick={() => setShowMore(false)}
                 className="bottom-nav-more-close"
-                aria-label="Đóng menu"
+                aria-label={t("common.closeMenu")}
                 type="button"
               >
                 <X size={16} />
@@ -339,14 +250,13 @@ export default function BottomNav({ onLogout }) {
               onClick={openLogoutConfirm}
             >
               <LogOut size={20} />
-              <span>Đăng xuất</span>
+              <span>{t("common.logout")}</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* ============ BOTTOM NAV ============ */}
-      <nav className="bottom-nav" aria-label="Điều hướng chính">
+      <nav className="bottom-nav" aria-label={t("nav.mainNav")}>
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const badge = getBadge(tab.badge);
@@ -369,14 +279,13 @@ export default function BottomNav({ onLogout }) {
           );
         })}
 
-        {/* Nút "Thêm" */}
         <button
           type="button"
           className={
             "bottom-nav-item" + (isMoreActive || showMore ? " active" : "")
           }
           onClick={handleMoreToggle}
-          aria-label="Mở menu thêm"
+          aria-label={t("nav.openMore")}
           aria-expanded={showMore}
           aria-haspopup="menu"
         >
@@ -387,14 +296,13 @@ export default function BottomNav({ onLogout }) {
         </button>
       </nav>
 
-      {/* ============ CONFIRM LOGOUT MODAL ============ */}
       <ConfirmDialog
         open={confirmLogout}
         icon={LogoutIcon}
-        title="Đăng xuất khỏi Canteen VWA?"
-        message="Giỏ hàng hiện tại sẽ bị xoá. Bạn sẽ cần đăng nhập lại để tiếp tục."
-        confirmText="Đăng xuất"
-        cancelText="Ở lại"
+        title={t("logout.confirmTitle")}
+        message={t("logout.confirmMessageCart")}
+        confirmText={t("common.logout")}
+        cancelText={t("logout.stay")}
         danger
         loading={loggingOut}
         onConfirm={performLogout}

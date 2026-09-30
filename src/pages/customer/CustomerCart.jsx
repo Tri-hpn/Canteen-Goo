@@ -1,16 +1,6 @@
 ﻿// ============================================================
 // CUSTOMERCART.JSX — Giỏ hàng khách hàng
 // ============================================================
-// Tính năng:
-//   - Chọn/bỏ chọn từng món để đặt (persist vào localStorage)
-//   - Tăng/giảm qty (giới hạn theo stock)
-//   - Sửa món (mở FoodDetailModal) — đổi size/topping
-//   - Xoá món (có confirm)
-//   - Cột summary: sticky, tính tổng theo món đã chọn
-//
-// FIX v10:
-//   - ✅ Áp dụng i18n cho TẤT CẢ text (toast, aria-label, dialog)
-// ============================================================
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -60,7 +50,6 @@ export default function CustomerCart({ cart, setCart }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  // ---------- Derived ----------
   const lines = useMemo(
     () => Object.entries(cart).map(([key, item]) => ({ ...item, _key: key })),
     [cart]
@@ -68,7 +57,6 @@ export default function CustomerCart({ cart, setCart }) {
 
   const cartKeys = useMemo(() => Object.keys(cart), [cart]);
 
-  // ---------- State ----------
   const [editingItem, setEditingItem] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(() =>
     readSavedSelection(Object.keys(cart))
@@ -77,7 +65,7 @@ export default function CustomerCart({ cart, setCart }) {
 
   const prevKeysRef = useRef(cartKeys);
 
-  // ---------- Persist selectedKeys ----------
+  // Persist selectedKeys
   useEffect(() => {
     try {
       if (selectedKeys.length === 0) {
@@ -88,11 +76,19 @@ export default function CustomerCart({ cart, setCart }) {
     } catch {}
   }, [selectedKeys]);
 
-  // ---------- Sync selectedKeys khi cart đổi ----------
+  // ✅ FIX: Sync selectedKeys khi cart đổi, bao gồm cả khi cart rỗng hoàn toàn
+  // (ví dụ: sau khi đặt hàng, cart bị xóa sạch bởi checkout)
   useEffect(() => {
     const prevKeys = prevKeysRef.current;
     const newKeys = cartKeys.filter((k) => !prevKeys.includes(k));
     const removedSet = new Set(prevKeys.filter((k) => !cartKeys.includes(k)));
+
+    // Nếu cart rỗng hoàn toàn → clear selection
+    if (cartKeys.length === 0) {
+      setSelectedKeys([]);
+      prevKeysRef.current = cartKeys;
+      return;
+    }
 
     if (newKeys.length === 0 && removedSet.size === 0) return;
 
@@ -105,7 +101,6 @@ export default function CustomerCart({ cart, setCart }) {
     prevKeysRef.current = cartKeys;
   }, [cartKeys]);
 
-  // ---------- Memoized computed ----------
   const allSelected = useMemo(
     () =>
       lines.length > 0 && lines.every((m) => selectedKeys.includes(m._key)),
@@ -130,8 +125,6 @@ export default function CustomerCart({ cart, setCart }) {
     () => selectedLines.reduce((s, m) => s + (Number(m.qty) || 0), 0),
     [selectedLines]
   );
-
-  // ---------- Handlers ----------
 
   const toggleItem = (key) => {
     setSelectedKeys((prev) =>
@@ -192,7 +185,7 @@ export default function CustomerCart({ cart, setCart }) {
     navigate("/customer/checkout");
   };
 
-  // ---------- Early return: giỏ rỗng ----------
+  // Early return: giỏ rỗng
   if (!lines.length) {
     return (
       <div
@@ -251,10 +244,6 @@ export default function CustomerCart({ cart, setCart }) {
     );
   }
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
   return (
     <>
       <div
@@ -266,9 +255,7 @@ export default function CustomerCart({ cart, setCart }) {
           alignItems: "start",
         }}
       >
-        {/* ============ CỘT TRÁI ============ */}
         <div style={{ minWidth: 0 }}>
-          {/* Header chọn tất cả */}
           <div
             style={{
               background: "var(--card-bg, #fff)",
@@ -331,7 +318,6 @@ export default function CustomerCart({ cart, setCart }) {
             </span>
           </div>
 
-          {/* Danh sách món */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {lines.map((m) => {
               const checked = selectedKeys.includes(m._key);
@@ -361,7 +347,6 @@ export default function CustomerCart({ cart, setCart }) {
                       : "none",
                   }}
                 >
-                  {/* Checkbox */}
                   <span
                     role="checkbox"
                     aria-checked={checked}
@@ -388,7 +373,6 @@ export default function CustomerCart({ cart, setCart }) {
                     {checked && <Check size={14} color="#fff" />}
                   </span>
 
-                  {/* Ảnh */}
                   <img
                     src={m.image}
                     alt={m.name}
@@ -402,7 +386,6 @@ export default function CustomerCart({ cart, setCart }) {
                     }}
                   />
 
-                  {/* Tên + giá */}
                   <div
                     style={{ minWidth: 0, cursor: "pointer" }}
                     onClick={() => toggleItem(m._key)}
@@ -439,7 +422,6 @@ export default function CustomerCart({ cart, setCart }) {
                     </div>
                   </div>
 
-                  {/* Qty controls */}
                   <div
                     style={{
                       display: "inline-flex",
@@ -506,7 +488,6 @@ export default function CustomerCart({ cart, setCart }) {
                     </button>
                   </div>
 
-                  {/* Thành tiền */}
                   <div style={{ textAlign: "right", minWidth: 90 }}>
                     <b
                       style={{
@@ -519,7 +500,6 @@ export default function CustomerCart({ cart, setCart }) {
                     </b>
                   </div>
 
-                  {/* Sửa */}
                   <button
                     onClick={() => setEditingItem({ key: m._key, item: m })}
                     title={t("cart.editTitle")}
@@ -540,7 +520,6 @@ export default function CustomerCart({ cart, setCart }) {
                     <Pencil size={15} />
                   </button>
 
-                  {/* Xoá */}
                   <button
                     onClick={() => removeItem(m._key)}
                     title={t("cart.removeTitleBtn")}
@@ -566,7 +545,6 @@ export default function CustomerCart({ cart, setCart }) {
           </div>
         </div>
 
-        {/* ============ CỘT PHẢI — SUMMARY ============ */}
         <div
           style={{
             background: "var(--card-bg, #fff)",
@@ -592,7 +570,6 @@ export default function CustomerCart({ cart, setCart }) {
             🧾 {t("checkout.summary")}
           </h3>
 
-          {/* Box hiển thị đã chọn */}
           <div
             style={{
               background:
@@ -632,7 +609,6 @@ export default function CustomerCart({ cart, setCart }) {
             )}
           </div>
 
-          {/* Tạm tính */}
           <div
             style={{
               display: "flex",
@@ -649,7 +625,6 @@ export default function CustomerCart({ cart, setCart }) {
             </b>
           </div>
 
-          {/* Phí dịch vụ */}
           <div
             style={{
               display: "flex",
@@ -664,7 +639,6 @@ export default function CustomerCart({ cart, setCart }) {
             <b style={{ color: "var(--text-primary, #172033)" }}>{money(0)}</b>
           </div>
 
-          {/* Tổng cộng */}
           <div
             style={{
               display: "flex",
@@ -689,7 +663,6 @@ export default function CustomerCart({ cart, setCart }) {
             </strong>
           </div>
 
-          {/* Nút checkout */}
           <button
             onClick={goCheckout}
             disabled={!selectedLines.length}
@@ -725,7 +698,6 @@ export default function CustomerCart({ cart, setCart }) {
           </button>
         </div>
 
-        {/* ============ MODAL SỬA MÓN ============ */}
         {editingItem && (
           <FoodDetailModal
             item={editingItem.item}
@@ -753,7 +725,6 @@ export default function CustomerCart({ cart, setCart }) {
         )}
       </div>
 
-      {/* ============ CONFIRM REMOVE DIALOG ============ */}
       <ConfirmDialog
         open={!!confirmRemove}
         title={t("cart.removeTitle")}

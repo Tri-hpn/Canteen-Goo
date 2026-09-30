@@ -1,33 +1,6 @@
 // ============================================================
 // STAFFORDERDETAILMODAL.JSX — Modal chi tiết đơn (Staff/Admin)
 // ============================================================
-// Props:
-//   order      — object đơn hàng
-//   onClose    — callback đóng
-//   onUpdate   — callback khi order thay đổi (optional) → parent refresh list
-//
-// Features:
-//   - Realtime: poll 5s để cập nhật trạng thái mới nhất
-//   - Progress bar 5 bước
-//   - Info: payment, pickup time, customer, items, total
-//
-// Fixes (so với bản gốc):
-//   - 🔴 Xoá duplicate STATUS_FLOW keys (chỉ giữ có dấu)
-//   - 🔴 Fix polling leak: cleanup khi unmount
-//   - 🔴 Poll pause khi tab ẩn
-//   - 🔴 Race-safe refresh (reqIdRef)
-//   - 🔴 Dùng useCallback cho refresh (deps đúng)
-//   - 🔴 lastUpdated init = null (chỉ hiện sau khi refresh)
-//   - 🔴 z-index chuẩn 2147483600
-//   - 🔴 ESC đóng + role/aria
-//   - 🔴 Guard NaN cho price × qty
-//   - 🔴 Guard Invalid Date
-//   - 🟡 Gọi onUpdate khi có thay đổi
-//   - 🟡 Memo derived values
-//   - 🟡 Body scroll lock
-//   - 🟡 Sync order khi prop đổi
-//   - 🟢 Loading state lần đầu
-// ============================================================
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
@@ -37,30 +10,26 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { money } from "./UI";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const MODAL_Z = 2147483600;
 const POLL_MS = 5000;
 
-// Chỉ giữ keys có dấu (bỏ duplicate không dấu)
 const STATUS_FLOW = {
-  "Chờ xác nhận":  { step: 1, label: "Chờ xác nhận",  color: "#f59e0b" },
-  "Đã xác nhận":   { step: 2, label: "Đã xác nhận",   color: "#2634d5" },
-  "Đang chuẩn bị": { step: 3, label: "Đang chuẩn bị", color: "#8b5cf6" },
-  "Sẵn sàng nhận": { step: 4, label: "Sẵn sàng nhận", color: "#18a967" },
-  "Hoàn thành":    { step: 5, label: "Hoàn thành",    color: "#18a967" },
-  "Đã hủy":        { step: 0, label: "Đã hủy",        color: "#ef4444" },
+  "Chờ xác nhận":  { step: 1, labelKey: "status.pending",   color: "#f59e0b" },
+  "Đã xác nhận":   { step: 2, labelKey: "status.confirmed", color: "#2634d5" },
+  "Đang chuẩn bị": { step: 3, labelKey: "status.preparing", color: "#8b5cf6" },
+  "Sẵn sàng nhận": { step: 4, labelKey: "status.ready",     color: "#18a967" },
+  "Hoàn thành":    { step: 5, labelKey: "status.done",      color: "#18a967" },
+  "Đã hủy":        { step: 0, labelKey: "status.cancelled", color: "#ef4444" },
 };
 
 const ALL_STEPS = [
-  { step: 1, label: "Chờ xác nhận",  icon: Clock },
-  { step: 2, label: "Đã xác nhận",   icon: CheckCircle2 },
-  { step: 3, label: "Đang chuẩn bị", icon: ChefHat },
-  { step: 4, label: "Sẵn sàng nhận", icon: Truck },
-  { step: 5, label: "Hoàn thành",    icon: CheckCircle2 },
+  { step: 1, labelKey: "status.pending",   icon: Clock },
+  { step: 2, labelKey: "status.confirmed", icon: CheckCircle2 },
+  { step: 3, labelKey: "status.preparing", icon: ChefHat },
+  { step: 4, labelKey: "status.ready",     icon: Truck },
+  { step: 5, labelKey: "status.done",      icon: CheckCircle2 },
 ];
 
 const PAYMENT_ICONS = {
@@ -69,10 +38,6 @@ const PAYMENT_ICONS = {
   "Thẻ": CreditCard,
   "Ví Canteen": CreditCard,
 };
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function calcLineTotal(price, qty) {
   const p = Number(price) || 0;
@@ -100,7 +65,6 @@ function fmtTime(d) {
   }
 }
 
-/** Extract "Nhận lúc HH:MM" từ note. */
 function extractPickupTime(note) {
   if (!note) return null;
   const match = String(note).match(
@@ -109,16 +73,13 @@ function extractPickupTime(note) {
   return match ? match[1] : null;
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function StaffOrderDetailModal({
   order: initialOrder,
   onClose,
   onUpdate,
 }) {
-    const [order, setOrder] = useState(initialOrder);
+  const { t } = useTranslation();
+  const [order, setOrder] = useState(initialOrder);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [error, setError] = useState("");
@@ -127,20 +88,17 @@ export default function StaffOrderDetailModal({
   );
   const [isScrolling, setIsScrolling] = useState(false);
 
-    // Refs
   const reqIdRef = useRef(0);
   const inFlightRef = useRef(false);
   const prevStatusRef = useRef(initialOrder?.status);
   const modalContentRef = useRef(null);
   const scrollTimerRef = useRef(null);
 
-  // ---------- Sync order khi prop đổi ----------
   useEffect(() => {
     setOrder(initialOrder);
     prevStatusRef.current = initialOrder?.status;
   }, [initialOrder]);
 
-  // ---------- ESC đóng modal ----------
   useEffect(() => {
     if (!order) return;
     const handler = (e) => {
@@ -150,7 +108,6 @@ export default function StaffOrderDetailModal({
     return () => window.removeEventListener("keydown", handler);
   }, [order, onClose]);
 
-  // ---------- Body scroll lock ----------
   useEffect(() => {
     if (!order) return;
     const prev = document.body.style.overflow;
@@ -160,14 +117,12 @@ export default function StaffOrderDetailModal({
     };
   }, [order]);
 
-   // ---------- Track tab visibility ----------
   useEffect(() => {
     const handler = () => setTabVisible(!document.hidden);
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
   }, []);
 
-  // ---------- Pause poll khi user đang scroll ----------
   useEffect(() => {
     const el = modalContentRef.current;
     if (!el) return;
@@ -175,7 +130,6 @@ export default function StaffOrderDetailModal({
     const handler = () => {
       setIsScrolling(true);
       if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
-      // Resume poll sau 1.5s không scroll
       scrollTimerRef.current = setTimeout(() => {
         setIsScrolling(false);
         scrollTimerRef.current = null;
@@ -192,59 +146,55 @@ export default function StaffOrderDetailModal({
       }
     };
   }, []);
-  // ---------- Order ID ----------
+
   const orderId = useMemo(
     () => order?._id || order?.id || null,
     [order?._id, order?.id]
   );
 
-  // ---------- Refresh (race-safe) ----------
+  const refresh = useCallback(
+    async (silent = false) => {
+      if (!orderId) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
 
-  const refresh = useCallback(async (silent = false) => {
-    if (!orderId) return;
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
+      const myReqId = ++reqIdRef.current;
+      if (!silent) setRefreshing(true);
+      setError("");
 
-    const myReqId = ++reqIdRef.current;
-    if (!silent) setRefreshing(true);
-    setError("");
+      try {
+        const list = await api.orders.all("Tất cả");
 
-    try {
-      const list = await api.orders.all("Tất cả");
+        if (myReqId !== reqIdRef.current) return;
 
-      // Bỏ qua nếu có request mới hơn
-      if (myReqId !== reqIdRef.current) return;
+        const updated = (Array.isArray(list) ? list : []).find(
+          (o) => String(o._id || o.id) === String(orderId)
+        );
 
-      const updated = (Array.isArray(list) ? list : []).find(
-        (o) => String(o._id || o.id) === String(orderId)
-      );
+        if (!updated) return;
 
-      if (!updated) return;
+        const newStatus = updated.status;
+        if (prevStatusRef.current !== newStatus) {
+          prevStatusRef.current = newStatus;
+          try {
+            onUpdate?.();
+          } catch {}
+        }
 
-      // Detect status change → notify parent
-      const newStatus = updated.status;
-      if (prevStatusRef.current !== newStatus) {
-        prevStatusRef.current = newStatus;
-        try {
-          onUpdate?.();
-        } catch {}
+        setOrder(updated);
+        setLastUpdated(new Date());
+      } catch (e) {
+        if (myReqId === reqIdRef.current && !silent) {
+          setError(e.message || t("order.refreshError"));
+        }
+      } finally {
+        if (myReqId === reqIdRef.current) setRefreshing(false);
+        inFlightRef.current = false;
       }
+    },
+    [orderId, onUpdate, t]
+  );
 
-      setOrder(updated);
-      setLastUpdated(new Date());
-    } catch (e) {
-      if (myReqId === reqIdRef.current && !silent) {
-        setError(e.message || "Không cập nhật được");
-      }
-    } finally {
-      if (myReqId === reqIdRef.current) setRefreshing(false);
-      inFlightRef.current = false;
-    }
-  }, [orderId, onUpdate]);
-
-  // ---------- Polling ----------
-  // Chỉ poll khi: có orderId + tab visible + modal đang mở
-  // ✅ Pause khi user đang scroll (tránh re-render làm nhảy scroll)
   useEffect(() => {
     if (!orderId) return;
     if (!tabVisible) return;
@@ -253,8 +203,6 @@ export default function StaffOrderDetailModal({
     const timer = setInterval(() => refresh(true), POLL_MS);
     return () => clearInterval(timer);
   }, [orderId, tabVisible, isScrolling, refresh]);
-
-  // ---------- Computed (memo) ----------
 
   const current = useMemo(() => {
     return STATUS_FLOW[order?.status] || STATUS_FLOW["Chờ xác nhận"];
@@ -286,10 +234,10 @@ export default function StaffOrderDetailModal({
   );
 
   const paymentStatus = isCompleted
-    ? "Đã thanh toán"
+    ? t("order.paymentPaid")
     : isCancelled
-    ? "Đã hủy"
-    : "Chưa thanh toán";
+    ? t("status.cancelled")
+    : t("order.paymentUnpaid");
 
   const paymentColor = isCompleted
     ? "#18a967"
@@ -316,19 +264,14 @@ export default function StaffOrderDetailModal({
     [order?.discount]
   );
 
-  // ---------- Early return ----------
   if (!order) return null;
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={`Chi tiết đơn hàng ${order.code || ""}`}
+      aria-label={t("order.detailAria").replace("{code}", order.code || "")}
       style={{
         position: "fixed",
         inset: 0,
@@ -341,7 +284,7 @@ export default function StaffOrderDetailModal({
       }}
     >
       <div
-	ref={modalContentRef}
+        ref={modalContentRef}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--card-bg, #fff)",
@@ -353,7 +296,7 @@ export default function StaffOrderDetailModal({
           overflowY: "auto",
         }}
       >
-        {/* ============ HEADER ============ */}
+        {/* HEADER */}
         <div
           style={{
             display: "flex",
@@ -387,7 +330,7 @@ export default function StaffOrderDetailModal({
                   fontSize: 16,
                 }}
               >
-                Chi tiết đơn hàng
+                {t("order.detailTitle")}
               </h3>
               <div
                 style={{
@@ -429,10 +372,10 @@ export default function StaffOrderDetailModal({
                     }}
                   />
                   {error
-                    ? "Lỗi cập nhật"
+                    ? t("order.refreshErrorShort")
                     : refreshing
-                    ? "Đang cập nhật..."
-                    : "Realtime"}
+                    ? t("order.refreshing")
+                    : t("order.realtime")}
                 </span>
               </div>
             </div>
@@ -443,8 +386,8 @@ export default function StaffOrderDetailModal({
               onClick={() => refresh(false)}
               disabled={refreshing}
               type="button"
-              aria-label="Làm mới"
-              title="Làm mới"
+              aria-label={t("common.refresh")}
+              title={t("common.refresh")}
               style={{
                 background: "var(--bg-tertiary, #f5f7fb)",
                 border: "1px solid var(--border-color, #e5e9ef)",
@@ -469,7 +412,7 @@ export default function StaffOrderDetailModal({
             <button
               onClick={onClose}
               type="button"
-              aria-label="Đóng"
+              aria-label={t("common.close")}
               style={{
                 background: "transparent",
                 border: 0,
@@ -485,7 +428,6 @@ export default function StaffOrderDetailModal({
           </div>
         </div>
 
-        {/* ============ ERROR BANNER ============ */}
         {error && (
           <div
             style={{
@@ -502,7 +444,7 @@ export default function StaffOrderDetailModal({
           </div>
         )}
 
-        {/* ============ PROGRESS ============ */}
+        {/* PROGRESS */}
         {!isCancelled && (
           <div
             style={{
@@ -584,7 +526,7 @@ export default function StaffOrderDetailModal({
                         fontWeight: active ? 700 : 500,
                       }}
                     >
-                      {s.label}
+                      {t(s.labelKey)}
                     </span>
                   </div>
                 );
@@ -593,7 +535,7 @@ export default function StaffOrderDetailModal({
           </div>
         )}
 
-        {/* ============ CANCELLED ============ */}
+        {/* CANCELLED */}
         {isCancelled && (
           <div
             style={{
@@ -610,12 +552,12 @@ export default function StaffOrderDetailModal({
           >
             <X size={20} color="#ef4444" />
             <b style={{ color: "#991b1b", fontSize: 14 }}>
-              Đơn hàng đã bị hủy
+              {t("order.cancelledBanner")}
             </b>
           </div>
         )}
 
-        {/* ============ KPI CARDS ============ */}
+        {/* KPI */}
         <div
           style={{
             display: "grid",
@@ -626,31 +568,31 @@ export default function StaffOrderDetailModal({
         >
           <InfoCard
             icon={<PaymentIcon size={14} />}
-            label="THANH TOÁN"
+            label={t("order.paymentLabel")}
             value={paymentStatus}
-            sub={order.payment || "Tiền mặt"}
+            sub={order.payment || t("checkout.cash")}
             color={paymentColor}
             bg={paymentBg}
           />
           <InfoCard
             icon={<Clock size={14} />}
-            label="GIỜ NHẬN"
-            value={pickupTime || "Chưa đặt"}
-            sub="Khung giờ khách chọn"
+            label={t("order.pickupLabel")}
+            value={pickupTime || t("order.pickupNotSet")}
+            sub={t("order.pickupSubLabel")}
             color="#2634d5"
             bg="rgba(38, 52, 213, 0.08)"
           />
           <InfoCard
             icon={<ShoppingBag size={14} />}
-            label="SỐ LƯỢNG"
-            value={`${totalQty} phần`}
-            sub={`${items.length} loại món`}
+            label={t("order.qtyLabel")}
+            value={t("order.qtyValue").replace("{n}", totalQty)}
+            sub={t("order.qtySubLabel").replace("{n}", items.length)}
             color="#8b5cf6"
             bg="rgba(139, 92, 246, 0.08)"
           />
         </div>
 
-        {/* ============ CUSTOMER + TIME ============ */}
+        {/* CUSTOMER + TIME */}
         <div
           style={{
             display: "grid",
@@ -676,7 +618,7 @@ export default function StaffOrderDetailModal({
               }}
             >
               <User size={11} style={{ display: "inline", marginRight: 4 }} />
-              Khách hàng
+              {t("order.customerLabel")}
             </div>
             <b
               style={{
@@ -684,7 +626,7 @@ export default function StaffOrderDetailModal({
                 color: "var(--text-primary, #172033)",
               }}
             >
-              {order.customer_name || "Khách"}
+              {order.customer_name || t("profile.guest")}
             </b>
           </div>
 
@@ -705,7 +647,7 @@ export default function StaffOrderDetailModal({
               }}
             >
               <Clock size={11} style={{ display: "inline", marginRight: 4 }} />
-              Thời gian đặt
+              {t("orders.orderTime")}
             </div>
             <b
               style={{
@@ -718,7 +660,7 @@ export default function StaffOrderDetailModal({
           </div>
         </div>
 
-        {/* ============ ITEMS ============ */}
+        {/* ITEMS */}
         <h4
           style={{
             margin: "0 0 10px",
@@ -729,7 +671,8 @@ export default function StaffOrderDetailModal({
             gap: 6,
           }}
         >
-          <ShoppingBag size={16} /> Món đã đặt ({items.length})
+          <ShoppingBag size={16} />{" "}
+          {t("order.itemsCount").replace("{n}", items.length)}
         </h4>
 
         <div
@@ -744,15 +687,15 @@ export default function StaffOrderDetailModal({
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={thBase}>MÓN</th>
+                <th style={thBase}>{t("menu.title").toUpperCase()}</th>
                 <th style={{ ...thBase, textAlign: "center", width: 60 }}>
-                  SL
+                  {t("common.quantity").toUpperCase()}
                 </th>
                 <th style={{ ...thBase, textAlign: "right", width: 100 }}>
-                  ĐƠN GIÁ
+                  {t("cart.unitPrice").toUpperCase()}
                 </th>
                 <th style={{ ...thBase, textAlign: "right", width: 100 }}>
-                  TỔNG
+                  {t("cart.total").toUpperCase()}
                 </th>
               </tr>
             </thead>
@@ -771,17 +714,53 @@ export default function StaffOrderDetailModal({
                       fontSize: 13,
                     }}
                   >
-                    {it.name || "—"}
-                    {it._size && it._size !== "S" && (
-                      <span
+                    <div>
+                      {it.name || "—"}
+                      {it.size?.name && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-light, #94a3b8)",
+                            marginLeft: 4,
+                          }}
+                        >
+                          ({it.size.name})
+                        </span>
+                      )}
+                      {!it.size?.name && it._size && it._size !== "S" && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-light, #94a3b8)",
+                            marginLeft: 4,
+                          }}
+                        >
+                          ({it._size})
+                        </span>
+                      )}
+                    </div>
+
+                    {Array.isArray(it.toppings) && it.toppings.length > 0 && (
+                      <div
                         style={{
+                          marginTop: 4,
                           fontSize: 11,
-                          color: "var(--text-light, #94a3b8)",
-                          marginLeft: 4,
+                          color: "var(--text-muted, #64748b)",
+                          lineHeight: 1.5,
                         }}
                       >
-                        ({it._size})
-                      </span>
+                        <div style={{ fontWeight: 600 }}>Topping:</div>
+                        {it.toppings.map((topping, toppingIndex) => (
+                          <div key={topping.id || toppingIndex}>
+                            - {topping.name || "—"}
+                            {Number(topping.price) > 0 && (
+                              <span>
+                                {" "}+{money(Number(topping.price))}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </td>
                   <td
@@ -830,7 +809,7 @@ export default function StaffOrderDetailModal({
                       fontSize: 12,
                     }}
                   >
-                    Đơn hàng không có món
+                    {t("order.noItems")}
                   </td>
                 </tr>
               )}
@@ -838,7 +817,7 @@ export default function StaffOrderDetailModal({
           </table>
         </div>
 
-        {/* ============ SUMMARY ============ */}
+        {/* SUMMARY */}
         <div
           style={{
             display: "flex",
@@ -849,7 +828,7 @@ export default function StaffOrderDetailModal({
           }}
         >
           <span style={{ color: "var(--text-muted, #64748b)" }}>
-            Tạm tính
+            {t("cart.subtotal")}
           </span>
           <b style={{ color: "var(--text-primary, #172033)" }}>
             {money(subtotal)}
@@ -866,7 +845,7 @@ export default function StaffOrderDetailModal({
             }}
           >
             <span style={{ color: "var(--text-muted, #64748b)" }}>
-              Giảm giá
+              {t("checkout.discount")}
             </span>
             <b style={{ color: "#18a967" }}>-{money(discount)}</b>
           </div>
@@ -889,14 +868,14 @@ export default function StaffOrderDetailModal({
               fontSize: 15,
             }}
           >
-            TỔNG CỘNG
+            {t("cart.total").toUpperCase()}
           </b>
           <strong style={{ color: "#2634d5", fontSize: 22 }}>
             {money(Number(order.total) || 0)}
           </strong>
         </div>
 
-        {/* ============ NOTE ============ */}
+        {/* NOTE */}
         {order.note && (
           <div
             style={{
@@ -916,14 +895,14 @@ export default function StaffOrderDetailModal({
             />
             <span>
               <b style={{ color: "var(--text-primary, #172033)" }}>
-                Ghi chú:
+                {t("checkout.note")}:
               </b>{" "}
               {order.note}
             </span>
           </div>
         )}
 
-        {/* ============ FOOTER ============ */}
+        {/* FOOTER */}
         <div
           style={{
             marginTop: 18,
@@ -938,8 +917,8 @@ export default function StaffOrderDetailModal({
             style={{ fontSize: 11, color: "var(--text-light, #94a3b8)" }}
           >
             {lastUpdated
-              ? `Cập nhật: ${fmtTime(lastUpdated)}`
-              : "Chưa cập nhật"}
+              ? t("order.lastUpdated").replace("{time}", fmtTime(lastUpdated))
+              : t("order.notUpdated")}
           </span>
           <button
             onClick={onClose}
@@ -955,7 +934,7 @@ export default function StaffOrderDetailModal({
               fontSize: 13,
             }}
           >
-            Đóng
+            {t("common.close")}
           </button>
         </div>
       </div>
@@ -969,10 +948,6 @@ export default function StaffOrderDetailModal({
     </div>
   );
 }
-
-// ============================================================
-// SUB-COMPONENT: InfoCard
-// ============================================================
 
 function InfoCard({ icon, label, value, sub, color, bg }) {
   return (
@@ -1004,10 +979,6 @@ function InfoCard({ icon, label, value, sub, color, bg }) {
     </div>
   );
 }
-
-// ============================================================
-// STYLE CONSTANTS
-// ============================================================
 
 const thBase = {
   padding: "6px 0",

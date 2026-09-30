@@ -1,29 +1,8 @@
 ﻿// ============================================================
-// ChatBot.js — Logic keyword matching gợi ý món ăn
+// CHATBOT.JS — Logic keyword matching gợi ý món ăn
 // ============================================================
-// API:
-//   getBotReply(userText, menuItems, settings?) => { text, items }
-//   - menuItems: Array món từ api.menu.list()
-//   - settings:  Object từ api.settings.get() — dùng cho địa chỉ/hotline/giờ
-//                (optional, fallback dùng default)
-//
-// Return:
-//   { text: string, items: Array } — items để render kèm trong chat
-//   null nếu text rỗng
-//
-// Fixes (so với bản gốc):
-//   - Không hardcode địa chỉ/hotline/giờ → nhận qua settings
-//   - Fix price bug: "500đ" không còn thành 500.000đ
-//   - Bỏ \b (không hoạt động với tiếng Việt) — dùng ^ + khoảng trắng
-//   - Normalize dấu tiếng Việt để match "com ga" ≈ "cơm gà"
-//   - Fix false positive "cay" (không match "cà chua")
-//   - Fallback cho nhánh rỗng (VD: "nước" nhưng không có đồ uống)
-//   - Hỗ trợ "1k5" → 1500đ
-//   - Thêm intent: đặt món, thanh toán, voucher, đổi điểm
-// ============================================================
-
-// ============================================================
-// DEFAULT SETTINGS (fallback khi không có settings từ API)
+// Nhận thêm tham số `t` (i18n) để dịch text trả về.
+// Nếu không truyền `t` → fallback dùng tiếng Việt (backward compat).
 // ============================================================
 
 const DEFAULT_SETTINGS = {
@@ -32,14 +11,52 @@ const DEFAULT_SETTINGS = {
   openHours: "6:30 — 18:30 hàng ngày",
 };
 
-// ============================================================
-// HELPERS
-// ============================================================
+// Fallback tiếng Việt (khi không truyền t)
+const FALLBACK_TEXT = {
+  greeting:
+    "Xin chào! 👋 Mình là trợ lý Canteen VWA.\n" +
+    "Bạn có thể hỏi mình:\n" +
+    '• "dưới 30k" — món rẻ\n' +
+    '• "chay" — món chay\n' +
+    '• "nước" — đồ uống\n' +
+    '• "cay" — món cay\n' +
+    '• "bán chạy" — top món hot\n' +
+    '• "cơm" — các món cơm\n' +
+    '• "gợi ý" — món ngẫu nhiên',
+  openHours: `🕐 Canteen VWA mở cửa ${DEFAULT_SETTINGS.openHours}.`,
+  address: `📍 Canteen VWA ở ${DEFAULT_SETTINGS.address}.`,
+  hotline: `☎️ Hotline Canteen VWA: ${DEFAULT_SETTINGS.hotline}. Gọi khi cần hỗ trợ nhé!`,
+  order:
+    "🛒 Để đặt món:\n" +
+    '1. Vào "Thực đơn" chọn món\n' +
+    "2. Thêm vào giỏ\n" +
+    '3. Vào giỏ → "Đặt hàng"\n' +
+    "Thanh toán: Tiền mặt · VietQR · Ví Canteen.",
+  voucher:
+    "🎁 Bạn có thể:\n" +
+    '• Xem điểm tích lũy ở trang "Khuyến mãi"\n' +
+    "• Đổi 100 điểm → voucher 10.000đ\n" +
+    "• Nhận voucher toàn hệ thống",
+  bestSeller: "🔥 Top 3 món bán chạy nhất tại Canteen:",
+  bestSellerEmpty: "Hiện chưa có dữ liệu bán chạy. Bạn xem thực đơn nhé!",
+  vegetarian: "🥗 Món chay ngon tại Canteen:",
+  vegetarianEmpty: "Hiện chưa có món chay trong thực đơn. Bạn xem món khác nhé!",
+  drinks: "🥤 Đồ uống tại Canteen:",
+  drinksEmpty: "Hiện chưa có đồ uống trong thực đơn.",
+  spicy: "🌶️ Món cay bạn có thể thử:",
+  spicyFallback: "Các món đậm vị tại Canteen:",
+  spicyEmpty: "Hiện chưa có món cay. Bạn xem thực đơn nhé!",
+  rice: "🍚 Món cơm tại Canteen:",
+  riceEmpty: "Hiện chưa có món cơm trong thực đơn.",
+  budget: '💰 Món dưới {price}đ cho bạn đây:',
+  budgetEmpty: "Không có món nào dưới {price}đ. Bạn thử ngân sách khác nhé!",
+  random: "🎲 Mình gợi ý bạn thử món này nhé:",
+  randomEmpty: "Hiện chưa có thực đơn. Bạn xem sau nhé!",
+  fallback:
+    "Mình chưa hiểu câu hỏi này. 🤔\n" +
+    'Bạn thử hỏi: "dưới 30k", "chay", "nước", "cay", "bán chạy", "cơm", "gợi ý".',
+};
 
-/**
- * Bỏ dấu tiếng Việt + lowercase.
- * "Cơm Gà" → "com ga"
- */
 function normalize(s) {
   return (s || "")
     .toLowerCase()
@@ -49,15 +66,9 @@ function normalize(s) {
     .trim();
 }
 
-/**
- * Parse giá từ text.
- * Hỗ trợ: "30k", "30 nghìn", "30000", "30000đ", "1k5"
- * Return: number | null
- */
 function parsePrice(text) {
   const t = normalize(text);
 
-  // "1k5" hoặc "1k500" → 1500
   const shortK = t.match(/(\d+)k(\d+)/);
   if (shortK) {
     const thousands = parseInt(shortK[1], 10);
@@ -65,69 +76,63 @@ function parsePrice(text) {
     return thousands * 1000 + rest;
   }
 
-  // "30k" / "30 nghìn" / "30 ngàn"
   const kMatch = t.match(/(\d+)\s*(k|nghin|ngan|ngàn|nghìn)/);
-  if (kMatch) {
-    return parseInt(kMatch[1], 10) * 1000;
-  }
+  if (kMatch) return parseInt(kMatch[1], 10) * 1000;
 
-  // "30000" / "30000đ" / "30000d" / "30.000"
   const dMatch = t.match(/(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(d|đ)?/);
-  if (dMatch) {
-    return parseInt(dMatch[1].replace(/[.,]/g, ""), 10);
-  }
+  if (dMatch) return parseInt(dMatch[1].replace(/[.,]/g, ""), 10);
 
   return null;
 }
 
-/**
- * Filter list + trả về message phù hợp nếu rỗng.
- */
 function pickWithFallback(list, prefix, emptyMsg, limit = 3) {
   const picked = list.slice(0, limit);
-  if (!picked.length) {
-    return { text: emptyMsg, items: [] };
-  }
+  if (!picked.length) return { text: emptyMsg, items: [] };
   return { text: prefix, items: picked };
 }
 
-// ============================================================
-// MAIN
-// ============================================================
-
-export function getBotReply(userText, menuItems = [], settings = null) {
+export function getBotReply(userText, menuItems = [], settings = null, t = null) {
   const raw = (userText || "").trim();
   if (!raw) return null;
 
-  const t = normalize(raw);
+  const tt = normalize(raw);
   const cfg = { ...DEFAULT_SETTINGS, ...(settings || {}) };
   const menu = Array.isArray(menuItems) ? menuItems : [];
+
+  // Helper: dùng t() nếu có, fallback FALLBACK_TEXT
+  const T = (key, vars) => {
+    if (t) {
+      const params = vars || {};
+      // Thay placeholder {x} trong kết quả t()
+      let out = t(key);
+      for (const k of Object.keys(params)) {
+        out = out.replace(new RegExp(`\\{${k}\\}`, "g"), params[k]);
+      }
+      return out;
+    }
+    // Fallback
+    let out = FALLBACK_TEXT[key] || key;
+    if (vars) {
+      for (const k of Object.keys(vars)) {
+        out = out.replace(new RegExp(`\\{${k}\\}`, "g"), vars[k]);
+      }
+    }
+    return out;
+  };
 
   // ============================================================
   // INTENT: Chào hỏi
   // ============================================================
-  if (/^(chao|hi|hello|hey|xin chao)\s*[!,.]?/.test(t)) {
-    return {
-      text:
-        "Xin chào! 👋 Mình là trợ lý Canteen VWA.\n" +
-        "Bạn có thể hỏi mình:\n" +
-        "• \"dưới 30k\" — món rẻ\n" +
-        "• \"chay\" — món chay\n" +
-        "• \"nước\" — đồ uống\n" +
-        "• \"cay\" — món cay\n" +
-        "• \"bán chạy\" — top món hot\n" +
-        "• \"cơm\" — các món cơm\n" +
-        "• \"gợi ý\" — món ngẫu nhiên",
-      items: [],
-    };
+  if (/^(chao|hi|hello|hey|xin chao)\s*[!,.]?/.test(tt)) {
+    return { text: T("bot.greeting"), items: [] };
   }
 
   // ============================================================
   // INTENT: Giờ mở cửa
   // ============================================================
-  if (/\b(gio mo|mo cua|dong cua|may gio mo)\b/.test(t)) {
+  if (/\b(gio mo|mo cua|dong cua|may gio mo)\b/.test(tt)) {
     return {
-      text: `🕐 Canteen VWA mở cửa ${cfg.openHours}.`,
+      text: T("bot.openHours", { hours: cfg.openHours }),
       items: [],
     };
   }
@@ -135,9 +140,9 @@ export function getBotReply(userText, menuItems = [], settings = null) {
   // ============================================================
   // INTENT: Địa chỉ
   // ============================================================
-  if (/\b(dia chi|o dau|duong nao|dia diem)\b/.test(t)) {
+  if (/\b(dia chi|o dau|duong nao|dia diem)\b/.test(tt)) {
     return {
-      text: `📍 Canteen VWA ở ${cfg.address}.`,
+      text: T("bot.address", { address: cfg.address }),
       items: [],
     };
   }
@@ -145,9 +150,9 @@ export function getBotReply(userText, menuItems = [], settings = null) {
   // ============================================================
   // INTENT: Hotline
   // ============================================================
-  if (/\b(hotline|so dien thoai|sdt|lien he)\b/.test(t)) {
+  if (/\b(hotline|so dien thoai|sdt|lien he)\b/.test(tt)) {
     return {
-      text: `☎️ Hotline Canteen VWA: ${cfg.hotline}. Gọi khi cần hỗ trợ nhé!`,
+      text: T("bot.hotline", { hotline: cfg.hotline }),
       items: [],
     };
   }
@@ -155,113 +160,95 @@ export function getBotReply(userText, menuItems = [], settings = null) {
   // ============================================================
   // INTENT: Đặt món / thanh toán
   // ============================================================
-  if (/\b(dat mon|dat hang|order|thanh toan|tra tien)\b/.test(t)) {
-    return {
-      text:
-        "🛒 Để đặt món:\n" +
-        "1. Vào \"Thực đơn\" chọn món\n" +
-        "2. Thêm vào giỏ\n" +
-        "3. Vào giỏ → \"Đặt hàng\"\n" +
-        "Thanh toán: Tiền mặt · VietQR · Ví Canteen.",
-      items: [],
-    };
+  if (/\b(dat mon|dat hang|order|thanh toan|tra tien)\b/.test(tt)) {
+    return { text: T("bot.order"), items: [] };
   }
 
   // ============================================================
   // INTENT: Đổi điểm / voucher
   // ============================================================
-  if (/\b(doi diem|voucher|khuyen mai|giam gia|uu dai)\b/.test(t)) {
-    return {
-      text:
-        "🎁 Bạn có thể:\n" +
-        "• Xem điểm tích lũy ở trang \"Khuyến mãi\"\n" +
-        "• Đổi 100 điểm → voucher 10.000đ\n" +
-        "• Nhận voucher toàn hệ thống",
-      items: [],
-    };
+  if (/\b(doi diem|voucher|khuyen mai|giam gia|uu dai)\b/.test(tt)) {
+    return { text: T("bot.voucher"), items: [] };
   }
 
   // ============================================================
   // INTENT: Top bán chạy
   // ============================================================
-  if (/\b(ban chay|ngon nhat|hot|pho bien|best)\b/.test(t)) {
+  if (/\b(ban chay|ngon nhat|hot|pho bien|best)\b/.test(tt)) {
     const top = [...menu]
       .sort((a, b) => (b.sold || 0) - (a.sold || 0))
       .slice(0, 3);
     return pickWithFallback(
       top,
-      "🔥 Top 3 món bán chạy nhất tại Canteen:",
-      "Hiện chưa có dữ liệu bán chạy. Bạn xem thực đơn nhé!"
+      T("bot.bestSeller"),
+      T("bot.bestSellerEmpty")
     );
   }
 
   // ============================================================
   // INTENT: Món chay
   // ============================================================
-  if (/\b(chay|khong thit|ko thit|an chay)\b/.test(t)) {
+  if (/\b(chay|khong thit|ko thit|an chay)\b/.test(tt)) {
     const chay = menu.filter((m) => m.category === "Món chay");
     return pickWithFallback(
       chay,
-      "🥗 Món chay ngon tại Canteen:",
-      "Hiện chưa có món chay trong thực đơn. Bạn xem món khác nhé!"
+      T("bot.vegetarian"),
+      T("bot.vegetarianEmpty")
     );
   }
 
   // ============================================================
   // INTENT: Đồ uống
   // ============================================================
-  if (/\b(nuoc|uong|tra|ca phe|sinh to|nuoc ep|tra sua)\b/.test(t)) {
+  if (/\b(nuoc|uong|tra|ca phe|sinh to|nuoc ep|tra sua)\b/.test(tt)) {
     const drinks = menu.filter((m) => m.category === "Đồ uống");
     return pickWithFallback(
       drinks,
-      "🥤 Đồ uống tại Canteen:",
-      "Hiện chưa có đồ uống trong thực đơn."
+      T("bot.drinks"),
+      T("bot.drinksEmpty")
     );
   }
 
   // ============================================================
   // INTENT: Món cay
   // ============================================================
-  // Note: dùng \b để tránh match "cà chua", "cay đắng", "chay"
-  if (/\b(cay|spicy)\b/.test(t) && !/\bchay\b/.test(t)) {
+  if (/\b(cay|spicy)\b/.test(tt) && !/\bchay\b/.test(tt)) {
     const cay = menu.filter((m) => {
       const n = normalize(m.name || "");
       return /\b(bun bo|hue|sa te|spicy|cay)\b/.test(n);
     });
-
     if (cay.length) {
-      return { text: "🌶️ Món cay bạn có thể thử:", items: cay.slice(0, 3) };
+      return {
+        text: T("bot.spicy"),
+        items: cay.slice(0, 3),
+      };
     }
 
-    // Fallback: món mặn
     const man = menu.filter((m) => m.category === "Món mặn");
     return pickWithFallback(
       man,
-      "Các món đậm vị tại Canteen:",
-      "Hiện chưa có món cay. Bạn xem thực đơn nhé!"
+      T("bot.spicyFallback"),
+      T("bot.spicyEmpty")
     );
   }
 
   // ============================================================
   // INTENT: Món cơm
   // ============================================================
-  if (/\b(com|com rang|com ga|com suon)\b/.test(t)) {
+  if (/\b(com|com rang|com ga|com suon)\b/.test(tt)) {
     const com = menu.filter((m) => m.category === "Cơm");
-    return pickWithFallback(
-      com,
-      "🍚 Món cơm tại Canteen:",
-      "Hiện chưa có món cơm trong thực đơn."
-    );
+    return pickWithFallback(com, T("bot.rice"), T("bot.riceEmpty"));
   }
 
   // ============================================================
   // INTENT: Giá theo ngân sách
   // ============================================================
-  const price = parsePrice(t);
-  const wantsCheap = /\b(re|duoi|it tien|sinh vien|tiet kiem)\b/.test(t);
+  const price = parsePrice(tt);
+  const wantsCheap = /\b(re|duoi|it tien|sinh vien|tiet kiem)\b/.test(tt);
 
   if (price !== null || wantsCheap) {
     const maxPrice = price !== null ? price : 30000;
+    const priceStr = maxPrice.toLocaleString("vi-VN");
 
     const cheap = menu
       .filter((m) => Number(m.price) <= maxPrice)
@@ -270,15 +257,13 @@ export function getBotReply(userText, menuItems = [], settings = null) {
 
     if (!cheap.length) {
       return {
-        text: `Không có món nào dưới ${maxPrice.toLocaleString(
-          "vi-VN"
-        )}đ. Bạn thử ngân sách khác nhé!`,
+        text: T("bot.budgetEmpty", { price: priceStr }),
         items: [],
       };
     }
 
     return {
-      text: `💰 Món dưới ${maxPrice.toLocaleString("vi-VN")}đ cho bạn đây:`,
+      text: T("bot.budget", { price: priceStr }),
       items: cheap,
     };
   }
@@ -286,13 +271,13 @@ export function getBotReply(userText, menuItems = [], settings = null) {
   // ============================================================
   // INTENT: Gợi ý ngẫu nhiên
   // ============================================================
-  if (/\b(goi y|random|ngau nhien|an gi|mon gi)\b/.test(t)) {
+  if (/\b(goi y|random|ngau nhien|an gi|mon gi)\b/.test(tt)) {
     if (!menu.length) {
-      return { text: "Hiện chưa có thực đơn. Bạn xem sau nhé!", items: [] };
+      return { text: T("bot.randomEmpty"), items: [] };
     }
     const rand = menu[Math.floor(Math.random() * menu.length)];
     return {
-      text: "🎲 Mình gợi ý bạn thử món này nhé:",
+      text: T("bot.random"),
       items: [rand],
     };
   }
@@ -300,12 +285,7 @@ export function getBotReply(userText, menuItems = [], settings = null) {
   // ============================================================
   // FALLBACK
   // ============================================================
-  return {
-    text:
-      "Mình chưa hiểu câu hỏi này. 🤔\n" +
-      "Bạn thử hỏi: \"dưới 30k\", \"chay\", \"nước\", \"cay\", \"bán chạy\", \"cơm\", \"gợi ý\".",
-    items: [],
-  };
+  return { text: T("bot.fallback"), items: [] };
 }
 
 export default getBotReply;

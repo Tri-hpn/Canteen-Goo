@@ -1,30 +1,6 @@
 // ============================================================
 // OWNERREPORTS.JSX — Báo cáo doanh thu chuyên sâu (Admin)
 // ============================================================
-// Tính năng:
-//   - Date range picker + quick ranges (7d/30d/90d/tháng/năm/custom)
-//   - So sánh kỳ trước (toggle) → hiện % delta trên KPI
-//   - Bar chart doanh thu theo ngày
-//   - Pie chart trạng thái đơn
-//   - Top 5 món bán chạy
-//   - Doanh thu theo giờ (insight giờ cao điểm)
-//   - Export CSV chi tiết
-//
-// Chiến lược:
-//   - Fetch ALL orders 1 lần → tính hết ở client
-//   - Không phụ thuộc vào period server-side
-//   - Race-safe với reqIdRef
-//
-// Endpoints:
-//   - api.orders.all("Tất cả")
-//   - api.menu.list(..., all=true)
-//
-// Batch 4B:
-//   - ✅ Date range + quick ranges
-//   - ✅ So sánh kỳ trước
-//   - ✅ Export CSV
-//   - ✅ Hourly breakdown
-// ============================================================
 
 import {
   useEffect, useState, useMemo, useCallback, useRef,
@@ -41,6 +17,7 @@ import {
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
+import { useTranslation } from "../../i18n";
 
 // ============================================================
 // CONSTANTS
@@ -70,7 +47,6 @@ function getLocalDateStr(d = new Date()) {
 }
 
 function parseDateOnly(s) {
-  // "YYYY-MM-DD" → Date local 00:00:00
   if (!s) return null;
   const d = new Date(s + "T00:00:00");
   return isNaN(d.getTime()) ? null : d;
@@ -107,14 +83,12 @@ function fmtDateTime(iso) {
   return d.toLocaleString("vi-VN");
 }
 
-/** Tính % delta giữa 2 số */
 function calcDelta(current, previous) {
   if (previous === 0) return current > 0 ? { pct: 100, isUp: true } : null;
   const pct = ((current - previous) / previous) * 100;
   return { pct: Math.abs(pct), isUp: pct >= 0 };
 }
 
-/** CSV cell escape */
 function csvCell(v) {
   const s = String(v ?? "");
   if (s.includes(",") || s.includes('"') || s.includes("\n")) {
@@ -123,16 +97,20 @@ function csvCell(v) {
   return s;
 }
 
-/** Tính range hiện tại từ rangeId (hoặc customFrom/customTo) */
 function resolveRange(rangeId, customFrom, customTo) {
   const today = startOfDay(new Date());
+  const todayStr = getLocalDateStr(today);
 
   const r = QUICK_RANGES.find((x) => x.id === rangeId);
   if (!r || r.custom) {
     const f = parseDateOnly(customFrom);
     const t = parseDateOnly(customTo);
+
+    // ✅ FIX: Chỉ accept custom range nếu from <= to VÀ to <= hôm nay
     if (f && t && f <= t) {
-      return { from: startOfDay(f), to: endOfDay(t) };
+      const todayEnd = endOfDay(today);
+      const clampedTo = t > todayEnd ? todayEnd : endOfDay(t);
+      return { from: startOfDay(f), to: clampedTo };
     }
     // Fallback 30d
     return { from: addDays(today, -29), to: endOfDay(today) };
@@ -158,7 +136,6 @@ function resolveRange(rangeId, customFrom, customTo) {
   return { from: addDays(today, -29), to: endOfDay(today) };
 }
 
-/** Kỳ trước = cùng độ dài, kết thúc ngay trước `from` */
 function getPreviousRange({ from, to }) {
   const lengthMs = endOfDay(to).getTime() - startOfDay(from).getTime();
   const dayMs = 24 * 60 * 60 * 1000;
@@ -175,13 +152,13 @@ function getPreviousRange({ from, to }) {
 // ============================================================
 
 export default function OwnerReports() {
-  // ---------- Data ----------
+  const { t } = useTranslation();
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  // ---------- Filter ----------
   const [rangeId, setRangeId] = useState("30d");
   const [customFrom, setCustomFrom] = useState(
     getLocalDateStr(addDays(new Date(), -29))
@@ -189,10 +166,7 @@ export default function OwnerReports() {
   const [customTo, setCustomTo] = useState(getLocalDateStr());
   const [compare, setCompare] = useState(false);
 
-  // Race-safe
   const reqIdRef = useRef(0);
-
-  // ---------- Load ----------
 
   const load = useCallback(async (silent = false) => {
     const myReqId = ++reqIdRef.current;
@@ -224,8 +198,6 @@ export default function OwnerReports() {
     load(false);
   }, [load]);
 
-  // ---------- Computed: ranges ----------
-
   const currentRange = useMemo(
     () => resolveRange(rangeId, customFrom, customTo),
     [rangeId, customFrom, customTo]
@@ -235,8 +207,6 @@ export default function OwnerReports() {
     () => getPreviousRange(currentRange),
     [currentRange]
   );
-
-  // ---------- Computed: orders in each range ----------
 
   const currentOrders = useMemo(() => {
     const fromTs = currentRange.from.getTime();
@@ -250,8 +220,6 @@ export default function OwnerReports() {
     const toTs = previousRange.to.getTime();
     return orders.filter((o) => inRange(o.created_at, fromTs, toTs));
   }, [orders, previousRange, compare]);
-
-  // ---------- Stats ----------
 
   const calcStats = useCallback((list) => {
     const completed = list.filter((o) => o.status === "Hoàn thành");
@@ -276,20 +244,15 @@ export default function OwnerReports() {
     [previousOrders, calcStats, compare]
   );
 
-  // ---------- Chart data ----------
-
-  // Bar: doanh thu theo ngày trong range
   const chartData = useMemo(() => {
     const dayMs = 24 * 60 * 60 * 1000;
     const startTs = startOfDay(currentRange.from).getTime();
     const endTs = startOfDay(currentRange.to).getTime();
     const days = Math.round((endTs - startTs) / dayMs) + 1;
 
-    // Nếu range > 90 ngày → group theo tuần để chart không quá dày
     const groupByWeek = days > 90;
 
     if (groupByWeek) {
-      // Group theo tuần
       const buckets = {};
       currentOrders
         .filter((o) => o.status === "Hoàn thành")
@@ -316,7 +279,6 @@ export default function OwnerReports() {
         });
     }
 
-    // Group theo ngày
     const buckets = {};
     for (let i = 0; i < days; i++) {
       const ts = startTs + i * dayMs;
@@ -345,7 +307,6 @@ export default function OwnerReports() {
       });
   }, [currentOrders, currentRange]);
 
-  // Pie: trạng thái đơn
   const statusData = useMemo(() => {
     if (!currentOrders.length) return [];
     const map = {};
@@ -355,7 +316,6 @@ export default function OwnerReports() {
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [currentOrders]);
 
-  // Top 5 món bán chạy
   const topItems = useMemo(() => {
     const sold = {};
     currentOrders
@@ -381,7 +341,6 @@ export default function OwnerReports() {
       .slice(0, 5);
   }, [currentOrders]);
 
-  // Hourly: doanh thu theo giờ (0-23), gộp all days
   const hourlyData = useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, i) => ({
       hour: i,
@@ -412,12 +371,9 @@ export default function OwnerReports() {
     return max;
   }, [hourlyData]);
 
-  // ---------- Handlers ----------
-
   const selectRange = (r) => {
     setRangeId(r.id);
     if (r.custom) {
-      // Reset custom về 30 ngày khi bấm vào
       if (!customFrom || !customTo) {
         setCustomFrom(getLocalDateStr(addDays(new Date(), -29)));
         setCustomTo(getLocalDateStr());
@@ -477,15 +433,9 @@ export default function OwnerReports() {
     }
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
   return (
     <div>
-      {/* ============================================================
-          FILTER BAR
-          ============================================================ */}
+      {/* FILTER BAR */}
       <div
         style={{
           background: "var(--card-bg, #fff)",
@@ -495,7 +445,6 @@ export default function OwnerReports() {
           marginBottom: 20,
         }}
       >
-        {/* Quick ranges */}
         <div
           style={{
             display: "flex",
@@ -536,7 +485,6 @@ export default function OwnerReports() {
           })}
         </div>
 
-        {/* Custom range inputs (chỉ hiện khi chọn custom) */}
         {rangeId === "custom" && (
           <div
             style={{
@@ -573,7 +521,6 @@ export default function OwnerReports() {
           </div>
         )}
 
-        {/* Compare + Export + Refresh */}
         <div
           style={{
             display: "flex",
@@ -672,9 +619,7 @@ export default function OwnerReports() {
         </div>
       </div>
 
-      {/* ============================================================
-          ERROR
-          ============================================================ */}
+      {/* ERROR */}
       {error && (
         <div
           style={{
@@ -710,9 +655,7 @@ export default function OwnerReports() {
         </div>
       )}
 
-      {/* ============================================================
-          KPI CARDS
-          ============================================================ */}
+      {/* KPI CARDS */}
       <div
         style={{
           display: "grid",
@@ -768,9 +711,7 @@ export default function OwnerReports() {
         />
       </div>
 
-      {/* ============================================================
-          CHARTS ROW
-          ============================================================ */}
+      {/* CHARTS ROW */}
       <div
         className="reports-charts"
         style={{
@@ -780,7 +721,6 @@ export default function OwnerReports() {
           marginBottom: 18,
         }}
       >
-        {/* Bar chart */}
         <div style={cardStyle}>
           <h3 style={cardTitleStyle}>
             Doanh thu theo{" "}
@@ -835,7 +775,6 @@ export default function OwnerReports() {
           )}
         </div>
 
-        {/* Pie chart */}
         <div style={cardStyle}>
           <h3 style={cardTitleStyle}>Trạng thái đơn</h3>
 
@@ -907,9 +846,7 @@ export default function OwnerReports() {
         </div>
       </div>
 
-      {/* ============================================================
-          HOURLY BREAKDOWN
-          ============================================================ */}
+      {/* HOURLY BREAKDOWN */}
       <div style={{ ...cardStyle, marginBottom: 18 }}>
         <div
           style={{
@@ -978,9 +915,7 @@ export default function OwnerReports() {
         )}
       </div>
 
-      {/* ============================================================
-          TOP ITEMS
-          ============================================================ */}
+      {/* TOP ITEMS */}
       <div style={cardStyle}>
         <div
           style={{
@@ -1241,19 +1176,11 @@ function ChartSkeleton({ height = 280 }) {
   );
 }
 
-// ============================================================
-// HELPERS
-// ============================================================
-
 function formatAxis(v) {
   if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
   if (v >= 1_000) return Math.round(v / 1_000) + "k";
   return String(v);
 }
-
-// ============================================================
-// STYLE CONSTANTS
-// ============================================================
 
 const cardStyle = {
   background: "var(--card-bg, #fff)",

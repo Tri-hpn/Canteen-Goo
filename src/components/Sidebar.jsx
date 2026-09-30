@@ -1,26 +1,6 @@
 // ============================================================
 // SIDEBAR.JSX — Sidebar cho ADMIN & EMPLOYEE
 // ============================================================
-// - Hiển thị menu theo role
-// - Badge động cho Orders (đơn mới), Vouchers
-// - Mobile: hamburger toggle + overlay + auto-close khi click nav
-// - Auto-close khi click nav
-//
-// Fixes:
-//   - fetchCounts race-safe (reqIdRef)
-//   - Polling pause khi tab ẩn
-//   - Badge cart cho customer
-//   - Guard Invalid Date
-//   - Extract ProfileLink component (bỏ ~150 dòng duplicate)
-//   - ✅ BỎ nút X đóng sidebar mobile (đã có overlay bấm ra ngoài)
-//   - Body scroll lock khi sidebar mở
-//   - Dùng useTranslation hook
-//   - aria-label cho nav
-//   - Memo roleLabel
-//   - Guard dispatchEvent
-//   - ✅ PATCH ProfileLink: màu chữ đậm cho sidebar sáng sky
-//     (trước: #fff chữ trắng → invisible trên nền sáng)
-// ============================================================
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { NavLink, Link } from "react-router-dom";
@@ -31,10 +11,6 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { useTranslation } from "../i18n";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
 
 const POLL_MS = 30000;
 const BADGE_MAX = 99;
@@ -64,7 +40,6 @@ const ICONS = {
   wallet_admin: CreditCard,
 };
 
-// Config menu theo role
 const MENU_CONFIG = {
   ADMIN: [
     ["dashboard", "nav.dashboard", "/owner"],
@@ -100,16 +75,11 @@ const MENU_CONFIG = {
   ],
 };
 
-// Profile link config theo role
 const PROFILE_CONFIG = {
-  ADMIN:    { to: "/owner/profile",    label: "Quản trị viên" },
-  EMPLOYEE: { to: "/employee/profile", label: "Nhân viên" },
-  CUSTOMER: { to: "/customer/profile", label: "Khách hàng" },
+  ADMIN:    { to: "/owner/profile",    labelKey: "role.admin" },
+  EMPLOYEE: { to: "/employee/profile", labelKey: "role.employee" },
+  CUSTOMER: { to: "/customer/profile", labelKey: "role.customer" },
 };
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function getInitials(name) {
   if (!name) return "VWA";
@@ -141,15 +111,8 @@ function readLastSeen(key) {
   }
 }
 
-// ============================================================
-// SUB-COMPONENT: ProfileLink
-// ============================================================
-// ✅ PATCH: màu chữ đậm để đọc được trên sidebar sáng.
-//    Trước: color "#fff" (trắng) + hover "#172635" (đen)
-//    → invisible khi sidebar thành nền sáng #F5FAFF.
-// ============================================================
-
 function ProfileLink({ user, role, onNavClick }) {
+  const { t } = useTranslation();
   const cfg = PROFILE_CONFIG[role];
   if (!cfg || !user) return null;
 
@@ -177,7 +140,6 @@ function ProfileLink({ user, role, onNavClick }) {
         (e.currentTarget.style.background = "transparent")
       }
     >
-      {/* Avatar / Initials */}
       <div
         style={{
           width: 36,
@@ -209,7 +171,6 @@ function ProfileLink({ user, role, onNavClick }) {
         )}
       </div>
 
-      {/* Name + Role */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <b
           style={{
@@ -222,7 +183,7 @@ function ProfileLink({ user, role, onNavClick }) {
             textOverflow: "ellipsis",
           }}
         >
-          {user.name || "Người dùng"}
+          {user.name || t("profile.guest")}
         </b>
         <small
           style={{
@@ -231,36 +192,26 @@ function ProfileLink({ user, role, onNavClick }) {
             color: "var(--sky-ink-500, #64748B)",
           }}
         >
-          {cfg.label}
+          {t(cfg.labelKey)}
         </small>
       </div>
     </Link>
   );
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function Sidebar({ role, onLogout, user }) {
   const { t } = useTranslation();
 
   const [open, setOpen] = useState(false);
-
-  // Badge counts
   const [cartCount, setCartCount] = useState(0);
   const [orderPending, setOrderPending] = useState(0);
   const [voucherCount, setVoucherCount] = useState(0);
 
-  // Tab visibility để pause polling
   const [tabVisible, setTabVisible] = useState(
     typeof document === "undefined" || !document.hidden
   );
 
-  // Refs
   const fetchReqIdRef = useRef(0);
-
-  // ---------- Listen toggle-sidebar ----------
 
   useEffect(() => {
     const toggle = () => setOpen((o) => !o);
@@ -268,15 +219,11 @@ export default function Sidebar({ role, onLogout, user }) {
     return () => window.removeEventListener("toggle-sidebar", toggle);
   }, []);
 
-  // ---------- Track tab visibility ----------
-
   useEffect(() => {
     const handler = () => setTabVisible(!document.hidden);
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
   }, []);
-
-  // ---------- Body scroll lock khi sidebar mở ----------
 
   useEffect(() => {
     if (!open) return;
@@ -289,7 +236,6 @@ export default function Sidebar({ role, onLogout, user }) {
     };
   }, [open]);
 
-  // ✅ FIX: Toggle body class để CSS biết sidebar đang mở
   useEffect(() => {
     if (open) {
       document.body.classList.add("sidebar-open");
@@ -299,8 +245,6 @@ export default function Sidebar({ role, onLogout, user }) {
     return () => document.body.classList.remove("sidebar-open");
   }, [open]);
 
-  // ---------- ESC đóng sidebar mobile ----------
-
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
@@ -309,8 +253,6 @@ export default function Sidebar({ role, onLogout, user }) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open]);
-
-  // ---------- Cart count (customer only) ----------
 
   const readCart = useCallback(() => {
     setCartCount(readCartCount());
@@ -331,8 +273,6 @@ export default function Sidebar({ role, onLogout, user }) {
     };
   }, [role, readCart]);
 
-  // ---------- Fetch counts (orders + vouchers) — race-safe ----------
-
   const fetchCounts = useCallback(async () => {
     if (role !== "CUSTOMER") return;
 
@@ -344,10 +284,8 @@ export default function Sidebar({ role, onLogout, user }) {
         api.vouchers.me().catch(() => []),
       ]);
 
-      // Bỏ qua nếu có request mới hơn
       if (myReqId !== fetchReqIdRef.current) return;
 
-      // Đếm đơn mới hơn last_seen
       const lastSeen = readLastSeen("orders_last_seen");
       const pending = (Array.isArray(orders) ? orders : []).filter((o) => {
         const created = new Date(o?.created_at || 0).getTime();
@@ -356,7 +294,6 @@ export default function Sidebar({ role, onLogout, user }) {
 
       setOrderPending(pending);
 
-      // Đếm voucher chưa dùng + mới hơn points_last_seen
       const lastSeenPoints = readLastSeen("points_last_seen");
       const available = (Array.isArray(vouchers) ? vouchers : []).filter((v) => {
         if (v?.used) return false;
@@ -373,14 +310,10 @@ export default function Sidebar({ role, onLogout, user }) {
     }
   }, [role]);
 
-  // ---------- Polling + events ----------
-
   useEffect(() => {
     if (role !== "CUSTOMER") return;
 
     fetchCounts();
-
-    // Chỉ poll khi tab visible
     if (!tabVisible) return;
 
     const interval = setInterval(fetchCounts, POLL_MS);
@@ -402,14 +335,10 @@ export default function Sidebar({ role, onLogout, user }) {
     };
   }, [role, fetchCounts, tabVisible]);
 
-  // ---------- Menu list ----------
-
   const list = useMemo(
     () => MENU_CONFIG[role] || MENU_CONFIG.CUSTOMER,
     [role]
   );
-
-  // ---------- Badge getter ----------
 
   const getBadge = useCallback(
     (key) => {
@@ -420,13 +349,7 @@ export default function Sidebar({ role, onLogout, user }) {
     [orderPending, voucherCount]
   );
 
-  // ---------- Handlers ----------
-
   const closeSidebar = () => setOpen(false);
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <>
@@ -440,9 +363,8 @@ export default function Sidebar({ role, onLogout, user }) {
 
       <aside
         className={"sidebar " + (open ? "mobile-open" : "")}
-        aria-label="Menu điều hướng"
+        aria-label={t("nav.sidebarNav")}
       >
-        {/* ============ BRAND ============ */}
         <div className="brand">
           <div className="brand-mark">C</div>
           <div className="brand-text">
@@ -451,7 +373,6 @@ export default function Sidebar({ role, onLogout, user }) {
           </div>
         </div>
 
-        {/* ============ ROLE CHIP ============ */}
         <div className="role-chip">
           {role === "ADMIN"
             ? t("role.admin")
@@ -460,7 +381,6 @@ export default function Sidebar({ role, onLogout, user }) {
             : t("role.customer")}
         </div>
 
-        {/* ============ NAV ============ */}
         <nav>
           {list.map(([key, labelKey, to]) => {
             const Icon = ICONS[key] || ShoppingBag;
@@ -483,7 +403,10 @@ export default function Sidebar({ role, onLogout, user }) {
                 <Icon size={18} />
                 <span>{t(labelKey)}</span>
                 {badge > 0 && (
-                  <span className="nav-badge" aria-label={`${badge} mới`}>
+                  <span
+                    className="nav-badge"
+                    aria-label={t("common.newCount").replace("{n}", badge)}
+                  >
                     {badge > BADGE_MAX ? `${BADGE_MAX}+` : badge}
                   </span>
                 )}
@@ -492,11 +415,8 @@ export default function Sidebar({ role, onLogout, user }) {
           })}
         </nav>
 
-        {/* ============ PROFILE LINK ============ */}
         <ProfileLink user={user} role={role} onNavClick={closeSidebar} />
 
-        {/* ============ LOGOUT ============ */}
-        {/* onClick gọi onLogout() → Layout sẽ mở ConfirmDialog */}
         <button className="logout-btn" onClick={onLogout} type="button">
           <LogOut size={18} /> {t("common.logout")}
         </button>
