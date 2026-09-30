@@ -1,27 +1,6 @@
 // ============================================================
 // CUSTOMERORDERDETAIL.JSX — Modal chi tiết đơn hàng (Customer)
 // ============================================================
-// Tính năng:
-//   - Progress bar 5 bước
-//   - Info: thời gian, trạng thái, thanh toán
-//   - Danh sách items + tổng tiền + ghi chú
-//   - Action: "Đã nhận món", "Hủy đơn"
-//   - Form đánh giá (rating + comment) cho đơn Hoàn thành
-//   - Xem lại đánh giá đã gửi
-//
-// Fixes (so với bản gốc):
-//   - Bỏ localStorage.getItem() khỏi JSX (dùng state)
-//   - Fix useEffect deps: dùng initialOrder.code thay vì object
-//   - Guard double-submit trong submitReview
-//   - Tách loading cho received / cancel
-//   - ESC đóng modal + role/aria
-//   - z-index chuẩn 2147483600
-//   - Guard order.created_at undefined
-//   - Constant POINTS_PER_REVIEW
-//   - Không đóng modal khi click overlay nếu đang gõ form
-//   - Error state cho review check
-//   - ✅ Thay confirm() native bằng ConfirmDialog custom (2 chỗ)
-// ============================================================
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -32,35 +11,28 @@ import { api } from "../api";
 import { money } from "./UI";
 import { toast } from "./Effects";
 import ConfirmDialog from "./ConfirmDialog";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const MODAL_Z = 2147483600;
 const POINTS_PER_REVIEW = 10;
 const MAX_COMMENT_LENGTH = 500;
 
 const STATUS_FLOW = {
-  "Chờ xác nhận": { step: 1, label: "Chờ xác nhận", color: "#f59e0b" },
-  "Đã xác nhận": { step: 2, label: "Đã xác nhận", color: "#2634d5" },
-  "Đang chuẩn bị": { step: 3, label: "Đang chuẩn bị", color: "#8b5cf6" },
-  "Sẵn sàng nhận": { step: 4, label: "Sẵn sàng nhận", color: "#18a967" },
-  "Hoàn thành": { step: 5, label: "Hoàn thành", color: "#18a967" },
-  "Đã hủy": { step: 0, label: "Đã hủy", color: "#ef4444" },
+  "Chờ xác nhận": { step: 1, labelKey: "status.pending", color: "#f59e0b" },
+  "Đã xác nhận": { step: 2, labelKey: "status.confirmed", color: "#2634d5" },
+  "Đang chuẩn bị": { step: 3, labelKey: "status.preparing", color: "#8b5cf6" },
+  "Sẵn sàng nhận": { step: 4, labelKey: "status.ready", color: "#18a967" },
+  "Hoàn thành": { step: 5, labelKey: "status.done", color: "#18a967" },
+  "Đã hủy": { step: 0, labelKey: "status.cancelled", color: "#ef4444" },
 };
 
 const ALL_STEPS = [
-  { step: 1, label: "Chờ xác nhận", icon: Clock },
-  { step: 2, label: "Đã xác nhận", icon: CheckCircle2 },
-  { step: 3, label: "Đang chuẩn bị", icon: ChefHat },
-  { step: 4, label: "Sẵn sàng nhận", icon: Truck },
-  { step: 5, label: "Hoàn thành", icon: CheckCircle2 },
+  { step: 1, labelKey: "status.pending", icon: Clock },
+  { step: 2, labelKey: "status.confirmed", icon: CheckCircle2 },
+  { step: 3, labelKey: "status.preparing", icon: ChefHat },
+  { step: 4, labelKey: "status.ready", icon: Truck },
+  { step: 5, labelKey: "status.done", icon: CheckCircle2 },
 ];
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function fmtDateTime(iso) {
   if (!iso) return "—";
@@ -81,20 +53,14 @@ function getReviewedKey(code) {
   return `reviewed_order_${code}`;
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function CustomerOrderDetail({
   order: initialOrder,
   user,
   onClose,
   onUpdate,
 }) {
+  const { t } = useTranslation();
   const [order, setOrder] = useState(initialOrder);
-  const [loading, setLoading] = useState(false);
-
-  // ---------- Review state ----------
   const [showReview, setShowReview] = useState(false);
   const [showMyReviews, setShowMyReviews] = useState(false);
   const [rating, setRating] = useState(5);
@@ -104,28 +70,21 @@ export default function CustomerOrderDetail({
   const [reviewedCount, setReviewedCount] = useState(0);
   const [myReviews, setMyReviews] = useState([]);
 
-  // ---------- Check state ----------
   const [checking, setChecking] = useState(true);
   const [checkError, setCheckError] = useState("");
 
-  // ---------- Action loading (tách riêng) ----------
   const [receiving, setReceiving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  // ---------- ✅ Confirm dialog state ----------
-  // null | "received" | "cancel"
   const [confirmAction, setConfirmAction] = useState(null);
 
-  // ---------- Refs ----------
   const lastCodeRef = useRef(null);
   const submittingRef = useRef(false);
 
-  // ---------- Sync order khi prop đổi ----------
   useEffect(() => {
     setOrder(initialOrder);
   }, [initialOrder]);
 
-  // ---------- Check đã đánh giá chưa ----------
   useEffect(() => {
     const code = initialOrder?.code;
     if (!code) return;
@@ -174,7 +133,6 @@ export default function CustomerOrderDetail({
       .finally(() => setChecking(false));
   }, [initialOrder]);
 
-  // ---------- ESC đóng modal ----------
   useEffect(() => {
     const handler = (e) => {
       if (e.key !== "Escape") return;
@@ -185,7 +143,6 @@ export default function CustomerOrderDetail({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose, submitting, receiving, cancelling]);
 
-  // ---------- Early return ----------
   if (!order) return null;
 
   const current = STATUS_FLOW[order.status] || STATUS_FLOW["Chờ xác nhận"];
@@ -197,11 +154,6 @@ export default function CustomerOrderDetail({
   const itemsCount = items.length;
   const earnPoints = itemsCount * POINTS_PER_REVIEW;
 
-  // ---------- Handlers ----------
-
-  /**
-   * ✅ Mở confirm dialog thay vì gọi confirm() native.
-   */
   const handleReceived = () => {
     if (receiving) return;
     setConfirmAction("received");
@@ -212,9 +164,6 @@ export default function CustomerOrderDetail({
     setConfirmAction("cancel");
   };
 
-  /**
-   * ✅ Thực thi hành động sau khi user xác nhận trong dialog.
-   */
   const executeConfirm = useCallback(async () => {
     if (!confirmAction) return;
 
@@ -222,12 +171,12 @@ export default function CustomerOrderDetail({
       setReceiving(true);
       try {
         await api.orders.received(orderId);
-        toast("Đã nhận món! Cảm ơn bạn!", "success");
+        toast(t("order.receivedToast"), "success");
         setConfirmAction(null);
         onUpdate?.();
         onClose?.();
       } catch (e) {
-        toast(e.message || "Không xác nhận được", "error");
+        toast(e.message || t("order.receivedError"), "error");
       } finally {
         setReceiving(false);
       }
@@ -238,22 +187,22 @@ export default function CustomerOrderDetail({
       setCancelling(true);
       try {
         await api.orders.cancel(orderId);
-        toast("Đã hủy đơn", "success");
+        toast(t("order.cancelledToast"), "success");
         setConfirmAction(null);
         onUpdate?.();
         onClose?.();
       } catch (e) {
-        toast(e.message || "Không hủy được", "error");
+        toast(e.message || t("order.cancelError"), "error");
       } finally {
         setCancelling(false);
       }
       return;
     }
-  }, [confirmAction, orderId, onUpdate, onClose]);
+  }, [confirmAction, orderId, onUpdate, onClose, t]);
 
   const openReview = () => {
     if (!itemsCount) {
-      toast("Đơn hàng không có món để đánh giá", "error");
+      toast(t("order.noItemsReview"), "error");
       return;
     }
     setRating(5);
@@ -306,7 +255,6 @@ export default function CustomerOrderDetail({
         );
       } catch {}
 
-      // Reload my reviews
       api.reviews
         .me()
         .then((list) => {
@@ -323,27 +271,22 @@ export default function CustomerOrderDetail({
       } catch {}
 
       onUpdate?.();
-      toast(`Đã gửi ${success} đánh giá! +${success * POINTS_PER_REVIEW} điểm`, "success");
-    } else {
       toast(
-        "Không thể gửi đánh giá. Có thể các món đã được đánh giá rồi.",
-        "error"
+        t("order.reviewSuccess")
+          .replace("{n}", success)
+          .replace("{points}", success * POINTS_PER_REVIEW),
+        "success"
       );
+    } else {
+      toast(t("order.reviewAlreadyDone"), "error");
     }
   };
 
-  // ---------- Overlay click ----------
   const handleOverlayClick = () => {
-    // Không đóng khi đang gõ form đánh giá
     if (showReview && comment.trim()) return;
-    // Không đóng khi đang submit
     if (submitting || receiving || cancelling) return;
     onClose?.();
   };
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <>
@@ -351,7 +294,7 @@ export default function CustomerOrderDetail({
         onClick={handleOverlayClick}
         role="dialog"
         aria-modal="true"
-        aria-label={`Chi tiết đơn hàng ${order.code}`}
+        aria-label={t("order.detailAria").replace("{code}", order.code)}
         style={{
           position: "fixed",
           inset: 0,
@@ -375,18 +318,16 @@ export default function CustomerOrderDetail({
             overflowY: "auto",
           }}
         >
-          {/* ============================================================
-              VIEW MY REVIEWS
-              ============================================================ */}
           {showMyReviews ? (
             <MyReviewsView
               order={order}
               myReviews={myReviews}
               onClose={() => setShowMyReviews(false)}
+              t={t}
             />
           ) : (
             <>
-              {/* ============ HEADER ============ */}
+              {/* HEADER */}
               <div
                 style={{
                   display: "flex",
@@ -417,7 +358,7 @@ export default function CustomerOrderDetail({
                         color: "var(--text-primary, #172033)",
                       }}
                     >
-                      Đơn hàng
+                      {t("order.title")}
                     </h3>
                     <b style={{ fontSize: 13, color: "#2634d5" }}>
                       {order.code}
@@ -426,7 +367,7 @@ export default function CustomerOrderDetail({
                 </div>
                 <button
                   onClick={onClose}
-                  aria-label="Đóng"
+                  aria-label={t("common.close")}
                   type="button"
                   style={{
                     background: "transparent",
@@ -442,7 +383,7 @@ export default function CustomerOrderDetail({
                 </button>
               </div>
 
-              {/* ============ PROGRESS ============ */}
+              {/* PROGRESS */}
               {!isCancelled && (
                 <div
                   style={{
@@ -524,7 +465,7 @@ export default function CustomerOrderDetail({
                               fontWeight: active ? 700 : 500,
                             }}
                           >
-                            {s.label}
+                            {t(s.labelKey)}
                           </span>
                         </div>
                       );
@@ -533,7 +474,7 @@ export default function CustomerOrderDetail({
                 </div>
               )}
 
-              {/* ============ CANCELLED ============ */}
+              {/* CANCELLED */}
               {isCancelled && (
                 <div
                   style={{
@@ -550,19 +491,19 @@ export default function CustomerOrderDetail({
                     style={{ margin: "0 auto 8px" }}
                   />
                   <b style={{ color: "#991b1b", fontSize: 15 }}>
-                    Đơn hàng đã bị hủy
+                    {t("order.cancelledBanner")}
                   </b>
                 </div>
               )}
 
-              {/* ============ INFO ============ */}
+              {/* INFO */}
               <div style={{ marginBottom: 16 }}>
                 <InfoRow
-                  label="Thời gian đặt"
+                  label={t("orders.orderTime")}
                   value={fmtDateTime(order.created_at)}
                 />
                 <InfoRow
-                  label="Trạng thái"
+                  label={t("common.status")}
                   value={
                     <span
                       style={{
@@ -574,18 +515,18 @@ export default function CustomerOrderDetail({
                         color: current.color,
                       }}
                     >
-                      {current.label}
+                      {t(current.labelKey)}
                     </span>
                   }
                 />
                 <InfoRow
-                  label="Thanh toán"
-                  value={order.payment || "Tiền mặt"}
+                  label={t("checkout.payment")}
+                  value={order.payment || t("checkout.cash")}
                   last
                 />
               </div>
 
-              {/* ============ ITEMS ============ */}
+              {/* ITEMS */}
               <h4
                 style={{
                   margin: "16px 0 12px",
@@ -593,7 +534,7 @@ export default function CustomerOrderDetail({
                   fontSize: 14,
                 }}
               >
-                Món đã đặt
+                {t("orders.itemsOrdered")}
               </h4>
               <div
                 style={{
@@ -627,7 +568,7 @@ export default function CustomerOrderDetail({
                 ))}
               </div>
 
-              {/* ============ TOTAL ============ */}
+              {/* TOTAL */}
               <div
                 style={{
                   display: "flex",
@@ -637,14 +578,14 @@ export default function CustomerOrderDetail({
                 }}
               >
                 <b style={{ color: "var(--text-primary, #172033)" }}>
-                  Tổng cộng
+                  {t("cart.total")}
                 </b>
                 <strong style={{ color: "#2634d5", fontSize: 20 }}>
                   {money(order.total || 0)}
                 </strong>
               </div>
 
-              {/* ============ NOTE ============ */}
+              {/* NOTE */}
               {order.note && (
                 <div
                   style={{
@@ -657,13 +598,13 @@ export default function CustomerOrderDetail({
                   }}
                 >
                   <b style={{ color: "var(--text-primary, #172033)" }}>
-                    Ghi chú:
+                    {t("checkout.note")}:
                   </b>{" "}
                   {order.note}
                 </div>
               )}
 
-              {/* ============ REVIEW FORM ============ */}
+              {/* REVIEW FORM */}
               {showReview && (
                 <div
                   style={{
@@ -681,7 +622,7 @@ export default function CustomerOrderDetail({
                       fontSize: 14,
                     }}
                   >
-                    ⭐ Đánh giá đơn hàng
+                    ⭐ {t("order.reviewTitle")}
                   </h4>
 
                   <div
@@ -696,18 +637,17 @@ export default function CustomerOrderDetail({
                       fontWeight: 600,
                     }}
                   >
-                    💡 Đánh giá sẽ áp dụng cho tất cả <b>{itemsCount} món</b>{" "}
-                    trong đơn
+                    💡 {t("order.reviewApplyAll").replace("{n}", itemsCount)}
                   </div>
 
-                  <label style={labelStyle}>Số sao</label>
+                  <label style={labelStyle}>{t("order.starsLabel")}</label>
                   <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
                     {[1, 2, 3, 4, 5].map((s) => (
                       <button
                         key={s}
                         onClick={() => setRating(s)}
                         type="button"
-                        aria-label={`${s} sao`}
+                        aria-label={t("rating.starAria").replace("{n}", s)}
                         style={{
                           background: "transparent",
                           border: 0,
@@ -725,17 +665,17 @@ export default function CustomerOrderDetail({
                   </div>
 
                   <label style={labelStyle}>
-                    Cảm nhận của bạn{" "}
+                    {t("order.yourReview")}{" "}
                     <span
                       style={{ fontWeight: 400, color: "var(--text-light, #94a3b8)" }}
                     >
-                      (không bắt buộc)
+                      ({t("review.optional")})
                     </span>
                   </label>
                   <textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    placeholder="VD: Món ngon, giao nhanh... (có thể bỏ trống)"
+                    placeholder={t("order.reviewPlaceholder")}
                     maxLength={MAX_COMMENT_LENGTH}
                     disabled={submitting}
                     style={{
@@ -780,18 +720,19 @@ export default function CustomerOrderDetail({
                           size={14}
                           style={{ animation: "spin 1s linear infinite" }}
                         />
-                        Đang gửi...
+                        {t("review.sending")}
                       </>
                     ) : (
                       <>
-                        <Send size={14} /> Gửi đánh giá (+{earnPoints} điểm)
+                        <Send size={14} />{" "}
+                        {t("order.submitReview").replace("{n}", earnPoints)}
                       </>
                     )}
                   </button>
                 </div>
               )}
 
-              {/* ============ ACTIONS ============ */}
+              {/* ACTIONS */}
               <div
                 style={{
                   display: "flex",
@@ -800,7 +741,6 @@ export default function CustomerOrderDetail({
                   flexDirection: "column",
                 }}
               >
-                {/* Đã nhận món */}
                 {order.status === "Sẵn sàng nhận" && (
                   <button
                     onClick={handleReceived}
@@ -823,15 +763,14 @@ export default function CustomerOrderDetail({
                           size={14}
                           style={{ animation: "spin 1s linear infinite" }}
                         />{" "}
-                        Đang xử lý...
+                        {t("common.processing")}
                       </>
                     ) : (
-                      "✅ Tôi đã nhận món"
+                      `✅ ${t("orders.receivedConfirm")}`
                     )}
                   </button>
                 )}
 
-                {/* Hủy đơn */}
                 {order.status === "Chờ xác nhận" && (
                   <button
                     onClick={handleCancel}
@@ -854,15 +793,14 @@ export default function CustomerOrderDetail({
                           size={14}
                           style={{ animation: "spin 1s linear infinite" }}
                         />{" "}
-                        Đang xử lý...
+                        {t("common.processing")}
                       </>
                     ) : (
-                      "Hủy đơn"
+                      t("orders.cancelOrder")
                     )}
                   </button>
                 )}
 
-                {/* Đánh giá (chưa đánh giá) */}
                 {isCompleted &&
                   !showReview &&
                   !reviewed &&
@@ -886,12 +824,11 @@ export default function CustomerOrderDetail({
                         gap: 6,
                       }}
                     >
-                      <Star size={16} fill="#fff" /> Đánh giá đơn hàng (+
-                      {earnPoints} điểm)
+                      <Star size={16} fill="#fff" />{" "}
+                      {t("order.reviewCta").replace("{n}", earnPoints)}
                     </button>
                   )}
 
-                {/* Xem lại đánh giá */}
                 {isCompleted && reviewed && !showMyReviews && (
                   <button
                     onClick={openMyReviews}
@@ -911,11 +848,10 @@ export default function CustomerOrderDetail({
                       gap: 6,
                     }}
                   >
-                    <CheckCircle2 size={16} /> Đã đánh giá — Xem lại
+                    <CheckCircle2 size={16} /> {t("order.viewMyReview")}
                   </button>
                 )}
 
-                {/* Đóng */}
                 <button
                   onClick={onClose}
                   disabled={submitting || receiving || cancelling}
@@ -934,7 +870,7 @@ export default function CustomerOrderDetail({
                     opacity: submitting || receiving || cancelling ? 0.6 : 1,
                   }}
                 >
-                  Đóng
+                  {t("common.close")}
                 </button>
               </div>
             </>
@@ -949,26 +885,26 @@ export default function CustomerOrderDetail({
         `}</style>
       </div>
 
-      {/* ============ ✅ CONFIRM DIALOGS ============ */}
-      {/* Đã nhận món */}
+      {/* CONFIRM DIALOGS */}
       <ConfirmDialog
         open={confirmAction === "received"}
-        title="Xác nhận đã nhận món?"
-        message={`Bạn xác nhận đã nhận đủ ${itemsCount} món trong đơn ${order.code}.`}
-        confirmText="Đã nhận món"
-        cancelText="Chưa nhận"
+        title={t("order.confirmReceivedTitle")}
+        message={t("order.confirmReceivedMsg")
+          .replace("{n}", itemsCount)
+          .replace("{code}", order.code)}
+        confirmText={t("orders.receivedConfirm")}
+        cancelText={t("order.notReceived")}
         loading={receiving}
         onConfirm={executeConfirm}
         onClose={() => !receiving && setConfirmAction(null)}
       />
 
-      {/* Hủy đơn */}
       <ConfirmDialog
         open={confirmAction === "cancel"}
-        title="Hủy đơn hàng này?"
-        message={`Đơn ${order.code} sẽ bị hủy và không thể khôi phục. Bạn chắc chắn chứ?`}
-        confirmText="Hủy đơn"
-        cancelText="Giữ đơn"
+        title={t("order.confirmCancelTitle")}
+        message={t("order.confirmCancelMsg").replace("{code}", order.code)}
+        confirmText={t("orders.cancelOrder")}
+        cancelText={t("order.keepOrder")}
         danger
         loading={cancelling}
         onConfirm={executeConfirm}
@@ -977,10 +913,6 @@ export default function CustomerOrderDetail({
     </>
   );
 }
-
-// ============================================================
-// SUB-COMPONENT: InfoRow
-// ============================================================
 
 function InfoRow({ label, value, last = false }) {
   return (
@@ -1005,17 +937,12 @@ function InfoRow({ label, value, last = false }) {
   );
 }
 
-// ============================================================
-// SUB-COMPONENT: MyReviewsView
-// ============================================================
-
-function MyReviewsView({ order, myReviews, onClose }) {
+function MyReviewsView({ order, myReviews, onClose, t }) {
   const items = order.items || [];
   const totalPoints = myReviews.length * POINTS_PER_REVIEW;
 
   return (
     <div>
-      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -1040,17 +967,15 @@ function MyReviewsView({ order, myReviews, onClose }) {
             <Star size={20} fill="#fff" />
           </div>
           <div>
-            <h3
-              style={{ margin: 0, color: "var(--text-primary, #172033)" }}
-            >
-              Đánh giá của bạn
+            <h3 style={{ margin: 0, color: "var(--text-primary, #172033)" }}>
+              {t("order.myReviewsTitle")}
             </h3>
             <b style={{ fontSize: 13, color: "#2634d5" }}>{order.code}</b>
           </div>
         </div>
         <button
           onClick={onClose}
-          aria-label="Đóng"
+          aria-label={t("common.close")}
           type="button"
           style={{
             background: "transparent",
@@ -1066,7 +991,6 @@ function MyReviewsView({ order, myReviews, onClose }) {
         </button>
       </div>
 
-      {/* Points summary */}
       <div
         style={{
           padding: 14,
@@ -1080,10 +1004,9 @@ function MyReviewsView({ order, myReviews, onClose }) {
           textAlign: "center",
         }}
       >
-        ✨ Bạn đã được cộng <b>{totalPoints} điểm</b> từ đánh giá này
+        ✨ {t("order.pointsEarned").replace("{points}", totalPoints)}
       </div>
 
-      {/* Reviews */}
       {myReviews.length === 0 ? (
         <div
           style={{
@@ -1093,7 +1016,7 @@ function MyReviewsView({ order, myReviews, onClose }) {
             fontSize: 13,
           }}
         >
-          Chưa có đánh giá nào
+          {t("order.noReviews")}
         </div>
       ) : (
         myReviews.map((r, i) => {
@@ -1130,7 +1053,7 @@ function MyReviewsView({ order, myReviews, onClose }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {item?.name || "Món ăn"}
+                  {item?.name || t("menu.title")}
                 </b>
                 <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
                   {[1, 2, 3, 4, 5].map((s) => (
@@ -1162,7 +1085,7 @@ function MyReviewsView({ order, myReviews, onClose }) {
                     color: "var(--text-light, #94a3b8)",
                   }}
                 >
-                  (Không có nhận xét)
+                  ({t("order.noComment")})
                 </p>
               )}
               <div
@@ -1195,15 +1118,11 @@ function MyReviewsView({ order, myReviews, onClose }) {
           fontSize: 13,
         }}
       >
-        Đóng
+        {t("common.close")}
       </button>
     </div>
   );
 }
-
-// ============================================================
-// STYLE CONSTANTS
-// ============================================================
 
 const labelStyle = {
   display: "block",

@@ -1,27 +1,6 @@
 ﻿// ============================================================
 // NOTIFICATIONBELL.JSX — Chuông thông báo trên topbar
 // ============================================================
-// - Poll 30s (pause khi tab ẩn)
-// - Dropdown danh sách thông báo
-// - Click notification → mark read + navigate
-// - "Đọc tất cả" để clear unread
-//
-// Fixes (so với bản gốc):
-//   - 🔴 Fix dark mode: dùng CSS variables
-//   - 🔴 Fix mobile tràn: width responsive
-//   - 🔴 Guard e.target.closest
-//   - 🔴 Race-safe load (reqIdRef)
-//   - 🔴 Poll pause khi tab ẩn
-//   - 🔴 Error state + retry
-//   - 🔴 Guard Invalid Date trong timeAgo
-//   - 🔴 Guard data.list undefined
-//   - 🔴 ESC đóng dropdown
-//   - 🟡 z-index chuẩn 2147483600
-//   - 🟡 Icon theo 6 type (order, voucher, wallet, chat, system, default)
-//   - 🟡 Optimistic mark read
-//   - 🟡 Loading state
-//   - 🟢 aria-label
-// ============================================================
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -30,16 +9,12 @@ import {
   MessageCircle, Info, Loader2,
 } from "lucide-react";
 import { api } from "../api";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const MODAL_Z = 2147483600;
 const POLL_MS = 30000;
 const DROPDOWN_WIDTH = 360;
 
-// Icon + màu theo type notification
 const TYPE_CONFIG = {
   order:   { Icon: ShoppingBag,   bg: "rgba(245, 158, 11, 0.15)", color: "#f59e0b" },
   voucher: { Icon: Gift,          bg: "rgba(236, 72, 153, 0.15)", color: "#ec4899" },
@@ -49,34 +24,29 @@ const TYPE_CONFIG = {
   default: { Icon: Package,       bg: "rgba(100, 116, 139, 0.15)", color: "#64748b" },
 };
 
-// ============================================================
-// HELPERS
-// ============================================================
-
 /**
- * Tính thời gian tương đối từ ISO date.
- * Guard Invalid Date → trả về "—".
+ * Time ago với i18n.
+ * Truyền `t` để dịch.
  */
-function timeAgo(dateInput) {
+function timeAgo(dateInput, t) {
   if (!dateInput) return "—";
 
-  const t = new Date(dateInput).getTime();
-  if (isNaN(t)) return "—";
+  const time = new Date(dateInput).getTime();
+  if (isNaN(time)) return "—";
 
-  const diff = Date.now() - t;
-  if (diff < 0) return "Vừa xong"; // future date
+  const diff = Date.now() - time;
+  if (diff < 0) return t("time.justNow");
 
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Vừa xong";
-  if (mins < 60) return `${mins} phút trước`;
+  if (mins < 1) return t("time.justNow");
+  if (mins < 60) return t("time.minutesAgo").replace("{n}", mins);
 
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} giờ trước`;
+  if (hours < 24) return t("time.hoursAgo").replace("{n}", hours);
 
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} ngày trước`;
+  if (days < 7) return t("time.daysAgo").replace("{n}", days);
 
-  // > 7 ngày → hiện ngày cụ thể
   try {
     return new Date(dateInput).toLocaleDateString("vi-VN");
   } catch {
@@ -84,7 +54,6 @@ function timeAgo(dateInput) {
   }
 }
 
-/** Chuẩn hoá response từ API. */
 function normalizeData(res) {
   if (!res || typeof res !== "object") {
     return { list: [], unread: 0 };
@@ -95,11 +64,8 @@ function normalizeData(res) {
   };
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function NotificationBell() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState({ list: [], unread: 0 });
   const [loading, setLoading] = useState(true);
@@ -113,56 +79,47 @@ export default function NotificationBell() {
   const inFlightRef = useRef(false);
   const navigate = useNavigate();
 
-  // ---------- Load (race-safe) ----------
+  const load = useCallback(
+    async (silent = false) => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
 
-  const load = useCallback(async (silent = false) => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
+      const myReqId = ++reqIdRef.current;
+      if (!silent) setError("");
 
-    const myReqId = ++reqIdRef.current;
-    if (!silent) setError("");
+      try {
+        const res = await api.notifications.list();
 
-    try {
-      const res = await api.notifications.list();
+        if (myReqId !== reqIdRef.current) return;
 
-      // Bỏ qua nếu có request mới hơn
-      if (myReqId !== reqIdRef.current) return;
-
-      setData(normalizeData(res));
-    } catch (e) {
-      if (myReqId === reqIdRef.current && !silent) {
-        setError(e.message || "Không tải được thông báo");
+        setData(normalizeData(res));
+      } catch (e) {
+        if (myReqId === reqIdRef.current && !silent) {
+          setError(e.message || t("notif.loadError"));
+        }
+      } finally {
+        if (myReqId === reqIdRef.current) setLoading(false);
+        inFlightRef.current = false;
       }
-    } finally {
-      if (myReqId === reqIdRef.current) setLoading(false);
-      inFlightRef.current = false;
-    }
-  }, []);
-
-  // ---------- Initial load ----------
+    },
+    [t]
+  );
 
   useEffect(() => {
     load(false);
   }, [load]);
 
-  // ---------- Polling (pause khi tab ẩn) ----------
-
   useEffect(() => {
     if (!tabVisible) return;
-
     const timer = setInterval(() => load(true), POLL_MS);
     return () => clearInterval(timer);
   }, [load, tabVisible]);
-
-  // ---------- Track visibility ----------
 
   useEffect(() => {
     const handler = () => setTabVisible(!document.hidden);
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
   }, []);
-
-  // ---------- Click outside ----------
 
   useEffect(() => {
     if (!open) return;
@@ -180,11 +137,8 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // ---------- ESC đóng ----------
-
   useEffect(() => {
     if (!open) return;
-
     const handler = (e) => {
       if (e.key === "Escape") setOpen(false);
     };
@@ -192,12 +146,9 @@ export default function NotificationBell() {
     return () => window.removeEventListener("keydown", handler);
   }, [open]);
 
-  // ---------- Handlers ----------
-
   const markRead = async (n) => {
     if (!n) return;
 
-    // Optimistic: update UI trước
     if (!n.read) {
       setData((d) => ({
         list: d.list.map((item) =>
@@ -208,10 +159,8 @@ export default function NotificationBell() {
 
       try {
         await api.notifications.read(n.id);
-        // Background sync (không block UX)
         load(true);
       } catch {
-        // Revert nếu fail
         setData((d) => ({
           list: d.list.map((item) =>
             item.id === n.id ? { ...item, read: false } : item
@@ -230,7 +179,6 @@ export default function NotificationBell() {
   const markAll = async () => {
     if (data.unread === 0) return;
 
-    // Optimistic
     const prevData = data;
     setData((d) => ({
       list: d.list.map((item) => ({ ...item, read: true })),
@@ -241,22 +189,15 @@ export default function NotificationBell() {
       await api.notifications.readAll();
       load(true);
     } catch (e) {
-      // Revert
       setData(prevData);
       console.error(e);
     }
   };
 
-  // ---------- Computed ----------
-
   const unreadText = useMemo(() => {
     if (data.unread > 9) return "9+";
     return String(data.unread);
   }, [data.unread]);
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div
@@ -264,13 +205,16 @@ export default function NotificationBell() {
       className="notif-bell-wrap"
       style={{ position: "relative" }}
     >
-      {/* ============ BELL BUTTON ============ */}
       <button
         type="button"
         onClick={() => setOpen((s) => !s)}
         className="icon-btn topbar-icon-btn notif-bell-btn"
-        title="Thông báo"
-        aria-label={`Thông báo${data.unread > 0 ? `, ${data.unread} chưa đọc` : ""}`}
+        title={t("notif.title")}
+        aria-label={
+          data.unread > 0
+            ? t("notif.ariaWithUnread").replace("{n}", data.unread)
+            : t("notif.title")
+        }
         aria-haspopup="true"
         aria-expanded={open}
         style={{ position: "relative" }}
@@ -304,11 +248,10 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* ============ DROPDOWN ============ */}
       {open && (
         <div
           role="dialog"
-          aria-label="Danh sách thông báo"
+          aria-label={t("notif.listAria")}
           style={{
             position: "absolute",
             top: "calc(100% + 10px)",
@@ -323,7 +266,6 @@ export default function NotificationBell() {
             zIndex: MODAL_Z,
           }}
         >
-          {/* ---------- HEADER ---------- */}
           <div
             style={{
               display: "flex",
@@ -345,7 +287,7 @@ export default function NotificationBell() {
                   color: "var(--text-primary, #172033)",
                 }}
               >
-                Thông báo
+                {t("notif.title")}
               </b>
               {data.unread > 0 && (
                 <span
@@ -358,7 +300,7 @@ export default function NotificationBell() {
                     borderRadius: 10,
                   }}
                 >
-                  {data.unread} mới
+                  {t("notif.newCount").replace("{n}", data.unread)}
                 </span>
               )}
             </div>
@@ -379,12 +321,11 @@ export default function NotificationBell() {
                   flexShrink: 0,
                 }}
               >
-                <Check size={12} /> Đọc tất cả
+                <Check size={12} /> {t("notif.markAllRead")}
               </button>
             )}
           </div>
 
-          {/* ---------- ERROR ---------- */}
           {error && (
             <div
               style={{
@@ -415,12 +356,11 @@ export default function NotificationBell() {
                   fontWeight: 600,
                 }}
               >
-                Thử lại
+                {t("common.retry")}
               </button>
             </div>
           )}
 
-          {/* ---------- LOADING ---------- */}
           {loading && !error && (
             <div
               style={{
@@ -437,11 +377,10 @@ export default function NotificationBell() {
                   marginBottom: 6,
                 }}
               />
-              <div>Đang tải...</div>
+              <div>{t("common.loading")}</div>
             </div>
           )}
 
-          {/* ---------- EMPTY ---------- */}
           {!loading && !error && data.list.length === 0 && (
             <div
               style={{
@@ -452,11 +391,10 @@ export default function NotificationBell() {
               }}
             >
               <Bell size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
-              <div>Không có thông báo</div>
+              <div>{t("notif.empty")}</div>
             </div>
           )}
 
-          {/* ---------- LIST ---------- */}
           {!loading &&
             data.list.map((n) => {
               const cfg = TYPE_CONFIG[n.type] || TYPE_CONFIG.default;
@@ -476,8 +414,7 @@ export default function NotificationBell() {
                   tabIndex={0}
                   style={{
                     padding: 14,
-                    borderBottom:
-                      "1px solid var(--border-color, #f5f7fb)",
+                    borderBottom: "1px solid var(--border-color, #f5f7fb)",
                     cursor: "pointer",
                     background: n.read
                       ? "var(--card-bg, #fff)"
@@ -521,7 +458,7 @@ export default function NotificationBell() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {n.title || "Thông báo"}
+                        {n.title || t("notif.defaultTitle")}
                       </div>
 
                       {n.content && (
@@ -548,7 +485,7 @@ export default function NotificationBell() {
                           marginTop: 4,
                         }}
                       >
-                        {timeAgo(n.created_at)}
+                        {timeAgo(n.created_at, t)}
                       </div>
                     </div>
 
@@ -572,7 +509,6 @@ export default function NotificationBell() {
         </div>
       )}
 
-      {/* Spinner animation */}
       <style>{`
         @keyframes notifSpin {
           from { transform: rotate(0deg); }

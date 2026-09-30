@@ -1,43 +1,18 @@
 // ============================================================
 // REVIEWSECTION.JSX — Đánh giá món ăn
 // ============================================================
-// Props:
-//   menuItemId  — id món ăn
-//   currentUser — user hiện tại (null nếu chưa login)
-//   readOnly    — true → chỉ xem, không cho đánh giá
-//
-// Fixes (so với bản gốc):
-//   - 🔴🔴 Form chỉ hiện khi canReview && !hasReviewed && hasPurchased
-//   - 🔴 Dark mode (CSS variables)
-//   - 🔴 Race-safe load (reqIdRef)
-//   - 🔴 Double-submit guard (submittingRef)
-//   - 🔴 useEffect deps dùng currentUser?.id (không dùng object)
-//   - 🔴 Error state + retry cho load
-//   - 🔴 Guard avg khi rating undefined
-//   - 🔴 Max length comment
-//   - 🟡 Reset form khi menuItemId đổi
-//   - 🟡 Dùng hasPurchased để hiển thị hint phù hợp
-//   - 🟡 Guard dispatchEvent
-//   - 🟡 Memo avg + derived states
-//   - 🟢 Avatar thật nếu có
-// ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { Send, User, AlertCircle, Loader2, Lock, CheckCircle2 } from "lucide-react";
+import {
+  Send, User, AlertCircle, Loader2, Lock, CheckCircle2,
+} from "lucide-react";
 import { api } from "../api";
 import { toast } from "./Effects";
 import StarRating from "./StarRating";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const MAX_COMMENT_LENGTH = 500;
 const MAX_REVIEWS_SHOWN = 20;
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function safeAvg(list) {
   if (!Array.isArray(list) || list.length === 0) return 0;
@@ -67,35 +42,26 @@ function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function ReviewSection({
   menuItemId,
   currentUser,
   readOnly = false,
 }) {
-  // ---------- Data ----------
+  const { t } = useTranslation();
   const [reviews, setReviews] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  // ---------- Form ----------
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // ---------- Permission flags ----------
   const [canReview, setCanReview] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(false);
   const [hasPurchased, setHasPurchased] = useState(false);
 
-  // ---------- Refs ----------
   const reqIdRef = useRef(0);
   const submittingRef = useRef(false);
-
-  // ---------- Load reviews (race-safe) ----------
 
   const loadReviews = useCallback(async () => {
     const myReqId = ++reqIdRef.current;
@@ -104,22 +70,17 @@ export default function ReviewSection({
 
     try {
       const data = await api.reviews.list(menuItemId);
-
-      // Bỏ qua nếu có request mới hơn
       if (myReqId !== reqIdRef.current) return;
-
       setReviews(Array.isArray(data) ? data : []);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setLoadError(e.message || "Không tải được đánh giá");
+        setLoadError(e.message || t("review.loadError"));
         setReviews([]);
       }
     } finally {
       if (myReqId === reqIdRef.current) setLoadingReviews(false);
     }
-  }, [menuItemId]);
-
-  // ---------- Check permission ----------
+  }, [menuItemId, t]);
 
   const checkCanReview = useCallback(async () => {
     if (!currentUser) {
@@ -135,31 +96,24 @@ export default function ReviewSection({
       setHasReviewed(!!data?.hasReviewed);
       setHasPurchased(!!data?.hasPurchased);
     } catch {
-      // Fail → không cho đánh giá (an toàn)
       setCanReview(false);
       setHasReviewed(false);
       setHasPurchased(false);
     }
   }, [menuItemId, currentUser]);
 
-  // ---------- Load on mount / item change ----------
-
   useEffect(() => {
     loadReviews();
     checkCanReview();
-
-    // Reset form khi đổi món
     setRating(5);
     setComment("");
   }, [loadReviews, checkCanReview]);
-
-  // ---------- Submit ----------
 
   const submit = useCallback(async () => {
     if (submittingRef.current) return;
 
     if (!rating || rating < 1 || rating > 5) {
-      toast("Vui lòng chọn số sao", "error");
+      toast(t("review.selectStar"), "error");
       return;
     }
 
@@ -179,52 +133,33 @@ export default function ReviewSection({
         window.dispatchEvent(new CustomEvent("refresh-user"));
       } catch {}
 
-      toast("Đã gửi đánh giá!", "success");
+      toast(t("review.submitted"), "success");
       setComment("");
       setRating(5);
 
-      // Reload song song
       await Promise.all([loadReviews(), checkCanReview()]);
     } catch (e) {
-      toast(e.message || "Lỗi gửi đánh giá", "error");
+      toast(e.message || t("review.submitError"), "error");
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [rating, comment, menuItemId, loadReviews, checkCanReview]);
-
-  // ---------- Computed ----------
+  }, [rating, comment, menuItemId, loadReviews, checkCanReview, t]);
 
   const avg = useMemo(() => safeAvg(reviews), [reviews]);
-
   const visibleReviews = useMemo(
     () => reviews.slice(0, MAX_REVIEWS_SHOWN),
     [reviews]
   );
-
   const hasMore = reviews.length > MAX_REVIEWS_SHOWN;
 
-  // ---------- Determine form visibility ----------
-
-  // Form chỉ hiện khi:
-  //   - Không phải readOnly
-  //   - User đã login
-  //   - Đã mua món này (hasPurchased)
-  //   - Chưa đánh giá (hasReviewed = false)
-  //   - Backend cho phép (canReview)
   const showForm =
     !readOnly && currentUser && canReview && !hasReviewed && hasPurchased;
 
-  // Hint khi user cần biết lý do không thể đánh giá
   const showPurchaseHint =
     !readOnly && currentUser && !canReview && !hasReviewed && !hasPurchased;
 
-  const showReviewedHint =
-    !readOnly && currentUser && hasReviewed;
-
-  // ============================================================
-  // RENDER
-  // ============================================================
+  const showReviewedHint = !readOnly && currentUser && hasReviewed;
 
   return (
     <div
@@ -234,7 +169,7 @@ export default function ReviewSection({
         borderTop: "1px solid var(--border-color, #eef2f7)",
       }}
     >
-      {/* ============ HEADER ============ */}
+      {/* HEADER */}
       <div
         style={{
           display: "flex",
@@ -252,7 +187,7 @@ export default function ReviewSection({
             color: "var(--text-primary, #172033)",
           }}
         >
-          Đánh giá món ăn
+          {t("review.title")}
         </h3>
 
         {reviews.length > 0 && (
@@ -262,13 +197,13 @@ export default function ReviewSection({
             <span
               style={{ color: "var(--text-light, #8993a3)", fontSize: 12 }}
             >
-              ({reviews.length} đánh giá)
+              {t("review.countLabel").replace("{n}", reviews.length)}
             </span>
           </div>
         )}
       </div>
 
-      {/* ============ NOT LOGGED IN ============ */}
+      {/* NOT LOGGED IN */}
       {!currentUser && !readOnly && (
         <div
           style={{
@@ -285,11 +220,11 @@ export default function ReviewSection({
           }}
         >
           <Lock size={14} style={{ flexShrink: 0 }} />
-          Vui lòng đăng nhập để đánh giá
+          {t("review.loginRequired")}
         </div>
       )}
 
-      {/* ============ HINT: Chưa mua món ============ */}
+      {/* PURCHASE HINT */}
       {showPurchaseHint && (
         <div
           style={{
@@ -306,11 +241,11 @@ export default function ReviewSection({
           }}
         >
           <AlertCircle size={14} style={{ flexShrink: 0 }} />
-          Bạn cần mua món này để có thể đánh giá
+          {t("review.mustPurchase")}
         </div>
       )}
 
-      {/* ============ HINT: Đã đánh giá ============ */}
+      {/* REVIEWED HINT */}
       {showReviewedHint && (
         <div
           style={{
@@ -327,11 +262,11 @@ export default function ReviewSection({
           }}
         >
           <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
-          Cảm ơn bạn đã đánh giá món này!
+          {t("review.thanks")}
         </div>
       )}
 
-      {/* ============ FORM ĐÁNH GIÁ ============ */}
+      {/* FORM */}
       {showForm && (
         <div
           style={{
@@ -382,7 +317,7 @@ export default function ReviewSection({
             onChange={(e) =>
               setComment(e.target.value.slice(0, MAX_COMMENT_LENGTH))
             }
-            placeholder="Chia sẻ cảm nhận của bạn về món này..."
+            placeholder={t("review.commentPlaceholder")}
             maxLength={MAX_COMMENT_LENGTH}
             disabled={submitting}
             style={{
@@ -411,7 +346,7 @@ export default function ReviewSection({
               color: "var(--text-light, #94a3b8)",
             }}
           >
-            <span>Không bắt buộc</span>
+            <span>{t("review.optional")}</span>
             <span>
               {comment.length}/{MAX_COMMENT_LENGTH}
             </span>
@@ -441,18 +376,18 @@ export default function ReviewSection({
                   size={14}
                   style={{ animation: "reviewSpin 1s linear infinite" }}
                 />
-                Đang gửi...
+                {t("review.sending")}
               </>
             ) : (
               <>
-                <Send size={14} /> Gửi đánh giá
+                <Send size={14} /> {t("review.submit")}
               </>
             )}
           </button>
         </div>
       )}
 
-      {/* ============ LOADING ============ */}
+      {/* LOADING */}
       {loadingReviews && (
         <div
           style={{
@@ -466,11 +401,11 @@ export default function ReviewSection({
             size={20}
             style={{ animation: "reviewSpin 1s linear infinite", marginBottom: 6 }}
           />
-          <div>Đang tải đánh giá...</div>
+          <div>{t("review.loading")}</div>
         </div>
       )}
 
-      {/* ============ ERROR ============ */}
+      {/* ERROR */}
       {!loadingReviews && loadError && (
         <div
           style={{
@@ -502,12 +437,12 @@ export default function ReviewSection({
               fontWeight: 600,
             }}
           >
-            Thử lại
+            {t("common.retry")}
           </button>
         </div>
       )}
 
-      {/* ============ REVIEWS LIST ============ */}
+      {/* LIST */}
       {!loadingReviews && !loadError && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {visibleReviews.map((r) => (
@@ -522,7 +457,6 @@ export default function ReviewSection({
                 borderRadius: 10,
               }}
             >
-              {/* Avatar */}
               {r.user_avatar ? (
                 <img
                   src={r.user_avatar}
@@ -578,7 +512,7 @@ export default function ReviewSection({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {r.user_name || "Khách"}
+                    {r.user_name || t("profile.guest")}
                   </b>
                   <span
                     style={{
@@ -610,7 +544,6 @@ export default function ReviewSection({
             </div>
           ))}
 
-          {/* Empty state */}
           {!reviews.length && (
             <p
               style={{
@@ -621,17 +554,21 @@ export default function ReviewSection({
                 margin: 0,
               }}
             >
-              Chưa có đánh giá nào. Hãy là người đầu tiên!
+              {t("review.empty")}
             </p>
           )}
 
-          {/* Show more */}
           {hasMore && (
             <button
               type="button"
               onClick={() => {
-                // Có thể mở rộng: hiện tất cả hoặc phân trang
-                toast(`Còn ${reviews.length - MAX_REVIEWS_SHOWN} đánh giá khác`, "info");
+                toast(
+                  t("review.moreHidden").replace(
+                    "{n}",
+                    reviews.length - MAX_REVIEWS_SHOWN
+                  ),
+                  "info"
+                );
               }}
               style={{
                 padding: "8px 14px",
@@ -645,7 +582,10 @@ export default function ReviewSection({
                 alignSelf: "center",
               }}
             >
-              Xem thêm {reviews.length - MAX_REVIEWS_SHOWN} đánh giá
+              {t("review.showMore").replace(
+                "{n}",
+                reviews.length - MAX_REVIEWS_SHOWN
+              )}
             </button>
           )}
         </div>

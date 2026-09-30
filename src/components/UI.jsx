@@ -1,38 +1,6 @@
 ﻿// ============================================================
 // UI.JSX — Utility components
 // ============================================================
-// Export:
-//   - money(n)         — format VNĐ
-//   - StatusBadge      — badge trạng thái (đơn, user, kho)
-//   - Modal            — modal có ESC + backdrop
-//   - Empty            — empty state (nâng cấp — hỗ trợ icon, title,
-//                        description, action button, size)
-//   - TableActions     — nút hành động trong bảng
-//   - ThemeProvider    — Provider theo dõi theme (wire ở main.jsx)
-//
-// Fixes (so với bản gốc):
-//   - money() guard NaN/null/undefined
-//   - money() format "30.000đ" (không space + ₫)
-//   - Modal: ESC đóng, role="dialog", z-index chuẩn
-//   - Modal: body scroll lock, fix miss-click
-//   - StatusBadge: 1 observer toàn cục (không phải mỗi instance)
-//   - StatusBadge: đọc theme qua context (không đọc DOM)
-//   - STATUS_MAP mở rộng cho mọi status
-//   - Icon cho tất cả status
-//   - aria-label cho TableActions
-//   - Empty có icon
-//   - ✅ ThemeContext default = null (không phải "light") để
-//     StatusBadge phân biệt được có Provider hay không
-//   - ✅ StatusBadge dùng `hasProvider` check thay vì `if (ctxTheme)`
-//     (bug cũ: ctxTheme default "light" truthy → observer không bao
-//     giờ được tạo khi không có Provider)
-//   - ✅ MEDIUM FIX: Empty component nâng cấp
-//     - Hỗ trợ icon (ReactNode hoặc Lucide component)
-//     - Hỗ trợ title + description
-//     - Hỗ trợ action button (onClick hoặc Link to)
-//     - Size variant: sm | md | lg
-//     - Backward compatible (chỉ có prop `text` cũ vẫn chạy)
-// ============================================================
 
 import {
   useEffect, useState, useMemo, useCallback,
@@ -45,15 +13,12 @@ import {
   CalendarX, Inbox, ShoppingBag, Search, UtensilsCrossed,
   FileQuestion, Gift, Wallet,
 } from "lucide-react";
+import { useTranslation } from "../i18n";
 
 // ============================================================
 // MONEY FORMAT
 // ============================================================
 
-/**
- * Format số thành tiền VN: "30.000đ"
- * - Guard NaN/null/undefined → "0đ"
- */
 export function money(n) {
   const num = Number(n);
   const safe = isFinite(num) ? num : 0;
@@ -61,25 +26,11 @@ export function money(n) {
 }
 
 // ============================================================
-// THEME CONTEXT — 1 observer toàn cục cho StatusBadge
+// THEME CONTEXT
 // ============================================================
 
-/**
- * null = chưa có Provider. Nếu có Provider → context value = "light" | "dark"
- *
- * ✅ QUAN TRỌNG: KHÔNG dùng default "light" vì như vậy
- * `useContext(ThemeContext)` luôn trả về "light" (truthy) ngay cả khi
- * không có Provider → StatusBadge không phân biệt được → bug.
- */
 const ThemeContext = createContext(null);
 
-/**
- * Provider theo dõi theme — gắn 1 lần ở App.jsx (hoặc main.jsx).
- * StatusBadge dùng context này thay vì tự đọc DOM.
- *
- * Nếu bạn KHÔNG muốn đổi main.jsx → StatusBadge vẫn hoạt động
- * nhờ fallback MutationObserver (nhưng chỉ 1 observer toàn cục).
- */
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     if (typeof document === "undefined") return "light";
@@ -96,14 +47,12 @@ export function ThemeProvider({ children }) {
       setTheme(isDark ? "dark" : "light");
     };
 
-    // Observer cho class <html>
     const observer = new MutationObserver(update);
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["class"],
     });
 
-    // Event từ ThemeToggle
     window.addEventListener("themechange", update);
 
     return () => {
@@ -119,7 +68,6 @@ export function ThemeProvider({ children }) {
   );
 }
 
-// Fallback: nếu không có Provider, StatusBadge tự quản lý observer
 function useTheme() {
   return useContext(ThemeContext);
 }
@@ -149,33 +97,22 @@ const STATUS_MAP = {
   },
 };
 
-// Map status → { type, icon }
-// Key = status text CHÍNH XÁC (có dấu, đúng case)
 const STATUS_CONFIG = {
-  // ===== Đơn hàng =====
   "Chờ xác nhận":  { type: "pending", Icon: Clock },
   "Đã xác nhận":   { type: "info",    Icon: CheckCircle2 },
   "Đang chuẩn bị": { type: "purple",  Icon: ChefHat },
   "Sẵn sàng nhận": { type: "info",    Icon: Truck },
   "Hoàn thành":    { type: "success", Icon: CheckCircle2 },
   "Đã hủy":        { type: "danger",  Icon: XCircle },
-
-  // ===== User =====
   "Hoạt động":     { type: "success", Icon: CheckCircle2 },
   "Bị khóa":       { type: "danger",  Icon: Ban },
-
-  // ===== Kho =====
   "Còn hàng":      { type: "success", Icon: Package },
   "Sắp hết":       { type: "warning", Icon: AlertTriangle },
   "Hết hàng":      { type: "danger",  Icon: Package },
-
-  // ===== Chấm công =====
   "Đúng giờ":      { type: "success", Icon: CheckCircle2 },
   "Đi muộn":       { type: "warning", Icon: Clock3 },
   "Về sớm":        { type: "info",    Icon: Clock3 },
   "Vắng mặt":      { type: "danger",  Icon: CalendarX },
-
-  // ===== Ví / giao dịch =====
   "Chờ duyệt":     { type: "pending", Icon: Clock },
   "Thành công":    { type: "success", Icon: CheckCircle2 },
   "Từ chối":       { type: "danger",  Icon: XCircle },
@@ -183,9 +120,12 @@ const STATUS_CONFIG = {
 
 const FALLBACK = { type: "neutral", Icon: Info };
 
-export function StatusBadge({ status }) {
-  // Nếu có ThemeProvider → dùng context
-  // Nếu không → fallback state nội bộ (chỉ 1 observer cho instance này)
+/**
+ * StatusBadge — nhận `statusKey` (i18n key) để dịch.
+ * Nếu caller truyền `status` (raw text) thì vẫn hoạt động như cũ.
+ */
+export function StatusBadge({ status, statusKey }) {
+  const { t } = useTranslation();
   const ctxTheme = useTheme();
   const hasProvider = ctxTheme !== null;
 
@@ -196,9 +136,8 @@ export function StatusBadge({ status }) {
       : "light";
   });
 
-  // Chỉ chạy observer nếu KHÔNG có ThemeProvider
   useEffect(() => {
-    if (hasProvider) return; // Provider đã lo
+    if (hasProvider) return;
     if (typeof window === "undefined") return;
 
     const update = () => {
@@ -222,9 +161,12 @@ export function StatusBadge({ status }) {
 
   const theme = hasProvider ? ctxTheme : fallbackTheme;
 
+  // Nhận status thật (đã dịch) để tra bảng
+  const displayStatus = statusKey ? t(statusKey) : status;
+
   const config = useMemo(
-    () => STATUS_CONFIG[status] || FALLBACK,
-    [status]
+    () => STATUS_CONFIG[displayStatus] || FALLBACK,
+    [displayStatus]
   );
 
   const colors = STATUS_MAP[theme] || STATUS_MAP.light;
@@ -251,7 +193,7 @@ export function StatusBadge({ status }) {
       }}
     >
       {Icon && <Icon size={12} />}
-      {status}
+      {displayStatus}
     </span>
   );
 }
@@ -263,10 +205,10 @@ export function StatusBadge({ status }) {
 const MODAL_Z = 2147483600;
 
 export function Modal({ title, children, onClose, maxWidth = 480 }) {
+  const { t } = useTranslation();
   const overlayRef = useRef(null);
   const mouseDownTargetRef = useRef(null);
 
-  // ESC đóng
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = (e) => {
@@ -276,7 +218,6 @@ export function Modal({ title, children, onClose, maxWidth = 480 }) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Body scroll lock
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -285,14 +226,12 @@ export function Modal({ title, children, onClose, maxWidth = 480 }) {
     };
   }, []);
 
-  // Track mousedown để chống miss-click khi kéo chuột từ ngoài
   const handleMouseDown = useCallback((e) => {
     mouseDownTargetRef.current = e.target;
   }, []);
 
   const handleMouseUp = useCallback(
     (e) => {
-      // Chỉ đóng nếu: mousedown VÀ mouseup đều trên overlay (không phải kéo từ trong)
       if (
         e.target === e.currentTarget &&
         mouseDownTargetRef.current === e.currentTarget
@@ -311,7 +250,7 @@ export function Modal({ title, children, onClose, maxWidth = 480 }) {
       onMouseUp={handleMouseUp}
       role="dialog"
       aria-modal="true"
-      aria-label={typeof title === "string" ? title : "Modal"}
+      aria-label={typeof title === "string" ? title : t("common.modal")}
       style={{
         position: "fixed",
         inset: 0,
@@ -355,7 +294,7 @@ export function Modal({ title, children, onClose, maxWidth = 480 }) {
           <button
             onClick={onClose}
             type="button"
-            aria-label="Đóng"
+            aria-label={t("common.close")}
             style={{
               background: "transparent",
               border: 0,
@@ -377,27 +316,7 @@ export function Modal({ title, children, onClose, maxWidth = 480 }) {
 }
 
 // ============================================================
-// EMPTY STATE — Nâng cấp toàn diện
-// ============================================================
-// Props:
-//   text        — (backward compat) text chính, tương đương `title`
-//   title       — tiêu đề chính
-//   description — mô tả phụ (tùy chọn)
-//   icon        — ReactNode hoặc Lucide component (mặc định Inbox)
-//   size        — "sm" | "md" | "lg" (mặc định "md")
-//   action      — { label, onClick?, to?, variant? } (tùy chọn)
-//                 - Nếu có `to` → render <Link>
-//                 - Nếu có `onClick` → render <button>
-//   iconColor   — màu icon (mặc định theo theme)
-//   style       — override style ngoài
-//
-// Ví dụ:
-//   <Empty
-//     icon={ShoppingBag}
-//     title="Giỏ hàng trống"
-//     description="Thêm món để tiếp tục"
-//     action={{ label: "Xem thực đơn", to: "/customer/menu" }}
-//   />
+// EMPTY STATE
 // ============================================================
 
 const EMPTY_SIZE_CONFIG = {
@@ -440,30 +359,23 @@ export function Empty({
   iconColor,
   style,
 }) {
-  // Backward compat: nếu caller chỉ truyền `text` cũ
-  const finalTitle = title || text || "Chưa có dữ liệu";
+  const { t } = useTranslation();
+
+  const finalTitle = title || text || t("common.emptyDefault");
   const showDescription = !!description;
 
   const cfg = EMPTY_SIZE_CONFIG[size] || EMPTY_SIZE_CONFIG.md;
 
-  // Icon có thể là ReactNode hoặc Lucide component
   const iconNode = useMemo(() => {
     if (!icon) return <Inbox size={cfg.iconSize} />;
 
-    // Nếu là function/component (Lucide) → render với size
     if (typeof icon === "function") {
       const IconComp = icon;
       return <IconComp size={cfg.iconSize} />;
     }
 
-    // Nếu là React element → clone và áp size nếu có thể
     if (typeof icon === "object" && icon.type) {
-      // Cố gắng inject size
-      try {
-        return icon;
-      } catch {
-        return <Inbox size={cfg.iconSize} />;
-      }
+      return icon;
     }
 
     return <Inbox size={cfg.iconSize} />;
@@ -471,7 +383,6 @@ export function Empty({
 
   const finalIconColor = iconColor || "var(--text-light, #94a3b8)";
 
-  // Action button
   const renderAction = () => {
     if (!action || !action.label) return null;
 
@@ -511,7 +422,6 @@ export function Empty({
       ...variant,
     };
 
-    // Nếu là Link (có `to`)
     if (action.to) {
       return (
         <Link to={action.to} style={baseStyle}>
@@ -521,7 +431,6 @@ export function Empty({
       );
     }
 
-    // Nếu là button (có `onClick`)
     if (action.onClick) {
       return (
         <button
@@ -557,7 +466,6 @@ export function Empty({
         ...style,
       }}
     >
-      {/* Icon trong khung tròn */}
       <div
         aria-hidden="true"
         style={{
@@ -574,7 +482,6 @@ export function Empty({
         {iconNode}
       </div>
 
-      {/* Title */}
       <div
         style={{
           fontSize: cfg.titleSize,
@@ -587,7 +494,6 @@ export function Empty({
         {finalTitle}
       </div>
 
-      {/* Description */}
       {showDescription && (
         <div
           style={{
@@ -601,7 +507,6 @@ export function Empty({
         </div>
       )}
 
-      {/* Action button */}
       {renderAction()}
     </div>
   );
@@ -612,6 +517,8 @@ export function Empty({
 // ============================================================
 
 export function TableActions({ onView, onEdit, onDelete }) {
+  const { t } = useTranslation();
+
   const btnStyle = {
     width: 30,
     height: 30,
@@ -632,8 +539,8 @@ export function TableActions({ onView, onEdit, onDelete }) {
           type="button"
           style={btnStyle}
           onClick={onView}
-          title="Xem chi tiết"
-          aria-label="Xem chi tiết"
+          title={t("common.view")}
+          aria-label={t("common.view")}
         >
           <Eye size={16} />
         </button>
@@ -643,8 +550,8 @@ export function TableActions({ onView, onEdit, onDelete }) {
           type="button"
           style={btnStyle}
           onClick={onEdit}
-          title="Chỉnh sửa"
-          aria-label="Chỉnh sửa"
+          title={t("common.edit")}
+          aria-label={t("common.edit")}
         >
           <Pencil size={16} />
         </button>
@@ -654,8 +561,8 @@ export function TableActions({ onView, onEdit, onDelete }) {
           type="button"
           style={{ ...btnStyle, color: "#ef4444" }}
           onClick={onDelete}
-          title="Xóa"
-          aria-label="Xóa"
+          title={t("common.delete")}
+          aria-label={t("common.delete")}
         >
           <Trash2 size={16} />
         </button>
@@ -663,14 +570,6 @@ export function TableActions({ onView, onEdit, onDelete }) {
     </div>
   );
 }
-
-// ============================================================
-// PRESET ICON EXPORTS (tiện dùng cho Empty)
-// ============================================================
-// Ví dụ:
-//   import { EmptyIcons } from "./UI";
-//   <Empty icon={EmptyIcons.Cart} title="Giỏ hàng trống" />
-// ============================================================
 
 export const EmptyIcons = {
   Inbox,
@@ -681,7 +580,7 @@ export const EmptyIcons = {
   Gift,
   Wallet,
   Package,
-  Users: Inbox,       // fallback
+  Users: Inbox,
   Alert: AlertTriangle,
   Calendar: CalendarX,
 };

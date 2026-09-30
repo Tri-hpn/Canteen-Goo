@@ -1,47 +1,20 @@
 ﻿// ============================================================
 // STARRATING.JSX — Đánh giá sao (1-5)
 // ============================================================
-// Props:
-//   value     — số sao hiện tại (0-5)
-//   onChange  — callback(star) khi user chọn (không có nếu readonly)
-//   size      — kích thước icon (default 20)
-//   readonly  — true → chỉ hiển thị, không cho chọn
-//
-// Fixes (so với bản gốc):
-//   - 🔴 role="radiogroup" + role="radio" + aria-checked
-//   - 🔴 Keyboard nav: ← → ↑ ↓ Home End Enter Space
-//   - 🔴 aria-label cho từng nút ("1 sao", "2 sao", ...)
-//   - 🟡 Clamp value về 0-5
-//   - 🟡 Hover state giữ khi rời từng sao (dùng onMouseLeave tổng)
-//   - 🟡 Thêm animation pop khi chọn sao
-//   - 🟡 aria-readonly cho readonly mode
-// ============================================================
 
 import { useState, useMemo, useCallback, useRef } from "react";
 import { Star } from "lucide-react";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const STARS = [1, 2, 3, 4, 5];
 const FILL_COLOR = "#f59e0b";
 const EMPTY_COLOR = "#cbd5e1";
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-/** Clamp số sao về [0, 5]. */
 function clampRating(n) {
   const num = Number(n);
   if (!isFinite(num)) return 0;
   return Math.max(0, Math.min(5, Math.round(num)));
 }
-
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
 
 export default function StarRating({
   value = 0,
@@ -49,20 +22,17 @@ export default function StarRating({
   size = 20,
   readonly = false,
 }) {
+  const { t } = useTranslation();
   const [hover, setHover] = useState(0);
   const containerRef = useRef(null);
 
-  // ---------- Clamp value ----------
   const safeValue = useMemo(() => clampRating(value), [value]);
   const safeHover = useMemo(() => clampRating(hover), [hover]);
 
-  // Số sao hiển thị filled (ưu tiên hover khi không readonly)
   const displayValue = useMemo(() => {
     if (readonly) return safeValue;
     return safeHover || safeValue;
   }, [readonly, safeValue, safeHover]);
-
-  // ---------- Handlers ----------
 
   const handleSelect = useCallback(
     (star) => {
@@ -84,8 +54,6 @@ export default function StarRating({
     if (readonly) return;
     setHover(0);
   }, [readonly]);
-
-  // ---------- Keyboard navigation ----------
 
   const handleKeyDown = useCallback(
     (e) => {
@@ -119,7 +87,6 @@ export default function StarRating({
         case " ":
         case "Enter":
           e.preventDefault();
-          // Nếu chưa có value → mặc định 5 sao
           handleSelect(safeValue || 5);
           break;
 
@@ -130,18 +97,13 @@ export default function StarRating({
     [readonly, safeHover, safeValue, handleSelect]
   );
 
-  // Focus container khi readonly=false để nhận keyboard
   const containerTabIndex = readonly ? -1 : 0;
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div
       ref={containerRef}
       role="radiogroup"
-      aria-label="Đánh giá sao"
+      aria-label={t("rating.ariaGroup")}
       aria-readonly={readonly}
       tabIndex={containerTabIndex}
       onKeyDown={handleKeyDown}
@@ -152,7 +114,6 @@ export default function StarRating({
         outline: "none",
       }}
       onFocus={(e) => {
-        // Focus ring đẹp cho keyboard nav
         if (!readonly) {
           e.currentTarget.style.borderRadius = "6px";
           e.currentTarget.style.boxShadow =
@@ -172,9 +133,9 @@ export default function StarRating({
             type="button"
             role="radio"
             aria-checked={star === safeValue}
-            aria-label={`${star} sao`}
+            aria-label={t("rating.starAria").replace("{n}", star)}
             disabled={readonly}
-            tabIndex={-1} /* Container quản lý focus */
+            tabIndex={-1}
             onClick={() => handleSelect(star)}
             onMouseEnter={() => handleMouseEnter(star)}
             style={{

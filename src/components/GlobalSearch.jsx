@@ -1,37 +1,13 @@
 ﻿// ============================================================
 // GLOBALSEARCH.JSX — Ô tìm kiếm toàn cục trên topbar
 // ============================================================
-// Tính năng:
-//   - Debounce 300ms khi gõ
-//   - Dropdown kết quả: món ăn (top 5)
-//   - Keyboard nav: ↑ ↓ Enter Escape
-//   - Highlight keyword trong kết quả
-//   - Điều hướng theo role (customer/employee/owner)
-//   - Sync sang trang Menu qua URL param ?q=
-//
-// Fixes:
-//   - Bỏ dead state orders/users (luôn rỗng)
-//   - Route theo role
-//   - Race-safe search (reqIdRef)
-//   - ✅ FIX: điều hướng bằng URL query `?q=`
-//   - Keyboard nav (↑ ↓ Enter Esc)
-//   - Loading state với spinner
-//   - Highlight keyword trong tên món
-//   - Memo derived values
-//   - aria: role="combobox" + aria-expanded
-//   - ✅ FIX CRITICAL: Customer chỉ thấy món đang bán.
-//     Admin/Employee thấy hết (kể cả món tắt).
-// ============================================================
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Search, Utensils, X, Loader2 } from "lucide-react";
 import { api } from "../api";
 import { money } from "./UI";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const DEBOUNCE_MS = 300;
 const MAX_RESULTS = 5;
@@ -44,10 +20,6 @@ const FALLBACK_IMG =
       <text x='50' y='58' font-size='40' text-anchor='middle'>🍽️</text>
     </svg>`
   );
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function getMenuPath(role) {
   if (role === "ADMIN") return "/owner/menu";
@@ -81,11 +53,8 @@ function highlightText(text, query) {
   );
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function GlobalSearch({ role }) {
+  const { t } = useTranslation();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [menuResults, setMenuResults] = useState([]);
@@ -99,7 +68,6 @@ export default function GlobalSearch({ role }) {
 
   const menuPath = useMemo(() => getMenuPath(role), [role]);
 
-  // ---------- Click outside ----------
   useEffect(() => {
     const handler = (e) => {
       if (boxRef.current && !boxRef.current.contains(e.target)) {
@@ -109,15 +77,12 @@ export default function GlobalSearch({ role }) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-  // ---------- Sync q với URL (?q=) ----------
-  // Khi user vào trang menu qua URL có ?q=..., tự điền vào ô search
-  // Giúp F5 / share link không bị mất từ khoá
+
   useEffect(() => {
     const urlQ = new URLSearchParams(location.search).get("q") || "";
     setQ(urlQ);
   }, [location.pathname, location.search]);
 
-  // ---------- Search (debounced + race-safe) ----------
   useEffect(() => {
     const trimmed = q.trim();
 
@@ -139,8 +104,6 @@ export default function GlobalSearch({ role }) {
 
         let list = Array.isArray(menu) ? menu : [];
 
-        // ✅ FIX CRITICAL: Customer chỉ thấy món đang bán.
-        // Admin/Employee thấy hết (kể cả món tắt).
         if (role === "CUSTOMER") {
           list = list.filter((m) => m.active);
         }
@@ -156,12 +119,9 @@ export default function GlobalSearch({ role }) {
     return () => clearTimeout(timer);
   }, [q, role]);
 
-  // Reset active index khi results đổi
   useEffect(() => {
     setActiveIdx(-1);
   }, [menuResults]);
-
-  // ---------- Handlers ----------
 
   const handleInput = (e) => {
     const val = e.target.value;
@@ -175,7 +135,6 @@ export default function GlobalSearch({ role }) {
     setOpen(false);
     setActiveIdx(-1);
 
-    // Nếu đang ở trang menu → xoá ?q= khỏi URL nhưng GIỮ ?category=
     if (location.pathname.includes("/menu")) {
       const params = new URLSearchParams(location.search);
       params.delete("q");
@@ -191,8 +150,6 @@ export default function GlobalSearch({ role }) {
       const params = new URLSearchParams();
       if (searchVal) params.set("q", searchVal);
 
-      // ✅ FIX: nếu ấn vào 1 món cụ thể → thêm category của món đó vào URL
-      // → Menu sẽ tự highlight đúng danh mục thay vì để "Tất cả"
       if (item && item.category && item.category !== "Tất cả") {
         params.set("category", item.category);
       }
@@ -203,7 +160,6 @@ export default function GlobalSearch({ role }) {
       setMenuResults([]);
       setOpen(false);
       setActiveIdx(-1);
-      // ✅ KHÔNG setQ("") — để useEffect sync URL giữ lại từ khoá
     },
     [menuPath, navigate, q]
   );
@@ -240,14 +196,8 @@ export default function GlobalSearch({ role }) {
     }
   };
 
-  // ---------- Computed ----------
-
   const total = menuResults.length;
   const hasQuery = q.trim().length > 0;
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div ref={boxRef} className="global-search">
@@ -265,8 +215,8 @@ export default function GlobalSearch({ role }) {
           onChange={handleInput}
           onFocus={() => hasQuery && setOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Tìm món ăn..."
-          aria-label="Tìm kiếm món ăn"
+          placeholder={t("search.placeholder")}
+          aria-label={t("search.placeholder")}
           aria-autocomplete="list"
           maxLength={100}
         />
@@ -287,7 +237,7 @@ export default function GlobalSearch({ role }) {
           <button
             onClick={clearSearch}
             className="clear-btn"
-            aria-label="Xoá tìm kiếm"
+            aria-label={t("search.clear")}
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             style={{
@@ -329,7 +279,7 @@ export default function GlobalSearch({ role }) {
                   marginBottom: 6,
                 }}
               />
-              <div>Đang tìm...</div>
+              <div>{t("search.searching")}</div>
             </div>
           )}
 
@@ -342,14 +292,14 @@ export default function GlobalSearch({ role }) {
                 fontSize: 13,
               }}
             >
-              Không tìm thấy "{q}"
+              {t("search.noResults").replace("{q}", q)}
             </div>
           )}
 
           {total > 0 && (
             <div>
               <div className="dropdown-section-title">
-                <Utensils size={12} /> Món ăn ({total})
+                <Utensils size={12} /> {t("search.dishesLabel")} ({total})
               </div>
 
               {menuResults.map((m, idx) => {
@@ -440,7 +390,8 @@ export default function GlobalSearch({ role }) {
               }}
             >
               <span>
-                <kbd>↑</kbd> <kbd>↓</kbd> chọn · <kbd>Enter</kbd> mở
+                <kbd>↑</kbd> <kbd>↓</kbd> {t("search.navHintSelect")} ·{" "}
+                <kbd>Enter</kbd> {t("search.navHintOpen")}
               </span>
               <button
                 type="button"
@@ -454,7 +405,7 @@ export default function GlobalSearch({ role }) {
                   fontWeight: 600,
                 }}
               >
-                Xem tất cả →
+                {t("search.seeAll")} →
               </button>
             </div>
           )}

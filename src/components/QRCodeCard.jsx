@@ -1,42 +1,15 @@
 // ============================================================
 // QRCODECARD.JSX — Card hiển thị QR nạp tiền / thanh toán
 // ============================================================
-// Props:
-//   bankInfo  — { bank, account, name } từ api.settings
-//   amount    — số tiền (number)
-//   orderCode — mã đơn hàng (để làm nội dung chuyển khoản)
-//
-// Fixes (so với bản gốc):
-//   - 🔴🔴 Bỏ fallback STK "1234567890" → hiện warning nếu thiếu
-//   - 🔴 Dùng CSS variables → dark mode
-//   - 🔴 Guard navigator.clipboard (fallback execCommand)
-//   - 🔴 Guard NaN cho amount
-//   - 🔴 Không cắt transferContent (giữ nguyên)
-//   - 🔴 Fix image onError loop
-//   - 🟡 Bỏ unused imports (useState, useEffect)
-//   - 🟡 Memo VietQR URL + transferContent
-//   - 🟡 URLSearchParams cho URL an toàn
-//   - 🟡 Guard orderCode undefined
-//   - 🟡 aria-label cho nút Copy
-//   - 🟢 Empty state khi thiếu bank info
-// ============================================================
 
 import { useMemo, useCallback } from "react";
 import { Copy, AlertTriangle, QrCode as QrIcon } from "lucide-react";
 import { toast } from "./Effects";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
+import { useTranslation } from "../i18n";
 
 const QR_SIZE = 240;
 const FALLBACK_QR_API = "https://api.qrserver.com/v1/create-qr-code/";
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-/** Tạo URL QR fallback (qrserver) từ data. */
 function makeFallbackQrUrl(data, size = QR_SIZE) {
   const params = new URLSearchParams({
     size: `${size}x${size}`,
@@ -46,31 +19,24 @@ function makeFallbackQrUrl(data, size = QR_SIZE) {
   return `${FALLBACK_QR_API}?${params.toString()}`;
 }
 
-/** Format tiền VN an toàn. */
 function fmtMoney(n) {
   const num = Number(n);
   if (!isFinite(num)) return "0 ₫";
   return num.toLocaleString("vi-VN") + " ₫";
 }
 
-/**
- * Copy text vào clipboard.
- * Fallback cho browser cũ / HTTP.
- */
 async function copyToClipboard(text) {
   if (!text) return false;
 
-  // Cách 1: Clipboard API (cần HTTPS)
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
       return true;
     }
   } catch {
-    // continue to fallback
+    // continue fallback
   }
 
-  // Cách 2: textarea + execCommand (deprecated nhưng còn hoạt động)
   try {
     const ta = document.createElement("textarea");
     ta.value = text;
@@ -88,20 +54,14 @@ async function copyToClipboard(text) {
   }
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function QRCodeCard({ bankInfo, amount, orderCode }) {
-  // ---------- Extract bank info (no fallback nguy hiểm) ----------
+  const { t } = useTranslation();
 
   const bank = bankInfo?.bank?.trim() || "";
   const account = bankInfo?.account?.trim() || "";
   const accountName = bankInfo?.name?.trim() || "";
 
   const hasBankInfo = !!(bank && account);
-
-  // ---------- Computed ----------
 
   const safeAmount = useMemo(() => {
     const n = Number(amount);
@@ -131,36 +91,34 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
     return makeFallbackQrUrl(vietQR);
   }, [vietQR]);
 
-  // ---------- Handlers ----------
-
-  const handleCopy = useCallback(async (text) => {
-    const ok = await copyToClipboard(text);
-    if (ok) {
-      toast("Đã sao chép", "success");
-    } else {
-      toast("Không sao chép được — vui lòng copy thủ công", "error");
-    }
-  }, []);
-
-  const handleImageError = useCallback((e) => {
-    // Chỉ thay src 1 lần → tránh loop vô hạn
-    if (e.target.dataset.fallbackTried === "1") {
-      // Fallback cũng fail → hiện placeholder
-      e.target.style.display = "none";
-      const next = e.target.nextElementSibling;
-      if (next && next.dataset.qrError === "1") {
-        next.style.display = "flex";
+  const handleCopy = useCallback(
+    async (text) => {
+      const ok = await copyToClipboard(text);
+      if (ok) {
+        toast(t("common.copied"), "success");
+      } else {
+        toast(t("common.copyError"), "error");
       }
-      return;
-    }
+    },
+    [t]
+  );
 
-    e.target.dataset.fallbackTried = "1";
-    e.target.src = fallbackQr;
-  }, [fallbackQr]);
+  const handleImageError = useCallback(
+    (e) => {
+      if (e.target.dataset.fallbackTried === "1") {
+        e.target.style.display = "none";
+        const next = e.target.nextElementSibling;
+        if (next && next.dataset.qrError === "1") {
+          next.style.display = "flex";
+        }
+        return;
+      }
 
-  // ============================================================
-  // RENDER — Empty state khi thiếu bank info
-  // ============================================================
+      e.target.dataset.fallbackTried = "1";
+      e.target.src = fallbackQr;
+    },
+    [fallbackQr]
+  );
 
   if (!hasBankInfo) {
     return (
@@ -188,7 +146,7 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
             marginBottom: 6,
           }}
         >
-          Chưa có thông tin ngân hàng
+          {t("qr.noBankTitle")}
         </div>
         <div
           style={{
@@ -197,15 +155,11 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
             lineHeight: 1.5,
           }}
         >
-          Vui lòng liên hệ admin để cấu hình tài khoản nhận tiền.
+          {t("qr.noBankDesc")}
         </div>
       </div>
     );
   }
-
-  // ============================================================
-  // RENDER — QR chính
-  // ============================================================
 
   return (
     <div
@@ -220,7 +174,6 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
         border: "1px solid var(--border-color, #e7ebf0)",
       }}
     >
-      {/* ============ QR IMAGE ============ */}
       <div
         style={{
           background: "var(--bg-tertiary, #f8fafc)",
@@ -235,7 +188,7 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
           <>
             <img
               src={vietQR}
-              alt="QR chuyển khoản"
+              alt={t("qr.altText")}
               loading="lazy"
               onError={handleImageError}
               style={{
@@ -248,7 +201,6 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
                 aspectRatio: "1 / 1",
               }}
             />
-            {/* Placeholder khi cả 2 URL đều fail */}
             <div
               data-qr-error="1"
               style={{
@@ -265,14 +217,13 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
               }}
             >
               <QrIcon size={40} style={{ opacity: 0.4 }} />
-              <div>Không tải được QR</div>
-              <div>Vui lòng chuyển khoản thủ công</div>
+              <div>{t("qr.loadFailTitle")}</div>
+              <div>{t("qr.loadFailDesc")}</div>
             </div>
           </>
         ) : null}
       </div>
 
-      {/* ============ INFO ROWS ============ */}
       <div
         style={{
           display: "flex",
@@ -282,9 +233,9 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
           marginBottom: 16,
         }}
       >
-        <InfoRow label="Ngân hàng" value={bank} />
+        <InfoRow label={t("qr.bankLabel")} value={bank} />
         <InfoRow
-          label="Số tài khoản"
+          label={t("qr.accountLabel")}
           value={
             <>
               <span
@@ -298,8 +249,8 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
               <button
                 type="button"
                 onClick={() => handleCopy(account)}
-                aria-label="Sao chép số tài khoản"
-                title="Sao chép"
+                aria-label={t("qr.copyAccount")}
+                title={t("common.copy")}
                 style={{
                   background: "var(--bg-tertiary, #f1f5f9)",
                   border: 0,
@@ -319,9 +270,12 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
             </>
           }
         />
-        <InfoRow label="Chủ tài khoản" value={accountName || "—"} />
         <InfoRow
-          label="Số tiền"
+          label={t("qr.ownerLabel")}
+          value={accountName || "—"}
+        />
+        <InfoRow
+          label={t("qr.amountLabel")}
           value={
             <b style={{ color: "#2634d5", fontSize: 16 }}>
               {fmtMoney(safeAmount)}
@@ -329,7 +283,7 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
           }
         />
         <InfoRow
-          label="Nội dung"
+          label={t("qr.contentLabel")}
           value={
             <b style={{ fontFamily: "monospace", wordBreak: "break-all" }}>
               {transferContent}
@@ -339,7 +293,6 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
         />
       </div>
 
-      {/* ============ HINT ============ */}
       <p
         style={{
           fontSize: 12,
@@ -351,15 +304,11 @@ export default function QRCodeCard({ bankInfo, amount, orderCode }) {
           lineHeight: 1.5,
         }}
       >
-        📱 Mở app ngân hàng / MoMo → Quét QR → Xác nhận chuyển khoản
+        {t("qr.hint")}
       </p>
     </div>
   );
 }
-
-// ============================================================
-// SUB-COMPONENT: InfoRow
-// ============================================================
 
 function InfoRow({ label, value, last = false }) {
   return (
