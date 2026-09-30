@@ -1,5 +1,5 @@
-// ============================================================
-// LAYOUT.JSX — Layout chính của app
+﻿// ============================================================
+// LAYOUT.JSX â€” Layout chÃ­nh cá»§a app
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -26,13 +26,13 @@ const FALLBACK_AVATAR =
   encodeURIComponent(
     `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
       <rect fill='#0EA5E9' width='100' height='100'/>
-      <text x='50' y='58' font-size='40' fill='#fff' text-anchor='middle'>👤</text>
+      <text x='50' y='58' font-size='40' fill='#fff' text-anchor='middle'>ðŸ‘¤</text>
     </svg>`
   );
 
 /**
  * Auto page-heading theo pathname.
- * Dùng KEY i18n, không hardcode text.
+ * DÃ¹ng KEY i18n, khÃ´ng hardcode text.
  */
 const PAGE_HEADINGS = [
   // ===== CUSTOMER =====
@@ -144,7 +144,6 @@ function TopbarLogo({ role }) {
 function CartTopbarIcon() {
   const { t } = useTranslation();
   const [count, setCount] = useState(0);
-  const { t } = useTranslation();
 
   useEffect(() => {
     const read = () => setCount(readCartCount());
@@ -361,7 +360,7 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
                 fontWeight: 600,
               }}
             >
-              {lang === "vi" ? "Tiếng Việt" : "English"}
+              {lang === "vi" ? "Tiáº¿ng Viá»‡t" : "English"}
             </span>
           </button>
 
@@ -455,8 +454,8 @@ export default function Layout({
 
   /**
    * Auto heading:
-   *   - Nếu prop title/subtitle → dịch trực tiếp (nếu là key i18n) hoặc dùng raw
-   *   - Nếu không → lookup theo path → dịch key
+   *   - Náº¿u prop title/subtitle â†’ dá»‹ch trá»±c tiáº¿p (náº¿u lÃ  key i18n) hoáº·c dÃ¹ng raw
+   *   - Náº¿u khÃ´ng â†’ lookup theo path â†’ dá»‹ch key
    */
   const heading = useMemo(() => {
     if (title || subtitle) {

@@ -13,7 +13,6 @@ import { toast } from "./Effects";
 import { getBotReply } from "./ChatBot";
 import { useTranslation } from "../i18n";
 import FoodDetailModal from "./FoodDetailModal";
-import { useTranslation } from "../i18n";
 
 const QUICK_REPLIES_KEYS = [
   "bot.quick.under30k",

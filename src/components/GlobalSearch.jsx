@@ -60,7 +60,6 @@ export default function GlobalSearch({ role }) {
   const [menuResults, setMenuResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
-  const { t, lang } = useTranslation();
 
   const boxRef = useRef(null);
   const reqIdRef = useRef(0);

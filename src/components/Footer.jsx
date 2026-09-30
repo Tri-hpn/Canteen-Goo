@@ -27,7 +27,6 @@ const EMPTY_CONTACT = {
 export default function Footer() {
   const { t } = useTranslation();
   const [contact, setContact] = useState(EMPTY_CONTACT);
-  const { t } = useTranslation();
 
   useEffect(() => {
     let cancelled = false;

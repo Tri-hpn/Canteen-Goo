@@ -73,7 +73,6 @@ export default function NotificationBell() {
   const [tabVisible, setTabVisible] = useState(
     typeof document === "undefined" || !document.hidden
   );
-  const { t } = useTranslation();
 
   const boxRef = useRef(null);
   const reqIdRef = useRef(0);
