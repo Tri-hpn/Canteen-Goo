@@ -3,6 +3,9 @@
 // ============================================================
 // Nhóm khung giờ nhận món (Time Slots) ở đầu trang.
 // Bảng món ăn ở dưới.
+//
+// ✅ THÊM: Checkbox "Món Signature" trong modal thêm/sửa món
+// ✅ THÊM: Cột "Signature" trong bảng hiển thị badge
 // ============================================================
 
 import { SkeletonTable } from "../../components/Skeleton";
@@ -10,7 +13,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Plus, Search, Edit, Trash2, FolderPlus, Folder,
   X, Save, Loader2, AlertCircle,
-  UtensilsCrossed, EyeOff, Eye,
+  UtensilsCrossed, EyeOff, Eye, Star,
   Clock, Sunrise, Sun, Sunset, RotateCcw,
 } from "lucide-react";
 import { api } from "../../api";
@@ -89,6 +92,9 @@ export default function OwnerMenu() {
     originalPrice: "",
     discountPercent: 0,
   });
+
+  // ---------- ✅ Signature checkbox state ----------
+  const [isSignature, setIsSignature] = useState(false);
 
   // ---------- Confirm dialog ----------
   const [confirm, setConfirm] = useState(null);
@@ -201,7 +207,7 @@ export default function OwnerMenu() {
     return () => window.removeEventListener("keydown", handler);
   }, [modal, showCatModal, catLoading, saving]);
 
-  // Reset price fields khi mở modal khác
+  // Reset price fields + signature khi mở modal khác
   useEffect(() => {
     if (!modal) return;
     setPriceFields({
@@ -209,6 +215,7 @@ export default function OwnerMenu() {
       originalPrice: modal.original_price ? String(modal.original_price) : "",
       discountPercent: Number(modal.discount_percent) || 0,
     });
+    setIsSignature(!!modal.is_signature);
   }, [modal]);
 
   // ============================================================
@@ -293,6 +300,7 @@ export default function OwnerMenu() {
       originalPrice: "",
       discountPercent: 0,
     });
+    setIsSignature(false);
   };
 
   const saveItem = async (e) => {
@@ -349,6 +357,8 @@ export default function OwnerMenu() {
       description: f.get("description")?.trim() || "",
       image: image || f.get("imageUrl")?.trim() || "",
       reason: f.get("reason")?.trim() || "",
+      // ✅ Lưu field is_signature
+      is_signature: isSignature,
     };
 
     setSaving(true);
@@ -1012,7 +1022,7 @@ export default function OwnerMenu() {
         >
           {loading && (
             <SkeletonTable
-              columns={7}
+              columns={8}
               rows={5}
               headers={[
                 "Ảnh",
@@ -1021,6 +1031,7 @@ export default function OwnerMenu() {
                 "Giá",
                 "Tồn",
                 "Hiển thị",
+                "Signature",
                 "Thao tác",
               ]}
             />
@@ -1040,6 +1051,10 @@ export default function OwnerMenu() {
                     <th style={{ ...thStyle, textAlign: "right" }}>Tồn</th>
                     <th style={{ ...thStyle, textAlign: "center" }}>
                       Hiển thị
+                    </th>
+                    {/* ✅ CỘT SIGNATURE */}
+                    <th style={{ ...thStyle, textAlign: "center" }}>
+                      Signature
                     </th>
                     <th style={{ ...thStyle, textAlign: "right" }}>
                       Thao tác
@@ -1248,6 +1263,41 @@ export default function OwnerMenu() {
                           </div>
                         </td>
 
+                        {/* ✅ CỘT SIGNATURE */}
+                        <td style={{ ...tdStyle, textAlign: "center" }}>
+                          {m.is_signature ? (
+                            <span
+                              title="Món Signature"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 3,
+                                padding: "4px 10px",
+                                borderRadius: 12,
+                                background:
+                                  "linear-gradient(135deg, #f59e0b, #ef4444)",
+                                color: "#fff",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                                boxShadow:
+                                  "0 2px 6px rgba(245, 158, 11, 0.35)",
+                              }}
+                            >
+                              <Star size={10} fill="#fff" /> Signature
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                color: "var(--text-light, #94a3b8)",
+                                fontSize: 12,
+                              }}
+                            >
+                              —
+                            </span>
+                          )}
+                        </td>
+
                         <td style={{ ...tdStyle, textAlign: "right" }}>
                           <div
                             style={{
@@ -1278,7 +1328,7 @@ export default function OwnerMenu() {
                   {!filtered.length && (
                     <tr>
                       <td
-                        colSpan="7"
+                        colSpan="8"
                         style={{
                           textAlign: "center",
                           padding: 40,
@@ -1767,6 +1817,69 @@ export default function OwnerMenu() {
                   />
                 </>
               )}
+
+              {/* ✅ CHECKBOX SIGNATURE */}
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: 12,
+                  marginTop: 14,
+                  marginBottom: 8,
+                  background: isSignature
+                    ? "linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(239, 68, 68, 0.08))"
+                    : "var(--bg-tertiary, #f8fafc)",
+                  border: isSignature
+                    ? "1px solid rgba(245, 158, 11, 0.4)"
+                    : "1px solid var(--border-color, #e5e9ef)",
+                  borderRadius: 10,
+                  cursor: saving ? "not-allowed" : "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSignature}
+                  onChange={(e) => setIsSignature(e.target.checked)}
+                  disabled={saving}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    accentColor: "#f59e0b",
+                    cursor: saving ? "not-allowed" : "pointer",
+                    flexShrink: 0,
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <b
+                    style={{
+                      fontSize: 13,
+                      color: "var(--text-primary, #172033)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <Star
+                      size={14}
+                      fill={isSignature ? "#f59e0b" : "none"}
+                      color="#f59e0b"
+                    />
+                    Món Signature
+                  </b>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-muted, #64748b)",
+                      display: "block",
+                      marginTop: 2,
+                    }}
+                  >
+                    Hiển thị ở section "Món Signature" trên trang chủ khách hàng
+                  </span>
+                </div>
+              </label>
 
               <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
                 <button

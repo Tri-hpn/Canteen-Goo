@@ -37,7 +37,6 @@ import CustomerOrders from "./pages/customer/CustomerOrders";
 import CustomerPoints from "./pages/customer/CustomerPoints";
 import CustomerProfile from "./pages/customer/CustomerProfile";
 import CustomerPromotions from "./pages/customer/CustomerPromotions";
-import CustomerSignature from "./pages/customer/CustomerSignature";
 import CustomerSuccess from "./pages/customer/CustomerSuccess";
 import CustomerWallet from "./pages/customer/CustomerWallet";
 import CustomerChat from "./pages/customer/CustomerChat";
@@ -390,16 +389,6 @@ export default function App() {
             "Chat hỗ trợ",
             "Nhắn tin với Canteen",
             <CustomerChat user={user} cart={cart} setCart={setCart} />
-          )}
-        />
-
-        {/* Món Signature */}
-        <Route
-          path="/customer/signature"
-          element={wrap(
-            "Món Signature",
-            "Đặc sản Canteen VWA",
-            <CustomerSignature />
           )}
         />
 
