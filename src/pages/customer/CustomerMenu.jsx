@@ -67,7 +67,6 @@ function translateCategory(name, t) {
 export default function CustomerMenu({ cart, setCart, user }) {
 
   const { t, lang } = useTranslation();
->>>>>>> origin/main
 
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -108,9 +107,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
   }, []);
 
 
-<<<<<<< HEAD
-  // ---------- Sync với URL (?q= và ?category=) ----------
-=======
   // ---------- Sync filter với URL ----------
 
   const searchParamsStr = searchParams.toString();
@@ -121,9 +117,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
   }, [searchParamsStr]);
 
 
-<<<<<<< HEAD
-  // ---------- Lắng nghe global search event ----------
-=======
   // ---------- Global search event ----------
 
   useEffect(() => {

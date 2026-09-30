@@ -617,9 +617,30 @@ export default function CustomerOrderDetail({
                       fontSize: 13,
                     }}
                   >
-                    <span style={{ color: "var(--text-primary, #172033)" }}>
-                      <b>{it.qty}×</b> {it.name}
-                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+  <div style={{ color: "var(--text-primary, #172033)" }}>
+    <b>{it.qty}×</b> {it.name}
+  </div>
+
+  {it.size && (
+    <div style={{ marginTop: 4, color: "var(--text-muted, #64748b)", fontSize: 12 }}>
+      Size: {it.size.name}
+      {Number(it.size.extra_price || 0) > 0 && ` (+${money(Number(it.size.extra_price))})`}
+    </div>
+  )}
+
+  {Array.isArray(it.toppings) && it.toppings.length > 0 && (
+    <div style={{ marginTop: 4, color: "var(--text-muted, #64748b)", fontSize: 12 }}>
+      <div>Topping:</div>
+      {it.toppings.map((topping, toppingIndex) => (
+        <div key={topping.id ?? toppingIndex} style={{ paddingLeft: 8 }}>
+          • {topping.name}
+          {Number(topping.price || 0) > 0 && ` (+${money(Number(topping.price))})`}
+        </div>
+      ))}
+    </div>
+  )}
+</div>
                     <b style={{ color: "var(--text-muted, #64748b)" }}>
                       {money(Number(it.price || 0) * Number(it.qty || 0))}
                     </b>
