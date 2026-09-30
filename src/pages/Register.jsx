@@ -1,17 +1,24 @@
 ﻿// ============================================================
 // REGISTER.JSX — Đăng ký tài khoản khách hàng (style Login V8)
 // ============================================================
+// FIX v9:
+//   - ✅ Áp dụng i18n cho TẤT CẢ text
+// ============================================================
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Mail, LockKeyhole, User, Phone, ArrowRight, Eye, EyeOff, Loader2,
 } from "lucide-react";
 import { api, setToken } from "../api";
 import { toast } from "../components/Effects";
+import { useTranslation } from "../i18n";
 import CuteCharacters from "../components/LoginIllustration";
 
 export default function Register() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -23,7 +30,6 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [peeking, setPeeking] = useState(false);
-  const navigate = useNavigate();
 
   const update = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -31,15 +37,15 @@ export default function Register() {
   };
 
   const validate = () => {
-    if (!form.name.trim()) return "Vui lòng nhập họ tên";
-    if (!form.email.trim()) return "Vui lòng nhập email";
+    if (!form.name.trim()) return t("register.errorNameRequired");
+    if (!form.email.trim()) return t("register.errorEmailRequired");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
-      return "Email không hợp lệ";
+      return t("register.errorEmailInvalid");
     if (form.phone && !/^[0-9]{10,11}$/.test(form.phone.trim()))
-      return "SĐT phải 10-11 số";
-    if (form.password.length < 6) return "Mật khẩu phải từ 6 ký tự";
+      return t("register.errorPhoneInvalid");
+    if (form.password.length < 6) return t("register.errorPasswordMin");
     if (form.password !== form.confirm)
-      return "Mật khẩu xác nhận không khớp";
+      return t("register.errorPasswordMismatch");
     return null;
   };
 
@@ -60,14 +66,19 @@ export default function Register() {
       });
 
       setToken(token);
-      toast("Đăng ký thành công! Chào mừng " + user.name, "success");
+      toast(`${t("register.successWelcome")} ${user.name}`, "success");
       navigate("/customer");
     } catch (err) {
-      setError(err.message || "Đăng ký thất bại");
+      setError(err.message || t("register.errorFailed"));
     } finally {
       setLoading(false);
     }
   };
+
+  // Bubble text — tính 1 lần
+  const bubbleText = useMemo(() => {
+    return peeking ? t("register.bubblePeek") : t("register.bubbleIdle");
+  }, [peeking, t]);
 
   return (
     <div className="v8-login-page">
@@ -76,98 +87,94 @@ export default function Register() {
         <div className="v8-login-brand">
           <div className="v8-brand-mark">C</div>
           <div className="v8-brand-text">
-            <b>CANTEEN</b>
-            <small>VWA</small>
+            <b>{t("login.brandName")}</b>
+            <small>{t("login.brandSub")}</small>
           </div>
         </div>
 
         <div className="v8-illustration-wrap">
           <div className="v8-illustration-inner">
-            <div className="v8-speech-bubble">
-              {peeking
-                ? "🙈 Đang nhập mật khẩu — không nhìn đâu!"
-                : "👋 Chào bạn mới! Đăng ký nhanh thôi nào!"}
-            </div>
+            <div className="v8-speech-bubble">{bubbleText}</div>
             <CuteCharacters peeking={peeking} />
           </div>
         </div>
 
         <div className="v8-left-caption">
-          <b>Tạo tài khoản chỉ trong 30 giây</b>
-          <span>Đặt món nhanh — Ưu đãi sinh viên — Tích điểm đổi quà.</span>
+          <b>{t("register.captionTitle")}</b>
+          <span>{t("register.captionSub")}</span>
         </div>
       </section>
 
       {/* RIGHT */}
       <main className="v8-login-right">
         <div className="v8-form-inner">
-          {/* ✅ Logo + Tabs cùng hàng */}
+          {/* Logo + Tabs */}
           <div className="v8-form-top">
             <div className="v8-form-logo">
               <div className="v8-form-logo-mark">C</div>
             </div>
 
             <nav className="v8-tabs" aria-label="Chuyển trang">
-              <Link to="/" className="v8-tab">Đăng nhập</Link>
-              <span className="v8-tab active">Đăng ký</span>
+              <Link to="/" className="v8-tab">
+                {t("login.tabLogin")}
+              </Link>
+              <span className="v8-tab active">{t("login.tabRegister")}</span>
             </nav>
           </div>
 
           {/* Heading */}
-          <h1 className="v8-form-title">Tạo tài khoản</h1>
-          <p className="v8-form-subtitle">
-            Đăng ký để đặt món, theo dõi đơn và nhận ưu đãi sinh viên
-          </p>
+          <h1 className="v8-form-title">{t("register.title")}</h1>
+          <p className="v8-form-subtitle">{t("register.subtitle")}</p>
 
           {/* Error */}
           {error && <div className="v8-error-box">{error}</div>}
 
           <form onSubmit={submit} autoComplete="off" data-form-type="other">
-            <label className="v8-label">Họ và tên *</label>
+            <label className="v8-label">{t("register.nameLabel")}</label>
             <div className="v8-input-wrap">
               <User size={16} className="v8-input-icon" />
               <input
                 type="text"
                 value={form.name}
                 onChange={update("name")}
-                placeholder="Nguyễn Văn A"
+                placeholder={t("register.namePlaceholder")}
                 disabled={loading}
               />
             </div>
 
-            <label className="v8-label">Email *</label>
+            <label className="v8-label">{t("register.emailLabel")}</label>
             <div className="v8-input-wrap">
               <Mail size={16} className="v8-input-icon" />
               <input
                 type="email"
                 value={form.email}
                 onChange={update("email")}
-                placeholder="email@vwa.vn"
+                placeholder={t("register.emailPlaceholder")}
                 disabled={loading}
                 autoComplete="off"
               />
             </div>
 
-            <label className="v8-label">Số điện thoại</label>
+            <label className="v8-label">{t("register.phoneLabel")}</label>
             <div className="v8-input-wrap">
               <Phone size={16} className="v8-input-icon" />
               <input
                 type="tel"
                 value={form.phone}
                 onChange={update("phone")}
-                placeholder="0901234567"
+                placeholder={t("register.phonePlaceholder")}
                 disabled={loading}
               />
             </div>
 
-            <label className="v8-label">Mật khẩu *</label>
+            <label className="v8-label">{t("register.passwordLabel")}</label>
             <div className="v8-input-wrap">
               <LockKeyhole size={16} className="v8-input-icon" />
               <input
                 type={show ? "text" : "password"}
                 value={form.password}
                 onChange={update("password")}
-                placeholder="Tối thiểu 6 ký tự"
+                placeholder={t("register.passwordPlaceholder")}
                 disabled={loading}
                 autoComplete="new-password"
                 onFocus={() => setPeeking(true)}
@@ -176,7 +183,9 @@ export default function Register() {
               <button
                 type="button"
                 onClick={() => setShow(!show)}
-                aria-label={show ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                aria-label={
+                  show ? t("login.hidePassword") : t("login.showPassword")
+                }
                 tabIndex={-1}
                 className="v8-eye-btn"
               >
@@ -184,14 +193,14 @@ export default function Register() {
               </button>
             </div>
 
-            <label className="v8-label">Xác nhận mật khẩu *</label>
+            <label className="v8-label">{t("register.confirmLabel")}</label>
             <div className="v8-input-wrap">
               <LockKeyhole size={16} className="v8-input-icon" />
               <input
                 type={show ? "text" : "password"}
                 value={form.confirm}
                 onChange={update("confirm")}
-                placeholder="Nhập lại mật khẩu"
+                placeholder={t("register.confirmPlaceholder")}
                 disabled={loading}
                 autoComplete="new-password"
                 onFocus={() => setPeeking(true)}
@@ -209,11 +218,11 @@ export default function Register() {
               {loading ? (
                 <>
                   <Loader2 size={16} className="spin" />
-                  Đang đăng ký...
+                  {t("register.submitting")}
                 </>
               ) : (
                 <>
-                  Tạo tài khoản
+                  {t("register.submitBtn")}
                   <ArrowRight size={16} />
                 </>
               )}
@@ -221,8 +230,8 @@ export default function Register() {
           </form>
 
           <p className="v8-bottom-text" style={{ marginTop: 24 }}>
-            Đã có tài khoản?{" "}
-            <Link to="/">Đăng nhập</Link>
+            {t("register.haveAccount")}{" "}
+            <Link to="/">{t("register.loginNow")}</Link>
           </p>
         </div>
       </main>

@@ -714,17 +714,53 @@ export default function StaffOrderDetailModal({
                       fontSize: 13,
                     }}
                   >
-                    {it.name || "—"}
-                    {it._size && it._size !== "S" && (
-                      <span
+                    <div>
+                      {it.name || "—"}
+                      {it.size?.name && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-light, #94a3b8)",
+                            marginLeft: 4,
+                          }}
+                        >
+                          ({it.size.name})
+                        </span>
+                      )}
+                      {!it.size?.name && it._size && it._size !== "S" && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-light, #94a3b8)",
+                            marginLeft: 4,
+                          }}
+                        >
+                          ({it._size})
+                        </span>
+                      )}
+                    </div>
+
+                    {Array.isArray(it.toppings) && it.toppings.length > 0 && (
+                      <div
                         style={{
+                          marginTop: 4,
                           fontSize: 11,
-                          color: "var(--text-light, #94a3b8)",
-                          marginLeft: 4,
+                          color: "var(--text-muted, #64748b)",
+                          lineHeight: 1.5,
                         }}
                       >
-                        ({it._size})
-                      </span>
+                        <div style={{ fontWeight: 600 }}>Topping:</div>
+                        {it.toppings.map((topping, toppingIndex) => (
+                          <div key={topping.id || toppingIndex}>
+                            - {topping.name || "—"}
+                            {Number(topping.price) > 0 && (
+                              <span>
+                                {" "}+{money(Number(topping.price))}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </td>
                   <td

@@ -77,23 +77,17 @@ function parsePrice(text) {
   }
 
   const kMatch = t.match(/(\d+)\s*(k|nghin|ngan|ngàn|nghìn)/);
-  if (kMatch) {
-    return parseInt(kMatch[1], 10) * 1000;
-  }
+  if (kMatch) return parseInt(kMatch[1], 10) * 1000;
 
   const dMatch = t.match(/(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(d|đ)?/);
-  if (dMatch) {
-    return parseInt(dMatch[1].replace(/[.,]/g, ""), 10);
-  }
+  if (dMatch) return parseInt(dMatch[1].replace(/[.,]/g, ""), 10);
 
   return null;
 }
 
 function pickWithFallback(list, prefix, emptyMsg, limit = 3) {
   const picked = list.slice(0, limit);
-  if (!picked.length) {
-    return { text: emptyMsg, items: [] };
-  }
+  if (!picked.length) return { text: emptyMsg, items: [] };
   return { text: prefix, items: picked };
 }
 
@@ -223,7 +217,6 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
       const n = normalize(m.name || "");
       return /\b(bun bo|hue|sa te|spicy|cay)\b/.test(n);
     });
-
     if (cay.length) {
       return {
         text: T("bot.spicy"),

@@ -12,15 +12,12 @@ import {
 import Sidebar from "./Sidebar";
 import GlobalSearch from "./GlobalSearch";
 import NotificationBell from "./NotificationBell";
+import LanguageToggle from "./LanguageToggle";
 import Footer from "./Footer";
 import HeaderNav from "./HeaderNav";
 import BottomNav from "./BottomNav";
 import ConfirmDialog, { LogoutIcon } from "./ConfirmDialog";
 import { useTranslation } from "../i18n";
-
-// ============================================================
-// CONSTANTS
-// ============================================================
 
 const CART_KEY = "canteen_cart";
 
@@ -76,10 +73,6 @@ const PAGE_HEADINGS = [
   { path: "/owner/backup",        titleKey: "owner.backupTitle",     subtitleKey: "owner.backupDesc" },
 ];
 
-// ============================================================
-// HELPERS
-// ============================================================
-
 function getHomePath(role) {
   if (role === "ADMIN") return "/owner";
   if (role === "EMPLOYEE") return "/employee";
@@ -127,10 +120,6 @@ function lookupHeading(pathname) {
   return null;
 }
 
-// ============================================================
-// SUB-COMPONENT: TopbarLogo
-// ============================================================
-
 function TopbarLogo({ role }) {
   const home = getHomePath(role);
   return (
@@ -152,13 +141,10 @@ function TopbarLogo({ role }) {
   );
 }
 
-// ============================================================
-// SUB-COMPONENT: CartTopbarIcon
-// ============================================================
-
 function CartTopbarIcon() {
   const { t } = useTranslation();
   const [count, setCount] = useState(0);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const read = () => setCount(readCartCount());
@@ -191,10 +177,6 @@ function CartTopbarIcon() {
     </Link>
   );
 }
-
-// ============================================================
-// SUB-COMPONENT: TopbarProfile
-// ============================================================
 
 function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
   const { t, lang, setLang } = useTranslation();
@@ -439,10 +421,6 @@ function TopbarProfile({ user, roleLabel, onOpenProfile, onLogout }) {
     </div>
   );
 }
-
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
 
 export default function Layout({
   role,

@@ -60,6 +60,7 @@ export default function GlobalSearch({ role }) {
   const [menuResults, setMenuResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
+  const { t, lang } = useTranslation();
 
   const boxRef = useRef(null);
   const reqIdRef = useRef(0);
@@ -99,7 +100,6 @@ export default function GlobalSearch({ role }) {
 
       try {
         const menu = await api.menu.list(trimmed, "Tất cả", "popular");
-
         if (myReqId !== reqIdRef.current) return;
 
         let list = Array.isArray(menu) ? menu : [];

@@ -73,6 +73,7 @@ export default function NotificationBell() {
   const [tabVisible, setTabVisible] = useState(
     typeof document === "undefined" || !document.hidden
   );
+  const { t } = useTranslation();
 
   const boxRef = useRef(null);
   const reqIdRef = useRef(0);
@@ -123,16 +124,13 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (!open) return;
-
     const handler = (e) => {
       const target = e.target;
       if (!target || typeof target.closest !== "function") return;
-
       if (boxRef.current && !boxRef.current.contains(target)) {
         setOpen(false);
       }
     };
-
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
