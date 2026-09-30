@@ -5,14 +5,13 @@
 //   - Banner carousel (data từ ../../bannerSlides)
 //   - Flash marquee (chạy chữ khuyến mãi)
 //   - Flash sale (voucher vuông + món giảm giá)
+//   - ✅ Món Signature (section mới, dưới Flash Sale)
 //   - Bán chạy nhất (top 5 sold)
 //   - Món mới lên kệ (4 món mới nhất)
 //   - Testimonials
 //   - QR truy cập menu (auto-detect origin)
 //
-// FIX v8:
-//   - ✅ Áp dụng i18n cho TẤT CẢ text
-//   - ✅ Flash promos fallback + testimonials lấy từ t()
+// ✅ BANNER: nếu buttonLink bắt đầu bằng "#" → scroll thay vì navigate
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -38,9 +37,10 @@ const BEST_SELLERS_LIMIT = 5;
 const NEW_ITEMS_LIMIT = 4;
 const FLASH_PROMOS_LIMIT = 4;
 const FLASH_VOUCHERS_LIMIT = 2;
+const SIGNATURE_LIMIT = 5;
+const SIGNATURE_ALL_LIMIT = 20;
 const SKELETON_COUNT = 5;
 
-// Testimonials — chỉ giữ name + rating (text/role lấy từ i18n)
 const TESTIMONIAL_DATA = [
   { name: "Nguyễn Minh Anh", roleKey: "testimonial.1.role", rating: 5, textKey: "testimonial.1.text" },
   { name: "Trần Quốc Bảo",   roleKey: "testimonial.2.role", rating: 5, textKey: "testimonial.2.text" },
@@ -80,6 +80,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
   const [items, setItems] = useState([]);
   const [newItems, setNewItems] = useState([]);
+  const [signatureItems, setSignatureItems] = useState([]);
   const [promotions, setPromotions] = useState([]);
   const [publicVouchers, setPublicVouchers] = useState([]);
   const [flashItems, setFlashItems] = useState([]);
@@ -92,6 +93,7 @@ export default function CustomerHome({ user, cart, setCart }) {
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState(null);
   const [mode, setMode] = useState("cart");
+  const [showAllSignature, setShowAllSignature] = useState(false);
 
   const [tabVisible, setTabVisible] = useState(
     typeof document === "undefined" || !document.hidden
@@ -128,14 +130,20 @@ export default function CustomerHome({ user, cart, setCart }) {
         const rawList = Array.isArray(menuRes) ? menuRes : [];
         const list = rawList.filter((m) => m.active);
 
+        // Best sellers
         const bestSellers = [...list]
           .filter((m) => (m.sold || 0) > 0)
           .sort((a, b) => (b.sold || 0) - (a.sold || 0))
           .slice(0, BEST_SELLERS_LIMIT);
         setItems(bestSellers);
 
+        // New items
         const sortedById = [...list].sort((a, b) => (b.id || 0) - (a.id || 0));
         setNewItems(sortedById.slice(0, NEW_ITEMS_LIMIT));
+
+        // ✅ Signature items — filter `is_signature === true`
+        const sig = list.filter((m) => m.is_signature === true);
+        setSignatureItems(sig);
 
         setPromotions(Array.isArray(promoRes) ? promoRes : []);
         setPublicVouchers(Array.isArray(pubVoucherRes) ? pubVoucherRes : []);
@@ -199,7 +207,6 @@ export default function CustomerHome({ user, cart, setCart }) {
     )}&margin=0`;
   }, [publicMenuUrl]);
 
-  // Flash track: nếu chưa load xong → dùng default (i18n)
   const effectiveFlashItems = useMemo(() => {
     if (flashItems.length > 0) return flashItems;
     return defaultFlashItems;
@@ -215,6 +222,36 @@ export default function CustomerHome({ user, cart, setCart }) {
     }
     return out;
   }, [effectiveFlashItems]);
+
+  // ✅ Signature visible items — dựa vào showAllSignature
+  const visibleSignature = useMemo(() => {
+    if (showAllSignature) return signatureItems.slice(0, SIGNATURE_ALL_LIMIT);
+    return signatureItems.slice(0, SIGNATURE_LIMIT);
+  }, [signatureItems, showAllSignature]);
+
+  // ✅ Handle banner button click — nếu link bắt đầu bằng "#" thì scroll
+  const handleBannerClick = useCallback((link) => {
+    if (!link) return;
+
+    if (link.startsWith("#")) {
+      const id = link.slice(1);
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      return;
+    }
+
+    navigate(link);
+  }, [navigate]);
+
+  // ✅ Scroll to signature section
+  const scrollToSignature = useCallback(() => {
+    const el = document.getElementById("signature-section");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
 
   // ============================================================
   // RENDER FOOD CARD
@@ -283,7 +320,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
   return (
     <div>
-      {/* ============ ERROR BANNER ============ */}
+      {/* ERROR BANNER */}
       {error && (
         <div
           style={{
@@ -322,7 +359,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         </div>
       )}
 
-      {/* ============ BANNER CAROUSEL ============ */}
+      {/* BANNER CAROUSEL */}
       <div
         className="banner-carousel"
         onMouseEnter={() => setPaused(true)}
@@ -447,10 +484,11 @@ export default function CustomerHome({ user, cart, setCart }) {
                   </div>
                 )}
 
+                {/* ✅ FIX: dùng handleBannerClick để hỗ trợ scroll anchor */}
                 <button
                   type="button"
                   className="banner-btn"
-                  onClick={() => navigate(s.buttonLink)}
+                  onClick={() => handleBannerClick(s.buttonLink)}
                   style={{
                     display: "inline-block",
                     background: "#fff",
@@ -509,7 +547,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         </div>
       </div>
 
-      {/* ============ FLASH MARQUEE ============ */}
+      {/* FLASH MARQUEE */}
       {flashTrack.length > 0 && (
         <Link
           to="/customer/promotions"
@@ -541,7 +579,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         </Link>
       )}
 
-      {/* ============ FLASH SALE ============ */}
+      {/* FLASH SALE */}
       {(promotions.length > 0 || publicVouchers.length > 0) && (
         <>
           <div
@@ -592,7 +630,6 @@ export default function CustomerHome({ user, cart, setCart }) {
 
           <div style={{ marginBottom: 26 }}>
             <div className="home-food-grid-5">
-              {/* ===== VOUCHER ===== */}
               {publicVouchers.slice(0, FLASH_VOUCHERS_LIMIT).map((v) => (
                 <Link
                   key={`voucher-${v.id}`}
@@ -627,7 +664,6 @@ export default function CustomerHome({ user, cart, setCart }) {
                 </Link>
               ))}
 
-              {/* ===== PROMO ===== */}
               {promotions.slice(0, FLASH_PROMOS_LIMIT).map((m) => (
                 <div
                   key={`promo-${m.id}`}
@@ -681,7 +717,103 @@ export default function CustomerHome({ user, cart, setCart }) {
         </>
       )}
 
-      {/* ============ BÁN CHẠY NHẤT ============ */}
+      {/* ✅ SIGNATURE SECTION — Dưới Flash Sale */}
+      {!loading && signatureItems.length > 0 && (
+        <div
+          id="signature-section"
+          style={{
+            marginBottom: 26,
+            scrollMarginTop: 80,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 14,
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 18,
+                color: "var(--text-primary, #172033)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 22 }}>⭐</span> {t("signature.title")}
+              <span
+                style={{
+                  background:
+                    "linear-gradient(135deg, #f59e0b, #ef4444)",
+                  color: "#fff",
+                  padding: "3px 10px",
+                  borderRadius: 12,
+                  fontSize: 10,
+                  fontWeight: 800,
+                }}
+              >
+                {t("customer.badgeBestSeller")}
+              </span>
+            </h3>
+
+            {/* ✅ Nút Xem thêm / Thu gọn */}
+            {signatureItems.length > SIGNATURE_LIMIT && (
+              <button
+                type="button"
+                onClick={() => setShowAllSignature((s) => !s)}
+                style={{
+                  background: "transparent",
+                  border: 0,
+                  color: "#2634d5",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  padding: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                {showAllSignature
+                  ? `${t("common.close")} ↑`
+                  : `${t("customer.viewAll")} →`}
+              </button>
+            )}
+          </div>
+
+          <div className="home-food-grid-5">
+            {visibleSignature.map(renderFoodCard)}
+          </div>
+
+          {/* Nút "Xem tất cả" bên dưới (khi đã show all, có nút đóng) */}
+          {showAllSignature && signatureItems.length > SIGNATURE_LIMIT && (
+            <div style={{ textAlign: "center", marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setShowAllSignature(false)}
+                style={{
+                  padding: "10px 20px",
+                  background: "var(--bg-tertiary, #f5f7fb)",
+                  border: "1px solid var(--border-color, #e5e9ef)",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--text-muted, #475569)",
+                }}
+              >
+                ↑ {t("common.close")}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* BÁN CHẠY NHẤT */}
       <h3
         style={{
           marginBottom: 14,
@@ -744,7 +876,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         {items.map(renderFoodCard)}
       </div>
 
-      {/* ============ MÓN MỚI ============ */}
+      {/* MÓN MỚI */}
       {newItems.length > 0 && (
         <div style={{ marginBottom: 26 }}>
           <div
@@ -782,7 +914,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         </div>
       )}
 
-      {/* ============ ĐÁNH GIÁ KHÁCH HÀNG ============ */}
+      {/* ĐÁNH GIÁ KHÁCH HÀNG */}
       <div style={{ marginBottom: 26 }}>
         <h3
           style={{
@@ -891,7 +1023,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         </div>
       </div>
 
-      {/* ============ QR XEM MENU ============ */}
+      {/* QR XEM MENU */}
       <div
         style={{
           marginBottom: 26,
@@ -969,7 +1101,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         </div>
       </div>
 
-      {/* ============ MODAL ============ */}
+      {/* MODAL */}
       {selected && (
         <FoodDetailModal
           item={selected}
@@ -981,7 +1113,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         />
       )}
 
-      {/* ============ CHATBOT WIDGET ============ */}
+      {/* CHATBOT WIDGET */}
       <ChatBotWidget cart={cart} setCart={setCart} user={user} />
     </div>
   );
