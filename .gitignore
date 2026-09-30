@@ -16,3 +16,4 @@ data/
 # Personal scripts
 merge-main.ps1
 check-conflict.ps1
+auto-merge-all.ps1
