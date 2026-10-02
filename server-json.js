@@ -1,4 +1,4 @@
-﻿import express from "express";
+﻿﻿import express from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -7,7 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import { translateList } from "./autoTranslate.js";
+import { translateOne } from "./autoTranslate.js";
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -16,6 +16,131 @@ const DB_FILE = path.join(__dirname, "canteen-db.json");
 // ✅ BUILD VERSION — dùng để verify Render đã deploy code mới chưa
 const BUILD_VERSION = "v5-oauth-" + new Date().toISOString().slice(0, 19);
 
+
+// ============================================================
+// ✅ AUTO-TRANSLATE — Dịch chủ động khi Admin thêm/sửa món
+// ============================================================
+// Chiến lược:
+//   - EN: dịch ĐỒNG BỘ (timeout 3s) — user có thể đổi ngôn ngữ ngay
+//   - JA/KO/ZH: dịch NỀN (fire-and-forget) — không block response
+//   - Chỉ dịch field thực sự thay đổi (so sánh với bản cũ khi PUT)
+//   - Cache tại translate-cache.json (dùng bởi autoTranslate.js)
+// ============================================================
+
+const SYNC_LANG = "en";
+const ASYNC_LANGS = ["ja", "ko", "zh"];
+const SYNC_TIMEOUT_MS = 3000;
+
+function translateSync(text) {
+  if (!text || !String(text).trim()) return Promise.resolve("");
+  return Promise.race([
+    translateOne(text, SYNC_LANG).catch(() => ""),
+    new Promise((resolve) => setTimeout(() => resolve(""), SYNC_TIMEOUT_MS)),
+  ]);
+}
+
+/**
+ * Dịch nền ja/ko/zh rồi save DB.
+ * `obj` được mutate in-place — saveDB sau khi xong.
+ */
+function translateAsync(db, obj, fields) {
+  const tasks = [];
+  for (const lang of ASYNC_LANGS) {
+    for (const f of fields) {
+      const text = obj[f];
+      if (!text || !String(text).trim()) continue;
+      if (obj[`${f}_${lang}`]) continue; // đã có → skip
+      tasks.push(
+        translateOne(text, lang)
+          .then((translated) => {
+            if (translated) obj[`${f}_${lang}`] = translated;
+          })
+          .catch(() => {})
+      );
+    }
+  }
+  if (!tasks.length) return;
+  Promise.all(tasks)
+    .then(() => {
+      try {
+        saveDB(db);
+      } catch {}
+    })
+    .catch(() => {});
+}
+
+/**
+ * Dịch món ăn (name + description).
+ * - Nếu oldItem != null: chỉ dịch lại field có text thay đổi.
+ * - EN: sync (await trước khi return)
+ * - JA/KO/ZH: async (fire-and-forget)
+ */
+async function autoTranslateMenuItem(db, item, oldItem = null) {
+  const FIELDS = ["name", "description"];
+
+  for (const f of FIELDS) {
+    const newText = item[f];
+    if (!newText || !String(newText).trim()) {
+      // Field rỗng → xóa bản dịch cũ
+      delete item[`${f}_${SYNC_LANG}`];
+      for (const lang of ASYNC_LANGS) delete item[`${f}_${lang}`];
+      continue;
+    }
+
+    const oldText = oldItem ? oldItem[f] : null;
+    const isChanged = !oldItem || oldText !== newText;
+
+    if (isChanged) {
+      // Xóa bản dịch cũ để dịch lại
+      delete item[`${f}_${SYNC_LANG}`];
+      for (const lang of ASYNC_LANGS) delete item[`${f}_${lang}`];
+    }
+
+    // EN: sync — nếu chưa có hoặc đã đổi
+    if (isChanged || !item[`${f}_${SYNC_LANG}`]) {
+      const en = await translateSync(newText);
+      if (en) item[`${f}_${SYNC_LANG}`] = en;
+    }
+  }
+
+  // JA/KO/ZH: fire-and-forget
+  translateAsync(db, item, FIELDS);
+
+  return item;
+}
+
+/**
+ * Dịch category (chỉ name).
+ */
+async function autoTranslateCategory(db, cat, oldCat = null) {
+  const FIELDS = ["name"];
+
+  for (const f of FIELDS) {
+    const newText = cat[f];
+    if (!newText || !String(newText).trim()) {
+      delete cat[`${f}_${SYNC_LANG}`];
+      for (const lang of ASYNC_LANGS) delete cat[`${f}_${lang}`];
+      continue;
+    }
+
+    const oldText = oldCat ? oldCat[f] : null;
+    const isChanged = !oldCat || oldText !== newText;
+
+    if (isChanged) {
+      delete cat[`${f}_${SYNC_LANG}`];
+      for (const lang of ASYNC_LANGS) delete cat[`${f}_${lang}`];
+    }
+
+    if (isChanged || !cat[`${f}_${SYNC_LANG}`]) {
+      const en = await translateSync(newText);
+      if (en) cat[`${f}_${SYNC_LANG}`] = en;
+    }
+  }
+
+  translateAsync(db, cat, FIELDS);
+
+  return cat;
+}
 
 // ============================================================
 // ✅ FIX TIMEZONE: Date helpers — LUÔN theo giờ Việt Nam (UTC+7)
@@ -271,15 +396,12 @@ function notifyNewOrder(db, order) {
   });
 }
 
-// ✅ FIX #4: Bỏ "đã " prefix — tránh "đã đã xác nhận" / "đã đang chuẩn bị"
-// Trước: "Đơn hàng X đã " + newStatus.toLowerCase() → "đã đã xác nhận" (lặp)
-// Sau:   "Đơn hàng X — " + newStatus  → "Đơn hàng X — Đã xác nhận" (chuẩn)
 function notifyOrderStatus(db, order, newStatus) {
   if (!db.notifications) db.notifications = [];
   const id = Math.max(0, ...db.notifications.map(n => n.id)) + 1;
   db.notifications.push({
     id, user_id: order.customer_id,
-    title: "Đơn hàng " + order.code + " — " + newStatus,
+    title: "Đơn hàng " + order.code + " đã " + newStatus.toLowerCase(),
     content: "Đơn hàng của bạn đang ở trạng thái: " + newStatus,
     type: "status", link: "/customer/orders", read: false,
     created_at: new Date().toISOString()
@@ -308,31 +430,6 @@ function rollbackCancelledOrder(db, order) {
   order._stock_rolled_back = true;
 }
 
-
-// ============================================================
-// P1-004 FIX: Validate pickupTime truc tiep (khong parse string)
-// ============================================================
-function validatePickupTime(db, pickupTime) {
-  if (!pickupTime) return { ok: true };
-
-  const slots = getTimeSlots(db);
-  const normalized = String(pickupTime).replace(/\s/g, "").trim();
-
-  const slot = slots.find(function (s) {
-    const slotId = String(s.id || "").replace(/\s/g, "");
-    return slotId === normalized;
-  });
-
-  if (!slot) {
-    return { ok: false, message: "Khung gio khong ton tai: " + pickupTime };
-  }
-
-  if (!slot.enabled) {
-    return { ok: false, message: "Khung gio " + pickupTime + " da kin hoac tam ngung" };
-  }
-
-  return { ok: true, slot: slot };
-}
 const app = express();
 app.use(cors({
   origin: [
@@ -359,9 +456,22 @@ function auth(roles = []) {
     if (!token) return res.status(401).json({ message: "Chưa đăng nhập" });
     try {
       const payload = jwt.verify(token, JWT_SECRET);
-      if (roles.length && !roles.includes(payload.role))
+      const db = loadDB();
+      const currentUser = (db.users || []).find((u) => u.id == payload.id);
+      if (!currentUser) {
+        return res.status(401).json({ message: "Tài khoản không còn tồn tại" });
+      }
+      if (currentUser.status === "Bị khóa") {
+        return res.status(403).json({ message: "Tài khoản đã bị khóa" });
+      }
+      if (roles.length && !roles.includes(currentUser.role))
         return res.status(403).json({ message: "Không có quyền" });
-      req.user = payload;
+      req.user = {
+        ...payload,
+        role: currentUser.role,
+        name: currentUser.name,
+        email: currentUser.email,
+      };
       next();
     } catch {
       res.status(401).json({ message: "Token không hợp lệ" });
@@ -373,9 +483,10 @@ function auth(roles = []) {
 app.post("/api/auth/login", (req, res) => {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ message: "Thiếu email/mật khẩu" });
+    const emailNorm = String(email || "").trim().toLowerCase();
+    if (!emailNorm || !password) return res.status(400).json({ message: "Thiếu email/mật khẩu" });
     const db = loadDB();
-    const user = db.users.find(u => u.email === email.toLowerCase());
+    const user = db.users.find(u => u.email === emailNorm);
     if (!user) return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
     const ok = bcrypt.compareSync(password, user.password);
     if (!ok) return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
@@ -390,14 +501,17 @@ app.post("/api/auth/login", (req, res) => {
 app.post("/api/auth/register", (req, res) => {
   try {
     const { email, password, name, phone } = req.body || {};
-    if (!email || !password || !name) return res.status(400).json({ message: "Thiếu thông tin" });
+    const emailNorm = String(email || "").trim().toLowerCase();
+    const nameNorm = String(name || "").trim();
+    if (!emailNorm || !password || !nameNorm) return res.status(400).json({ message: "Thiếu thông tin" });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) return res.status(400).json({ message: "Email không hợp lệ" });
     if (password.length < 6) return res.status(400).json({ message: "Mật khẩu phải từ 6 ký tự" });
     const db = loadDB();
-    if (db.users.find(u => u.email === email.toLowerCase()))
+    if (db.users.find(u => u.email === emailNorm))
       return res.status(400).json({ message: "Email đã được sử dụng" });
     const hash = bcrypt.hashSync(password, 10);
     const id = Math.max(0, ...db.users.map(u => u.id)) + 1;
-    const user = { id, email: email.toLowerCase(), password: hash, name, phone: phone || "", role: "CUSTOMER", status: "Hoạt động", points: 0 };
+    const user = { id, email: emailNorm, password: hash, name: nameNorm, phone: String(phone || "").trim(), role: "CUSTOMER", status: "Hoạt động", points: 0 };
     db.users.push(user);
     saveDB(db);
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: "7d" });
@@ -464,12 +578,20 @@ app.put("/api/auth/profile", auth(), (req, res) => {
 // ============================================================
 // OAUTH — Google + Facebook
 // ============================================================
+// Flow:
+//   1. FE redirect user sang accounts.google.com hoặc facebook.com
+//   2. User đồng ý → provider redirect về /auth/{provider}/callback?code=xxx
+//   3. FE gửi code + redirectUri lên backend (2 endpoint dưới)
+//   4. Backend exchange code → access_token → lấy user profile
+//   5. Backend tạo/tìm user trong DB → sign JWT → trả FE
+// ============================================================
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || "";
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || "";
 
+// Bật/tắt OAuth (chỉ bật khi có đủ ENV)
 const GOOGLE_OAUTH_ENABLED = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
 const FACEBOOK_OAUTH_ENABLED = !!(FACEBOOK_APP_ID && FACEBOOK_APP_SECRET);
 
@@ -486,6 +608,7 @@ app.post("/api/auth/google/callback", async (req, res) => {
     if (!code) return res.status(400).json({ message: "Thiếu code" });
     if (!redirectUri) return res.status(400).json({ message: "Thiếu redirectUri" });
 
+    // 1. Exchange code → access_token
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -509,6 +632,7 @@ app.post("/api/auth/google/callback", async (req, res) => {
       });
     }
 
+    // 2. Lấy user profile
     const userRes = await fetch(
       "https://www.googleapis.com/oauth2/v2/userinfo",
       { headers: { Authorization: "Bearer " + tokenData.access_token } }
@@ -518,6 +642,7 @@ app.post("/api/auth/google/callback", async (req, res) => {
       return res.status(400).json({ message: "Google không trả về email" });
     }
 
+    // 3. Tạo/tìm user
     const db = loadDB();
     const emailNorm = profile.email.toLowerCase();
     let user = db.users.find((u) => u.email === emailNorm);
@@ -527,7 +652,7 @@ app.post("/api/auth/google/callback", async (req, res) => {
       user = {
         id,
         email: emailNorm,
-        password: "",
+        password: "", // OAuth user không cần password
         name: profile.name || emailNorm.split("@")[0],
         phone: "",
         role: "CUSTOMER",
@@ -541,6 +666,7 @@ app.post("/api/auth/google/callback", async (req, res) => {
       saveDB(db);
       console.log("✅ Google OAuth: tạo user mới", user.email);
     } else {
+      // Update avatar nếu user có Google avatar
       if (profile.picture && !user.avatar) {
         user.avatar = profile.picture;
         saveDB(db);
@@ -548,6 +674,7 @@ app.post("/api/auth/google/callback", async (req, res) => {
       console.log("✅ Google OAuth: user đã tồn tại", user.email);
     }
 
+    // 4. Sign JWT
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.name },
       JWT_SECRET,
@@ -583,6 +710,7 @@ app.post("/api/auth/facebook/callback", async (req, res) => {
     if (!code) return res.status(400).json({ message: "Thiếu code" });
     if (!redirectUri) return res.status(400).json({ message: "Thiếu redirectUri" });
 
+    // 1. Exchange code → access_token
     const tokenUrl =
       `https://graph.facebook.com/v18.0/oauth/access_token?` +
       `client_id=${FACEBOOK_APP_ID}` +
@@ -601,6 +729,7 @@ app.post("/api/auth/facebook/callback", async (req, res) => {
       });
     }
 
+    // 2. Lấy user profile
     const userRes = await fetch(
       `https://graph.facebook.com/me?` +
         `fields=id,name,email,picture.width(200)&` +
@@ -614,6 +743,7 @@ app.post("/api/auth/facebook/callback", async (req, res) => {
       });
     }
 
+    // 3. Tạo/tìm user
     const db = loadDB();
     const emailNorm = profile.email.toLowerCase();
     let user = db.users.find((u) => u.email === emailNorm);
@@ -644,6 +774,7 @@ app.post("/api/auth/facebook/callback", async (req, res) => {
       console.log("✅ Facebook OAuth: user đã tồn tại", user.email);
     }
 
+    // 4. Sign JWT
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.name },
       JWT_SECRET,
@@ -666,52 +797,15 @@ app.post("/api/auth/facebook/callback", async (req, res) => {
   }
 });
 
-// ---------- Debug: kiểm tra OAuth đã cấu hình chưa ----------
-app.get("/api/_debug/oauth-status", (_, res) => {
-  res.json({
-    google: {
-      enabled: GOOGLE_OAUTH_ENABLED,
-      client_id_set: !!GOOGLE_CLIENT_ID,
-      client_secret_set: !!GOOGLE_CLIENT_SECRET,
-    },
-    facebook: {
-      enabled: FACEBOOK_OAUTH_ENABLED,
-      app_id_set: !!FACEBOOK_APP_ID,
-      app_secret_set: !!FACEBOOK_APP_SECRET,
-    },
-  });
-});
-
 // ============================================================
 // MENU
 // ============================================================
-// ✅ FIX #4:
-//   - Nhận `active_only` để lọc món đang bán (active === 1).
-//   - Nhận `sort` để sắp xếp theo popular / price-asc / price-desc / newest / rating.
-//   - KHÔNG truyền `active_only` → trả TẤT CẢ món (Admin/Employee cần thấy món tắt).
-//   - Truyền `active_only=1` → chỉ món đang bán (Customer).
-// ============================================================
-app.get("/api/menu", async (req, res) => {
+app.get("/api/menu", (req, res) => {
   try {
     const db = loadDB();
-    const {
-      q = "",
-      category = "Tất cả",
-      sort = "popular",
-      active_only,
-    } = req.query;
+    const { q = "", category = "Tất cả" } = req.query;
 
     let items = [...(db.menu_items || [])];
-
-    // ✅ FIX #4: Lọc món đang bán nếu active_only=1
-    const onlyActive =
-      active_only === "1" ||
-      active_only === "true" ||
-      active_only === "yes";
-
-    if (onlyActive) {
-      items = items.filter((m) => Number(m.active) === 1);
-    }
 
     if (q) {
       const ql = String(q).toLowerCase();
@@ -720,35 +814,14 @@ app.get("/api/menu", async (req, res) => {
     if (category && category !== "Tất cả") {
       items = items.filter((m) => m.category === category);
     }
-
-    // ✅ FIX #4: Sort theo param `sort` (api.js gửi sort=popular)
-    if (sort === "popular") {
-      items.sort((a, b) => (Number(b.sold) || 0) - (Number(a.sold) || 0));
-    } else if (sort === "price-asc") {
-      items.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
-    } else if (sort === "price-desc") {
-      items.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
-    } else if (sort === "newest") {
-      items.sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
-    } else if (sort === "rating") {
-      items.sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0));
-    }
-
-    // ✅ TỰ ĐỘNG DỊCH
-    const translated = await translateList(
-      items,
-      ["name", "description"],
-      ["en", "ja", "ko", "zh"]
-    );
-
-    res.json(translated);
+    res.json(items);
   } catch (e) {
     console.error("GET /api/menu error:", e);
     res.status(500).json({ message: e.message });
   }
 });
 
-app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), async (req, res) => {
   try {
     const db = loadDB();
     const id = Math.max(0, ...db.menu_items.map(m => m.id)) + 1;
@@ -777,7 +850,12 @@ app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
         body.price = body.original_price;
       }
     }
+
     const item = { id, active: 1, sold: 0, ...body };
+
+    // ✅ AUTO-TRANSLATE — dịch EN sync + JA/KO/ZH async
+    await autoTranslateMenuItem(db, item, null);
+
     db.menu_items.push(item);
     saveDB(db);
     res.status(201).json(item);
@@ -786,7 +864,7 @@ app.post("/api/menu", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
   }
 });
 
-app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), async (req, res) => {
   try {
     const db = loadDB();
     const i = db.menu_items.findIndex(m => m.id == req.params.id);
@@ -826,9 +904,15 @@ app.put("/api/menu/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
       });
     }
     delete newData.reason;
-    db.menu_items[i] = { ...oldItem, ...newData };
+
+    const updated = { ...oldItem, ...newData };
+
+    // ✅ AUTO-TRANSLATE — chỉ dịch lại field thực sự đổi
+    await autoTranslateMenuItem(db, updated, oldItem);
+
+    db.menu_items[i] = updated;
     saveDB(db);
-    res.json({ ok: true, item: db.menu_items[i] });
+    res.json({ ok: true, item: updated });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -943,129 +1027,44 @@ app.post("/api/orders", auth(), (req, res) => {
     let subtotal = 0;
     const detailed = [];
 
-    // ============================================================
-    // P1-001 FIX: Atomic stock check + reserve
-    // Tranh race condition: check va tru trong cung 1 buoc
-    // Neu bat ky mon nao fail -> rollback toan bo
-    // ============================================================
-    const reservedItems = [];
-    let stockError = null;
-
     for (const it of items) {
-      if (stockError) break;
-
       const q = Number(it.qty);
 
       if (!Number.isFinite(q) || q <= 0 || !Number.isInteger(q)) {
-        stockError = "Số lượng món không hợp lệ";
-        break;
+        return res.status(400).json({ message: "Số lượng món không hợp lệ" });
       }
 
       const m = db.menu_items.find(x => x.id == it.menuItem);
       if (!m) {
-        stockError = "Món không tồn tại (id=" + it.menuItem + ")";
-        break;
+        return res.status(400).json({ message: "Món không tồn tại (id=" + it.menuItem + ")" });
       }
 
       if (!m.active) {
-        stockError = m.name + " đã tạm ngừng bán";
-        break;
+        return res.status(400).json({ message: `${m.name} đã tạm ngừng bán` });
       }
 
       if ((m.stock || 0) < q) {
-        stockError = m.name + " không đủ hàng (còn " + (m.stock || 0) + ", cần " + q + ")";
-        break;
-      }
-
-      // ATOMIC: Reserve ngay
-      m.stock -= q;
-      m.sold = (m.sold || 0) + q;
-      reservedItems.push({ m: m, q: q });
-
-      const sizeId = String(it.size || "S");
-      const size = (db.sizes || []).find(
-        s => String(s.id) === sizeId
-      );
-
-      if (!size) {
         return res.status(400).json({
-          message: `${m.name}: kích thước không hợp lệ`,
+          message: `${m.name} không đủ hàng (còn ${m.stock || 0}, cần ${q})`,
         });
       }
 
-      const toppingIds = Array.isArray(it.toppings) ? it.toppings : [];
-      const selectedToppings = [];
-
-      for (const toppingId of toppingIds) {
-        const topping = (db.toppings || []).find(
-          t => String(t.id) === String(toppingId)
-        );
-
-        if (!topping) {
-          return res.status(400).json({
-            message: `${m.name}: topping không tồn tại (id=${toppingId})`,
-          });
-        }
-
-        if (
-          Array.isArray(topping.applies_to) &&
-          topping.applies_to.length > 0 &&
-          !topping.applies_to.includes(m.category)
-        ) {
-          return res.status(400).json({
-            message: `${topping.name} không áp dụng cho ${m.category}`,
-          });
-        }
-
-        selectedToppings.push({
-          id: topping.id,
-          name: topping.name,
-          price: Number(topping.price) || 0,
-        });
-      }
-
-      const basePrice = Number(m.price) || 0;
-      const sizeExtra = Number(size.extra_price) || 0;
-
-      const toppingsTotal = selectedToppings.reduce(
-        (sum, topping) => sum + topping.price,
-        0
-      );
-
-      const unitPrice = basePrice + sizeExtra + toppingsTotal;
-
-      subtotal += unitPrice * q;
-
-      detailed.push({
-        menu_item_id: m.id,
-        name: m.name,
-        price: unitPrice,
-        qty: q,
-        size: {
-          id: size.id,
-          name: size.name,
-          extra_price: sizeExtra,
-        },
-        toppings: selectedToppings,
-      });
-
+      subtotal += m.price * q;
+      detailed.push({ menu_item_id: m.id, name: m.name, price: m.price, qty: q });
       touchedItems.push({ m, q });
-    if (stockError) {
-      // Rollback stock da reserve
-      for (const ri of reservedItems) {
-        ri.m.stock += ri.q;
-        ri.m.sold = Math.max(0, (ri.m.sold || 0) - ri.q);
-      }
-      return res.status(400).json({ message: stockError });
     }
 
-}
-    // FIX: Validate pickupTime truc tiep tu body (khong parse tu note)
-    const pickupTimeFromBody = req.body.pickupTime || "";
-    if (pickupTimeFromBody) {
-      const slotCheck = validatePickupTime(db, pickupTimeFromBody);
-      if (!slotCheck.ok) {
-        return res.status(400).json({ message: slotCheck.message });
+    if (note) {
+      const match = String(note).match(/Nhận lúc\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
+      if (match) {
+        const slotId = match[1].replace(/\s/g, "");
+        const slots = getTimeSlots(db);
+        const slot = slots.find((s) => s.id === slotId);
+        if (slot && !slot.enabled) {
+          return res.status(400).json({
+            message: `Khung giờ ${slotId} đã kín hoặc tạm ngưng. Vui lòng chọn khung giờ khác.`,
+          });
+        }
       }
     }
     total = Math.max(0, subtotal - Number(discount) || 0);
@@ -1083,7 +1082,10 @@ app.post("/api/orders", auth(), (req, res) => {
       }
     }
 
-    // P1-001: Stock da tru trong vong for (atomic)
+    touchedItems.forEach(({ m, q }) => {
+      m.stock = (m.stock || 0) - q;
+      m.sold = (m.sold || 0) + q;
+    });
 
     if (isWalletPay) {
       wallet.balance -= total;
@@ -1154,7 +1156,10 @@ app.post("/api/orders", auth(), (req, res) => {
   } catch (e) {
     console.error("ORDER CREATE ERROR:", e);
 
-    // P1-001: Rollback da xu ly truoc khi tao order
+    touchedItems.forEach(({ m, q }) => {
+      m.stock = (m.stock || 0) + q;
+      m.sold = Math.max(0, (m.sold || 0) - q);
+    });
 
     if (isWalletPay && wallet) {
       wallet.balance += total;
@@ -1537,30 +1542,14 @@ function ensureCategories(db) {
   return { categories: db.categories, changed: false };
 }
 
-app.get("/api/categories", async (req, res) => {
-  try {
-    const db = loadDB();
-    const { categories, changed } = ensureCategories(db);
-    if (changed) saveDB(db);
-
-    const sorted = [...categories].sort(
-      (a, b) => (a.order || 0) - (b.order || 0)
-    );
-
-    const translated = await translateList(
-      sorted,
-      ["name"],
-      ["en", "ja", "ko", "zh"]
-    );
-
-    res.json(translated);
-  } catch (e) {
-    console.error("GET /api/categories error:", e);
-    res.status(500).json({ message: e.message });
-  }
+app.get("/api/categories", (req, res) => {
+  const db = loadDB();
+  const { categories, changed } = ensureCategories(db);
+  if (changed) saveDB(db);
+  res.json([...categories].sort((a, b) => (a.order || 0) - (b.order || 0)));
 });
 
-app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), async (req, res) => {
   try {
     const db = loadDB();
     const { categories } = ensureCategories(db);
@@ -1584,19 +1573,23 @@ app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
 
     const id = Math.max(0, ...categories.map(c => c.id)) + 1;
     const cat = { id, name: trimmed, icon: icon || "🍽️", order: finalOrder };
+
+    // ✅ AUTO-TRANSLATE
+    await autoTranslateCategory(db, cat, null);
+
     categories.push(cat);
     saveDB(db);
     res.status(201).json(cat);
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
+app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), async (req, res) => {
   try {
     const db = loadDB();
     const { categories } = ensureCategories(db);
     const cat = categories.find(c => c.id == req.params.id);
     if (!cat) return res.status(404).json({ message: "Không tìm thấy danh mục" });
-    const oldName = cat.name;
+    const oldName = cat.name; // ✅ snapshot TRƯỚC khi sửa
     const { name, icon, order } = req.body;
 
     if (name && name.trim()) {
@@ -1621,6 +1614,9 @@ app.put("/api/categories/:id", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {
       }
       cat.order = parsed;
     }
+
+    // ✅ AUTO-TRANSLATE — truyền oldCat để so sánh
+    await autoTranslateCategory(db, cat, { name: oldName });
 
     saveDB(db);
     res.json(cat);
@@ -2170,6 +2166,7 @@ function todayStr() {
   return getLocalDateStr();
 }
 
+// ✅ 2 ca: 06:30-12:30, 12:30-18:30
 const SHIFT_START_HOUR = { "Ca sáng": 6, "Ca chiều": 12 };
 const SHIFT_START_MIN  = { "Ca sáng": 30, "Ca chiều": 30 };
 const SHIFT_END_HOUR   = { "Ca sáng": 12, "Ca chiều": 18 };
@@ -2188,6 +2185,7 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
     const { shift: bodyShift } = req.body || {};
     let shift = bodyShift || "";
 
+    // Auto-detect nếu không truyền shift
     if (!shift) {
       if (nowMinutes >= 6 * 60 + 30 && nowMinutes < 12 * 60 + 30) shift = "Ca sáng";
       else if (nowMinutes >= 12 * 60 + 30 && nowMinutes < 18 * 60 + 30) shift = "Ca chiều";
@@ -2198,6 +2196,7 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
       }
     }
 
+    // ✅ FIX: Chặn nếu NV không có ca APPROVED hôm nay
     const approvedShift = (db.shifts || []).find((s) =>
       s.employee_id === req.user.id &&
       s.date === today &&
@@ -2222,6 +2221,7 @@ app.post("/api/attendance/checkin", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
       return res.status(400).json({ message: "Bạn đã check-in " + shift + " hôm nay rồi" });
     }
 
+    // ✅ FIX: Đi muộn nếu check-in > start + 15 phút
     const startHour = SHIFT_START_HOUR[shift] ?? 6;
     const startMin = SHIFT_START_MIN[shift] ?? 30;
     const shiftStartMinutes = startHour * 60 + startMin;
@@ -2281,6 +2281,8 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
     att.checkOut = now.toISOString();
     att.hours = Math.round(((now - new Date(att.checkIn)) / 3600000) * 100) / 100;
 
+    // ✅ FIX: Về sớm nếu check-out < end − 15 phút
+    // Và hiển thị cả 2 nếu vừa muộn vừa sớm
     const endHour = SHIFT_END_HOUR[shift];
     const endMin = SHIFT_END_MIN[shift] ?? 0;
     const shiftEndMinutes = endHour * 60 + endMin;
@@ -2293,6 +2295,7 @@ app.post("/api/attendance/checkout", auth(["EMPLOYEE", "ADMIN"]), (req, res) => 
     } else if (early && !wasLate) {
       att.status = "Về sớm";
     }
+    // Nếu không early → giữ nguyên status (Đúng giờ hoặc Đi muộn)
 
     saveDB(db);
     res.json({ message: "Check-out " + shift + " thành công", attendance: att });
@@ -2666,6 +2669,7 @@ app.put("/api/settings", auth(["ADMIN"]), (req, res) => {
 
 // ============ SHIFTS ============
 
+// ✅ SỬA: CHỈ trả ca APPROVED — ẩn pending
 app.get("/api/shifts/me", auth(), (req, res) => {
   const db = loadDB();
   const today = getLocalDateStr();
@@ -2680,6 +2684,7 @@ app.get("/api/shifts/me", auth(), (req, res) => {
   res.json(list);
 });
 
+// ✅ MỚI: Trả ca APPROVED của NV cho HÔM NAY
 app.get("/api/shifts/approved-today", auth(["EMPLOYEE", "ADMIN"]), (req, res) => {
   try {
     const db = loadDB();
@@ -2879,14 +2884,92 @@ app.delete("/api/shifts/:id", auth(["ADMIN"]), (req, res) => {
   saveDB(db);
   res.json({ ok: true });
 });
+// ============================================================
+// ✅ ADMIN BACKFILL — Dịch hàng loạt dữ liệu cũ chưa có bản dịch
+// ============================================================
+// Chạy 1 lần: curl -X POST /api/admin/backfill-translations (Bearer admin)
+// Idempotent: món nào đã có đủ 4 lang → skip
+// ============================================================
+app.post("/api/admin/backfill-translations", auth(["ADMIN"]), async (req, res) => {
+  try {
+    const db = loadDB();
+    const FIELDS_MENU = ["name", "description"];
+    const FIELDS_CAT = ["name"];
+    const LANGS = ["en", "ja", "ko", "zh"];
 
+    let menuDone = 0;
+    let menuSkipped = 0;
+    let menuFailed = [];
+    let catDone = 0;
+    let catSkipped = 0;
+
+    // ---- MENU ITEMS ----
+    for (const m of db.menu_items || []) {
+      let need = false;
+      for (const f of FIELDS_MENU) {
+        if (!m[f] || !String(m[f]).trim()) continue;
+        for (const l of LANGS) {
+          if (!m[`${f}_${l}`]) { need = true; break; }
+        }
+        if (need) break;
+      }
+
+      if (!need) { menuSkipped++; continue; }
+
+      try {
+        await autoTranslateMenuItem(db, m, null);
+        menuDone++;
+      } catch (e) {
+        menuFailed.push({ id: m.id, name: m.name, error: e.message });
+      }
+    }
+
+    // ---- CATEGORIES ----
+    for (const c of db.categories || []) {
+      let need = false;
+      for (const f of FIELDS_CAT) {
+        if (!c[f] || !String(c[f]).trim()) continue;
+        for (const l of LANGS) {
+          if (!c[`${f}_${l}`]) { need = true; break; }
+        }
+        if (need) break;
+      }
+
+      if (!need) { catSkipped++; continue; }
+
+      try {
+        await autoTranslateCategory(db, c, null);
+        catDone++;
+      } catch {
+        // bỏ qua lỗi category
+      }
+    }
+
+    saveDB(db);
+
+    res.json({
+      ok: true,
+      menu: { done: menuDone, skipped: menuSkipped, failed: menuFailed },
+      category: { done: catDone, skipped: catSkipped },
+      message: `Đã dịch ${menuDone} món, ${catDone} danh mục. Bỏ qua ${menuSkipped} món (đã có đủ 4 lang).`,
+    });
+  } catch (e) {
+    console.error("BACKFILL ERROR:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
 // ============ HEALTH ============
 app.get("/", (_, res) => res.json({
   ok: true,
   name: "Canteen VWA API (JSON)",
   version: BUILD_VERSION,
   timezone: VN_TIMEZONE,
-  menuEndpoint: "returns ALL items by default; use ?active_only=1 for Customer",
+  menuEndpoint: "returns ALL items (no active filter)",
+  autoTranslate: {
+    sync: SYNC_LANG,
+    async: ASYNC_LANGS,
+    timeoutMs: SYNC_TIMEOUT_MS,
+  },
   oauth: {
     google: GOOGLE_OAUTH_ENABLED,
     facebook: FACEBOOK_OAUTH_ENABLED,
@@ -2894,29 +2977,6 @@ app.get("/", (_, res) => res.json({
   timestamp: new Date().toISOString()
 }));
 
-app.get("/api/_debug/menu-count", (_, res) => {
-  try {
-    const db = loadDB();
-    const all = db.menu_items || [];
-    const active = all.filter(m => m.active).length;
-    const inactive = all.length - active;
-    res.json({
-      buildVersion: BUILD_VERSION,
-      serverTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      vnTimezone: VN_TIMEZONE,
-      serverDate: new Date().toISOString(),
-      vnDate: getLocalDateStr(),
-      vnHour: getVNHour(),
-      total: all.length,
-      active,
-      inactive,
-      inactiveItems: all.filter(m => !m.active).map(m => ({ id: m.id, name: m.name, active: m.active })),
-      timestamp: new Date().toISOString()
-    });
-  } catch (e) {
-    res.status(500).json({ message: e.message, buildVersion: BUILD_VERSION });
-  }
-});
 
 const PORT = process.env.PORT || 3000;
 
