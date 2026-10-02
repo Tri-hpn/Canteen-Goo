@@ -9,10 +9,7 @@
 //   - Lịch sử chấm công theo tháng + search
 //   - Thông báo nhắc trước ca 30 phút
 //
-// FIX v3 (triệt để):
-//   - 🔴 Cột phải KHÔNG render gì khi chưa có ca approved
-//   - 🔴 Không hiện badge "Đi muộn"/"Check-in 06:38" khi chưa có ca
-//   - 🔴 Empty state duy nhất ở đầu, khớp với trang Tổng quan
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
@@ -23,6 +20,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -112,6 +110,8 @@ function getAutoShift() {
 // ============================================================
 
 export default function EmployeeCheckInOut() {
+  const { t } = useI18n();
+
   // ---------- Data ----------
   const [today, setToday] = useState(null);
   const [list, setList] = useState([]);
@@ -176,12 +176,12 @@ export default function EmployeeCheckInOut() {
       const data = await api.shifts.approvedToday();
       setApprovedShifts(Array.isArray(data) ? data : []);
     } catch (e) {
-      setApprovedError(e.message || "Không tải được ca");
+      setApprovedError(e.message || t("Không tải được ca"));
       setApprovedShifts([]);
     } finally {
       setApprovedLoading(false);
     }
-  }, []);
+  }, [t]);
 
   // Initial load + auto-refresh
   useEffect(() => {
@@ -243,7 +243,7 @@ export default function EmployeeCheckInOut() {
           if (diffMin > 25 && diffMin <= 30 && !notifiedRef.current[key]) {
             notifiedRef.current[key] = true;
             toast(
-              `🔔 Sắp đến ${s.shift} (${shift.time}) — còn ${diffMin} phút!`,
+              `🔔 ${t("Sắp đến")} ${s.shift} (${shift.time}) — ${t("còn")} ${diffMin} ${t("phút!")}`,
               "info"
             );
           }
@@ -253,7 +253,7 @@ export default function EmployeeCheckInOut() {
     check();
     const t = setInterval(check, 60000);
     return () => clearInterval(t);
-  }, [approvedShifts]);
+  }, [approvedShifts, t]);
 
   // ---------- Handlers ----------
 
@@ -261,18 +261,21 @@ export default function EmployeeCheckInOut() {
     if (checkingIn || checkingOut) return;
 
     if (!approvedShifts.length) {
-      toast("Bạn chưa có ca được duyệt hôm nay", "error");
+      toast(t("Bạn chưa có ca được duyệt hôm nay"), "error");
       return;
     }
 
     if (!selectedShift || selectedShift === "Ngoài giờ") {
-      toast("Vui lòng chọn ca làm hợp lệ", "error");
+      toast(t("Vui lòng chọn ca làm hợp lệ"), "error");
       return;
     }
 
     const isApproved = approvedShifts.some((s) => s.shift === selectedShift);
     if (!isApproved) {
-      toast(`Bạn chưa được duyệt ${selectedShift} hôm nay`, "error");
+      toast(
+        `${t("Bạn chưa được duyệt")} ${selectedShift} ${t("hôm nay")}`,
+        "error"
+      );
       return;
     }
 
@@ -280,10 +283,13 @@ export default function EmployeeCheckInOut() {
     try {
       const res = await api.attendance.checkIn({ shift: selectedShift });
       setToday(res.attendance);
-      toast(`Check-in ${selectedShift} thành công!`, "success");
+      toast(
+        `${t("Check-in")} ${selectedShift} ${t("thành công!")}`,
+        "success"
+      );
       loadList();
     } catch (e) {
-      toast(e.message || "Lỗi check-in", "error");
+      toast(e.message || t("Lỗi check-in"), "error");
     } finally {
       setCheckingIn(false);
     }
@@ -296,10 +302,10 @@ export default function EmployeeCheckInOut() {
     try {
       const res = await api.attendance.checkOut({});
       setToday(res.attendance);
-      toast("Check-out thành công!", "success");
+      toast(t("Check-out thành công!"), "success");
       loadList();
     } catch (e) {
-      toast(e.message || "Lỗi check-out", "error");
+      toast(e.message || t("Lỗi check-out"), "error");
     } finally {
       setCheckingOut(false);
     }
@@ -375,10 +381,10 @@ export default function EmployeeCheckInOut() {
         let badge = null;
         let badgeColor = "#2634d5";
         if (date === todayStr) {
-          badge = "Hôm nay";
+          badge = t("Hôm nay");
           badgeColor = "#18a967";
         } else if (date === tomorrowStr) {
-          badge = "Ngày mai";
+          badge = t("Ngày mai");
           badgeColor = "#f59e0b";
         }
 
@@ -399,7 +405,7 @@ export default function EmployeeCheckInOut() {
           shifts,
         };
       });
-  }, [myShifts]);
+  }, [myShifts, t]);
 
   const timeStr = now.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
@@ -429,7 +435,7 @@ export default function EmployeeCheckInOut() {
     return { bg: "#f1f5f9", color: "#475569" };
   };
 
-  // ✅ NEW: flag để ẩn toàn bộ info khi chưa có ca
+  // Flag để ẩn toàn bộ info khi chưa có ca
   const hasApprovedShift = approvedShifts.length > 0;
   const showEmptyState = !approvedLoading && !hasApprovedShift;
 
@@ -472,11 +478,10 @@ export default function EmployeeCheckInOut() {
             </div>
             <div style={{ flex: 1 }}>
               <b style={{ color: "#92400e", fontSize: 15, display: "block" }}>
-                🔔 Sắp đến {nextShift.shift} ({nextShift._shift.time})
+                🔔 {t("Sắp đến")} {nextShift.shift} ({nextShift._shift.time})
               </b>
               <span style={{ color: "#78350f", fontSize: 13 }}>
-                Còn {Math.round(nextShift._diffMs / 60000)} phút nữa — chuẩn bị
-                check-in nhé!
+                {t("Còn")} {Math.round(nextShift._diffMs / 60000)} {t("phút nữa — chuẩn bị check-in nhé!")}
               </span>
             </div>
           </div>
@@ -513,7 +518,7 @@ export default function EmployeeCheckInOut() {
                 letterSpacing: 1,
               }}
             >
-              Giờ hiện tại
+              {t("Giờ hiện tại")}
             </span>
           </div>
 
@@ -549,7 +554,7 @@ export default function EmployeeCheckInOut() {
                   marginBottom: 4,
                 }}
               >
-                📅 Ca sắp tới
+                📅 {t("Ca sắp tới")}
               </div>
               <b
                 style={{
@@ -563,10 +568,10 @@ export default function EmployeeCheckInOut() {
               <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>
                 {fmtDate(nextShift.date)}
                 {nextShift._diffMs > 0 &&
-                  " · còn " + Math.round(nextShift._diffMs / 60000) + " phút"}
+                  ` · ${t("còn")} ${Math.round(nextShift._diffMs / 60000)} ${t("phút")}`}
                 {nextShift._diffMs <= 0 &&
                   nextShift._diffMs > -60 * 60 * 1000 &&
-                  " · đang trong ca"}
+                  ` · ${t("đang trong ca")}`}
               </span>
             </div>
           ) : (
@@ -580,7 +585,7 @@ export default function EmployeeCheckInOut() {
                 color: "var(--text-muted, #64748b)",
               }}
             >
-              💡 Chưa có ca làm nào được phân
+              💡 {t("Chưa có ca làm nào được phân")}
             </div>
           )}
         </div>
@@ -597,13 +602,10 @@ export default function EmployeeCheckInOut() {
               marginBottom: 12,
             }}
           >
-            Hôm nay
+            {t("Hôm nay")}
           </div>
 
-          {/* ============================================================
-              ✅ FIX TRIỆT ĐỂ: Chưa có ca approved → chỉ hiện empty state
-              (KHÔNG hiện Check-in/out, KHÔNG hiện badge, KHÔNG hiện "Ca sáng")
-              ============================================================ */}
+          {/* Chưa có ca approved → chỉ hiện empty state */}
           {showEmptyState ? (
             <div
               style={{
@@ -629,7 +631,7 @@ export default function EmployeeCheckInOut() {
                   display: "block",
                 }}
               >
-                Chưa có ca được duyệt hôm nay
+                {t("Chưa có ca được duyệt hôm nay")}
               </b>
               <span
                 style={{
@@ -639,7 +641,7 @@ export default function EmployeeCheckInOut() {
                   maxWidth: 300,
                 }}
               >
-                Vui lòng liên hệ admin để được phân ca trước khi check-in.
+                {t("Vui lòng liên hệ admin để được phân ca trước khi check-in.")}
               </span>
               <span
                 style={{
@@ -650,7 +652,7 @@ export default function EmployeeCheckInOut() {
                   fontStyle: "italic",
                 }}
               >
-                Chỉ check-in được ca admin đã duyệt. Đi muộn sau 15 phút.
+                {t("Chỉ check-in được ca admin đã duyệt. Đi muộn sau 15 phút.")}
               </span>
             </div>
           ) : (
@@ -664,13 +666,13 @@ export default function EmployeeCheckInOut() {
                   marginBottom: 16,
                 }}
               >
-                <Row label="Check-in" value={fmt(today?.checkIn)} />
-                <Row label="Check-out" value={fmt(today?.checkOut)} />
+                <Row label={t("Check-in")} value={fmt(today?.checkIn)} />
+                <Row label={t("Check-out")} value={fmt(today?.checkOut)} />
                 <Row
-                  label="Giờ làm"
+                  label={t("Giờ làm")}
                   value={today?.hours ? today.hours + "h" : "—"}
                 />
-                <Row label="Ca làm" value={today?.shift || "—"} />
+                <Row label={t("Ca làm")} value={today?.shift || "—"} />
                 {today?.status && (
                   <div
                     style={{
@@ -702,7 +704,7 @@ export default function EmployeeCheckInOut() {
                       marginBottom: 6,
                     }}
                   >
-                    Chọn ca làm (đã được duyệt hôm nay)
+                    {t("Chọn ca làm (đã được duyệt hôm nay)")}
                   </label>
 
                   {approvedLoading && (
@@ -723,7 +725,7 @@ export default function EmployeeCheckInOut() {
                           marginBottom: 6,
                         }}
                       />
-                      <div>Đang tải ca...</div>
+                      <div>{t("Đang tải ca...")}</div>
                     </div>
                   )}
 
@@ -756,7 +758,7 @@ export default function EmployeeCheckInOut() {
                           fontWeight: 600,
                         }}
                       >
-                        Thử lại
+                        {t("Thử lại")}
                       </button>
                     </div>
                   )}
@@ -868,12 +870,12 @@ export default function EmployeeCheckInOut() {
                 >
                   <LogIn size={16} />
                   {today?.checkIn
-                    ? "Đã check-in"
+                    ? t("Đã check-in")
                     : checkingIn
-                    ? "Đang xử lý..."
+                    ? t("Đang xử lý...")
                     : approvedShifts.length === 0
-                    ? "Chưa có ca"
-                    : "Check-in"}
+                    ? t("Chưa có ca")
+                    : t("Check-in")}
                 </button>
                 <button
                   disabled={
@@ -908,10 +910,10 @@ export default function EmployeeCheckInOut() {
                 >
                   <LogOut size={16} />
                   {today?.checkOut
-                    ? "Đã check-out"
+                    ? t("Đã check-out")
                     : checkingOut
-                    ? "Đang xử lý..."
-                    : "Check-out"}
+                    ? t("Đang xử lý...")
+                    : t("Check-out")}
                 </button>
               </div>
 
@@ -924,8 +926,7 @@ export default function EmployeeCheckInOut() {
                   textAlign: "center",
                 }}
               >
-                Ca sáng: 06:30 - 12:30 · Ca chiều: 12:30 - 18:30 · Đi muộn sau 15
-                phút.
+                {t("Ca sáng: 06:30 - 12:30 · Ca chiều: 12:30 - 18:30 · Đi muộn sau 15 phút.")}
               </p>
             </>
           )}
@@ -962,7 +963,7 @@ export default function EmployeeCheckInOut() {
                 gap: 8,
               }}
             >
-              <Calendar size={18} /> Ca làm sắp tới của tôi
+              <Calendar size={18} /> {t("Ca làm sắp tới của tôi")}
             </h3>
           </div>
           <button
@@ -981,7 +982,7 @@ export default function EmployeeCheckInOut() {
               fontSize: 13,
             }}
           >
-            <PlusCircle size={15} /> Đăng ký ca
+            <PlusCircle size={15} /> {t("Đăng ký ca")}
           </button>
         </div>
 
@@ -997,10 +998,10 @@ export default function EmployeeCheckInOut() {
           >
             <CalendarDays size={40} style={{ opacity: 0.3, marginBottom: 8 }} />
             <div style={{ fontSize: 13, marginBottom: 4 }}>
-              Chưa có ca làm nào được duyệt
+              {t("Chưa có ca làm nào được duyệt")}
             </div>
             <div style={{ fontSize: 12 }}>
-              Bấm "Đăng ký ca" để đăng ký ca cho tuần sau
+              {t("Bấm \"Đăng ký ca\" để đăng ký ca cho tuần sau")}
             </div>
           </div>
         ) : (
@@ -1019,7 +1020,7 @@ export default function EmployeeCheckInOut() {
                   borderRadius: 12,
                   padding: 14,
                   background:
-                    group.badge === "Hôm nay"
+                    group.badge === t("Hôm nay")
                       ? "linear-gradient(135deg, rgba(24, 169, 103, 0.05), rgba(38, 52, 213, 0.05))"
                       : "var(--card-bg, #fff)",
                   transition: "all 0.2s",
@@ -1082,7 +1083,7 @@ export default function EmployeeCheckInOut() {
                         color: "var(--text-light, #8993a3)",
                       }}
                     >
-                      {group.shifts.length} ca
+                      {group.shifts.length} {t("ca")}
                     </span>
                   </div>
                   {group.badge && (
@@ -1168,25 +1169,25 @@ export default function EmployeeCheckInOut() {
       <div className="emp-cio-stats">
         <StatBox
           icon={<Calendar />}
-          label="Tổng ngày công"
+          label={t("Tổng ngày công")}
           value={stats.total}
           color="#2634d5"
         />
         <StatBox
           icon={<TrendingUp />}
-          label="Đúng giờ"
+          label={t("Đúng giờ")}
           value={stats.onTime}
           color="#18a967"
         />
         <StatBox
           icon={<AlertTriangle />}
-          label="Đi muộn"
+          label={t("Đi muộn")}
           value={stats.late}
           color="#f59e0b"
         />
         <StatBox
           icon={<Clock />}
-          label="Tổng giờ"
+          label={t("Tổng giờ")}
           value={stats.totalHours.toFixed(1) + "h"}
           color="#8b5cf6"
         />
@@ -1237,7 +1238,7 @@ export default function EmployeeCheckInOut() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm theo ngày (YYYY-MM-DD)..."
+            placeholder={t("Tìm theo ngày (YYYY-MM-DD)...")}
             style={{
               border: 0,
               outline: "none",
@@ -1250,7 +1251,7 @@ export default function EmployeeCheckInOut() {
           {search && (
             <button
               onClick={() => setSearch("")}
-              aria-label="Xoá tìm kiếm"
+              aria-label={t("Xoá tìm kiếm")}
               style={{
                 background: "transparent",
                 border: 0,
@@ -1275,18 +1276,18 @@ export default function EmployeeCheckInOut() {
         }}
       >
         <h3 style={{ marginTop: 0, color: "var(--text-primary, #172033)" }}>
-          Lịch sử chấm công — {filtered.length} bản ghi
+          {t("Lịch sử chấm công")} — {filtered.length} {t("bản ghi")}
         </h3>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                <th style={th}>Ngày</th>
-                <th style={th}>Ca làm</th>
-                <th style={th}>Check-in</th>
-                <th style={th}>Check-out</th>
-                <th style={{ ...th, textAlign: "right" }}>Giờ làm</th>
-                <th style={th}>Trạng thái</th>
+                <th style={th}>{t("Ngày")}</th>
+                <th style={th}>{t("Ca làm")}</th>
+                <th style={th}>{t("Check-in")}</th>
+                <th style={th}>{t("Check-out")}</th>
+                <th style={{ ...th, textAlign: "right" }}>{t("Giờ làm")}</th>
+                <th style={th}>{t("Trạng thái")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1363,7 +1364,7 @@ export default function EmployeeCheckInOut() {
                       color: "var(--text-light, #8993a3)",
                     }}
                   >
-                    Chưa có dữ liệu chấm công
+                    {t("Chưa có dữ liệu chấm công")}
                   </td>
                 </tr>
               )}
@@ -1379,10 +1380,10 @@ export default function EmployeeCheckInOut() {
           onSave={async (data) => {
             const res = await api.shifts.register(data);
             toast(
-              "Đã đăng ký " +
-                res.created +
-                " ca" +
-                (res.skipped ? " (bỏ qua " + res.skipped + " ca trùng)" : ""),
+              `${t("Đã đăng ký")} ${res.created} ${t("ca")}` +
+                (res.skipped
+                  ? ` (${t("bỏ qua")} ${res.skipped} ${t("ca trùng")})`
+                  : ""),
               "success"
             );
             setShowRegister(false);
@@ -1468,6 +1469,7 @@ function StatBox({ icon, label, value, color }) {
 // ============================================================
 
 function RegisterModal({ existingShifts = [], onSave, onClose }) {
+  const { t } = useI18n();
   const displayWeekDays = useMemo(() => getNextWeekDays(), []);
 
   const [dateShifts, setDateShifts] = useState({});
@@ -1499,7 +1501,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
 
   const toggleShift = (shiftId) => {
     if (!activeDate) {
-      toast("Vui lòng chọn ngày trước", "error");
+      toast(t("Vui lòng chọn ngày trước"), "error");
       return;
     }
     setDateShifts((prev) => {
@@ -1537,7 +1539,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
       (d) => dateShifts[d]?.length > 0
     );
     if (!dates.length) {
-      toast("Chọn ít nhất 1 ngày và 1 ca", "error");
+      toast(t("Chọn ít nhất 1 ngày và 1 ca"), "error");
       return;
     }
 
@@ -1579,7 +1581,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
       onClick={() => !submitting && onClose()}
       role="dialog"
       aria-modal="true"
-      aria-label="Đăng ký ca làm"
+      aria-label={t("Đăng ký ca làm")}
       style={{
         position: "fixed",
         inset: 0,
@@ -1620,12 +1622,12 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
               gap: 8,
             }}
           >
-            <ClipboardList size={20} /> Đăng ký ca làm
+            <ClipboardList size={20} /> {t("Đăng ký ca làm")}
           </h3>
           <button
             onClick={() => !submitting && onClose()}
             disabled={submitting}
-            aria-label="Đóng"
+            aria-label={t("Đóng")}
             style={{
               background: "transparent",
               border: 0,
@@ -1652,7 +1654,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
             fontWeight: 600,
           }}
         >
-          📅 Đăng ký cho tuần sau ({weekLabel}) · Admin sẽ duyệt
+          📅 {t("Đăng ký cho tuần sau")} ({weekLabel}) · {t("Admin sẽ duyệt")}
         </div>
 
         <form onSubmit={submit}>
@@ -1668,11 +1670,11 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
             }}
           >
             <label style={label}>
-              Ngày *{" "}
+              {t("Ngày")} *{" "}
               <span
                 style={{ fontWeight: 400, color: "var(--text-light, #94a3b8)" }}
               >
-                (bấm ngày → chọn ca)
+                ({t("bấm ngày → chọn ca")})
               </span>
             </label>
             <div style={{ display: "flex", gap: 6 }}>
@@ -1691,7 +1693,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
                   fontWeight: 600,
                 }}
               >
-                Áp dụng cả tuần
+                {t("Áp dụng cả tuần")}
               </button>
               {totalAssignments > 0 && (
                 <button
@@ -1709,7 +1711,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
                     fontWeight: 600,
                   }}
                 >
-                  Xoá hết
+                  {t("Xoá hết")}
                 </button>
               )}
             </div>
@@ -1747,8 +1749,8 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
                   disabled={submitting}
                   title={
                     isAssigned
-                      ? "Đã chọn ca — bấm để xem/sửa"
-                      : "Bấm để chọn ngày"
+                      ? t("Đã chọn ca — bấm để xem/sửa")
+                      : t("Bấm để chọn ngày")
                   }
                   style={{
                     padding: "8px 4px",
@@ -1797,12 +1799,12 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
           </div>
 
           <label style={label}>
-            Ca làm *{" "}
+            {t("Ca làm")} *{" "}
             {activeDate && (
               <span
                 style={{ fontWeight: 400, color: "var(--text-light, #94a3b8)" }}
               >
-                (ngày {activeDate.slice(8)}/{activeDate.slice(5, 7)})
+                ({t("ngày")} {activeDate.slice(8)}/{activeDate.slice(5, 7)})
               </span>
             )}
           </label>
@@ -1851,7 +1853,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
                         fontWeight: 700,
                       }}
                     >
-                      đã có
+                      {t("đã có")}
                     </span>
                   )}
                   <Icon
@@ -1879,11 +1881,11 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
             })}
           </div>
 
-          <label style={label}>Ghi chú</label>
+          <label style={label}>{t("Ghi chú")}</label>
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="VD: Có thể đến trễ 10 phút..."
+            placeholder={t("VD: Có thể đến trễ 10 phút...")}
             disabled={submitting}
             style={input}
           />
@@ -1901,8 +1903,8 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
                 fontWeight: 600,
               }}
             >
-              📋 Sẽ đăng ký <b>{totalAssignments}</b> ca trên <b>{totalDays}</b>{" "}
-              ngày — chờ admin duyệt
+              📋 {t("Sẽ đăng ký")} <b>{totalAssignments}</b> {t("ca trên")}{" "}
+              <b>{totalDays}</b> {t("ngày — chờ admin duyệt")}
             </div>
           )}
 
@@ -1922,7 +1924,7 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
                 fontWeight: 600,
               }}
             >
-              Hủy
+              {t("Hủy")}
             </button>
             <button
               type="submit"
@@ -1946,7 +1948,8 @@ function RegisterModal({ existingShifts = [], onSave, onClose }) {
                 gap: 6,
               }}
             >
-              <Save size={14} /> {submitting ? "Đang gửi..." : "Đăng ký ca"}
+              <Save size={14} />{" "}
+              {submitting ? t("Đang gửi...") : t("Đăng ký ca")}
             </button>
           </div>
         </form>

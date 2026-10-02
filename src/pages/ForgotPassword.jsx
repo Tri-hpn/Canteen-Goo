@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // FORGOTPASSWORD.JSX — Khôi phục mật khẩu (style Login V8)
 // ============================================================
 // Demo — OTP hardcode "123456"
@@ -15,14 +15,14 @@ import {
   Eye, EyeOff, Loader2, RefreshCw,
 } from "lucide-react";
 import { toast } from "../components/Effects";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 import CuteCharacters from "../components/LoginIllustration";
 
 const DEMO_OTP = "123456";
 const RESEND_COOLDOWN = 60;
 
 export default function ForgotPassword() {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");

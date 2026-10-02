@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // FOOTER.JSX — Footer toàn cục
 // ============================================================
 
@@ -8,7 +8,7 @@ import {
   Send, Globe,
 } from "lucide-react";
 import { api } from "../api";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const SOCIALS = [
   { Icon: Facebook,  href: "https://facebook.com/",  label: "Facebook", color: "#1877F2" },
@@ -25,7 +25,7 @@ const EMPTY_CONTACT = {
 };
 
 export default function Footer() {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [contact, setContact] = useState(EMPTY_CONTACT);
 
   useEffect(() => {

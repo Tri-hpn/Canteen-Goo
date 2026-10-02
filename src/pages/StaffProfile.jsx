@@ -6,13 +6,7 @@
 //   setUser      — hàm cập nhật user (từ App state)
 //   canEditEmail — true nếu được sửa email (Admin: true, NV: false)
 //
-// Có 2 mode:
-//   - View  : hiển thị info read-only
-//   - Edit  : form cho phép chỉnh sửa
-//
-// Ngoài ra có:
-//   - Upload avatar (đọc file → base64)
-//   - Modal đổi mật khẩu (riêng biệt, tách component)
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useState, useEffect } from "react";
@@ -22,29 +16,23 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { toast } from "../components/Effects";
+import { useI18n } from "../hooks/useI18n";
 
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
 
 export default function StaffProfile({ user, setUser, canEditEmail = false }) {
-  // ---------- View / Edit state ----------
-  const [editing, setEditing] = useState(false);
+  const { t } = useI18n();
 
-  // Form data — khởi tạo từ user
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(() => buildFormFromUser(user));
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-
-  // Password modal state
   const [showPwdModal, setShowPwdModal] = useState(false);
 
   // ---------- Helpers ----------
 
-  /**
-   * Tạo object form từ user
-   * (dùng cho cả khởi tạo và reset)
-   */
   function buildFormFromUser(u) {
     return {
       name: u?.name || "",
@@ -57,10 +45,6 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
 
   // ---------- Effects ----------
 
-  /**
-   * Auto-sync form khi user prop thay đổi (VD: sau khi parent refresh user)
-   * NHƯNG chỉ sync khi KHÔNG đang edit — để không mất dữ liệu user đang gõ
-   */
   useEffect(() => {
     if (!editing) {
       setForm(buildFormFromUser(user));
@@ -92,16 +76,15 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Giới hạn 2MB
     if (file.size > 2 * 1024 * 1024) {
-      toast("Ảnh vượt quá 2MB", "error");
+      toast(t("Ảnh vượt quá 2MB"), "error");
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
       setForm((f) => ({ ...f, avatar: reader.result }));
-      toast("Đã chọn ảnh mới", "success");
+      toast(t("Đã chọn ảnh mới"), "success");
     };
     reader.readAsDataURL(file);
   };
@@ -110,18 +93,18 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
 
   const validate = () => {
     const errs = {};
-    if (!form.name.trim()) errs.name = "Vui lòng nhập họ tên";
+    if (!form.name.trim()) errs.name = t("Vui lòng nhập họ tên");
 
     if (canEditEmail) {
       if (!form.email.trim()) {
-        errs.email = "Vui lòng nhập email";
+        errs.email = t("Vui lòng nhập email");
       } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-        errs.email = "Email không hợp lệ";
+        errs.email = t("Email không hợp lệ");
       }
     }
 
     if (form.phone && !/^[0-9]{10,11}$/.test(form.phone.trim())) {
-      errs.phone = "SĐT phải 10-11 số";
+      errs.phone = t("SĐT phải 10-11 số");
     }
 
     setErrors(errs);
@@ -132,7 +115,7 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
 
   const save = async () => {
     if (!validate()) {
-      toast("Kiểm tra lại thông tin", "error");
+      toast(t("Kiểm tra lại thông tin"), "error");
       return;
     }
 
@@ -148,16 +131,14 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
 
       const updated = await api.updateProfile(payload);
 
-      // Cập nhật user state ở parent
       if (setUser) setUser((u) => ({ ...u, ...updated }));
 
-      // Báo các component khác refresh
       window.dispatchEvent(new CustomEvent("refresh-user"));
 
-      toast("Đã lưu thay đổi!", "success");
+      toast(t("Đã lưu thay đổi!"), "success");
       setEditing(false);
     } catch (err) {
-      toast(err.message || "Không lưu được", "error");
+      toast(err.message || t("Không lưu được"), "error");
     } finally {
       setLoading(false);
     }
@@ -166,7 +147,7 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
   // ---------- Render helpers ----------
 
   const roleLabel =
-    user?.role === "ADMIN" ? "Quản trị viên" : "Nhân viên";
+    user?.role === "ADMIN" ? t("Quản trị viên") : t("Nhân viên");
 
   const displayName = editing ? form.name : user?.name || "";
   const initials = (displayName || "VWA")
@@ -179,15 +160,24 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
   const avatarSrc = editing ? form.avatar : user?.avatar;
 
   return (
-    <div className="profile-grid" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 20 }}>
-
+    <div
+      className="profile-grid"
+      style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 20 }}
+    >
       {/* ============================================================
           LEFT CARD — Avatar + Role + Nút đổi mật khẩu
           ============================================================ */}
       <div className="profile-card-left" style={cardStyle}>
-
         {/* Avatar + nút camera (chỉ hiện khi edit) */}
-        <div className="profile-avatar-wrap" style={{ position: "relative", width: 100, height: 100, margin: "0 auto 14px" }}>
+        <div
+          className="profile-avatar-wrap"
+          style={{
+            position: "relative",
+            width: 100,
+            height: 100,
+            margin: "0 auto 14px",
+          }}
+        >
           <div
             className="profile-avatar"
             style={{
@@ -211,7 +201,7 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
 
           {editing && (
             <label
-              title="Đổi ảnh"
+              title={t("Đổi ảnh")}
               style={{
                 position: "absolute",
                 bottom: 0,
@@ -238,10 +228,23 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
           )}
         </div>
 
-        <h3 style={{ margin: "0 0 4px", color: "var(--text-primary, #172033)", textAlign: "center" }}>
+        <h3
+          style={{
+            margin: "0 0 4px",
+            color: "var(--text-primary, #172033)",
+            textAlign: "center",
+          }}
+        >
           {user?.name}
         </h3>
-        <p style={{ margin: 0, color: "var(--text-light, #8993a3)", fontSize: 13, textAlign: "center" }}>
+        <p
+          style={{
+            margin: 0,
+            color: "var(--text-light, #8993a3)",
+            fontSize: 13,
+            textAlign: "center",
+          }}
+        >
           {user?.email}
         </p>
 
@@ -285,7 +288,7 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
             gap: 6,
           }}
         >
-          <KeyRound size={15} /> Đổi mật khẩu
+          <KeyRound size={15} /> {t("Đổi mật khẩu")}
         </button>
       </div>
 
@@ -293,29 +296,53 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
           RIGHT CARD — Thông tin / Form chỉnh sửa
           ============================================================ */}
       <div className="profile-card-right" style={cardStyle}>
-
         {/* Header với nút Sửa / Lưu / Hủy */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: 20,
+          }}
+        >
           <div>
             <h3 style={{ margin: 0, color: "var(--text-primary, #172033)" }}>
-              Hồ sơ cá nhân
+              {t("Hồ sơ cá nhân")}
             </h3>
-            <p style={{ margin: "4px 0 0", color: "var(--text-light, #8993a3)", fontSize: 13 }}>
-              {editing ? "Chỉnh sửa thông tin bên dưới" : "Thông tin tài khoản của bạn"}
+            <p
+              style={{
+                margin: "4px 0 0",
+                color: "var(--text-light, #8993a3)",
+                fontSize: 13,
+              }}
+            >
+              {editing
+                ? t("Chỉnh sửa thông tin bên dưới")
+                : t("Thông tin tài khoản của bạn")}
             </p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             {!editing ? (
               <button onClick={startEdit} style={btnEdit}>
-                <Pencil size={14} /> Sửa
+                <Pencil size={14} /> {t("Sửa")}
               </button>
             ) : (
               <>
-                <button onClick={cancelEdit} disabled={loading} className="btn-cancel" style={btnCancel}>
-                  <X size={14} /> Hủy
+                <button
+                  onClick={cancelEdit}
+                  disabled={loading}
+                  className="btn-cancel"
+                  style={btnCancel}
+                >
+                  <X size={14} /> {t("Hủy")}
                 </button>
-                <button onClick={save} disabled={loading} className="btn-save" style={btnSave}>
-                  <Save size={14} /> {loading ? "Đang lưu..." : "Lưu"}
+                <button
+                  onClick={save}
+                  disabled={loading}
+                  className="btn-save"
+                  style={btnSave}
+                >
+                  <Save size={14} /> {loading ? t("Đang lưu...") : t("Lưu")}
                 </button>
               </>
             )}
@@ -325,15 +352,15 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
         {/* ---------- VIEW MODE ---------- */}
         {!editing && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <InfoRow icon={<User size={16} />} label="Họ và tên" value={user?.name} />
+            <InfoRow icon={<User size={16} />} label={t("Họ và tên")} value={user?.name} />
             <InfoRow
               icon={<Mail size={16} />}
-              label="Email"
+              label={t("Email")}
               value={user?.email}
-              note={!canEditEmail ? "Do admin quản lý" : null}
+              note={!canEditEmail ? t("Do admin quản lý") : null}
             />
-            <InfoRow icon={<Phone size={16} />} label="Số điện thoại" value={user?.phone || "—"} />
-            <InfoRow icon={<MapPin size={16} />} label="Địa chỉ" value={user?.address || "—"} />
+            <InfoRow icon={<Phone size={16} />} label={t("Số điện thoại")} value={user?.phone || "—"} />
+            <InfoRow icon={<MapPin size={16} />} label={t("Địa chỉ")} value={user?.address || "—"} />
           </div>
         )}
 
@@ -341,23 +368,28 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
         {editing && (
           <div>
             {/* Họ tên */}
-            <label style={labelStyle}>Họ và tên *</label>
+            <label style={labelStyle}>{t("Họ và tên")} *</label>
             <div style={inputWrapStyle(errors.name)}>
               <User size={16} style={iconStyle} />
               <input
                 value={form.name}
                 onChange={update("name")}
                 style={inputInnerStyle}
-                placeholder="Nguyễn Văn A"
+                placeholder={t("Nguyễn Văn A")}
               />
             </div>
             {errors.name && <div style={errStyle}>{errors.name}</div>}
 
             {/* Email */}
             <label style={labelStyle}>
-              Email {canEditEmail ? "*" : "(không được sửa)"}
+              {t("Email")} {canEditEmail ? "*" : `(${t("không được sửa")})`}
             </label>
-            <div style={{ ...inputWrapStyle(errors.email), opacity: canEditEmail ? 1 : 0.6 }}>
+            <div
+              style={{
+                ...inputWrapStyle(errors.email),
+                opacity: canEditEmail ? 1 : 0.6,
+              }}
+            >
               <Mail size={16} style={iconStyle} />
               <input
                 type="email"
@@ -370,27 +402,27 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
             {errors.email && <div style={errStyle}>{errors.email}</div>}
 
             {/* SĐT */}
-            <label style={labelStyle}>Số điện thoại</label>
+            <label style={labelStyle}>{t("Số điện thoại")}</label>
             <div style={inputWrapStyle(errors.phone)}>
               <Phone size={16} style={iconStyle} />
               <input
                 value={form.phone}
                 onChange={update("phone")}
                 style={inputInnerStyle}
-                placeholder="0901234567"
+                placeholder={t("0901234567")}
               />
             </div>
             {errors.phone && <div style={errStyle}>{errors.phone}</div>}
 
             {/* Địa chỉ */}
-            <label style={labelStyle}>Địa chỉ</label>
+            <label style={labelStyle}>{t("Địa chỉ")}</label>
             <div style={inputWrapStyle()}>
               <MapPin size={16} style={iconStyle} />
               <input
                 value={form.address}
                 onChange={update("address")}
                 style={inputInnerStyle}
-                placeholder="Ký túc xá VWA"
+                placeholder={t("Ký túc xá VWA")}
               />
             </div>
           </div>
@@ -410,11 +442,9 @@ export default function StaffProfile({ user, setUser, canEditEmail = false }) {
 // ============================================================
 // SUB-COMPONENT: PasswordModal
 // ============================================================
-// Tách riêng để code chính gọn hơn.
-// Tự quản lý state form + API call, parent chỉ cần truyền onClose.
-// ============================================================
 
 function PasswordModal({ onClose }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -438,15 +468,15 @@ function PasswordModal({ onClose }) {
     setError("");
 
     if (!form.currentPassword || !form.newPassword) {
-      setError("Nhập đầy đủ thông tin");
+      setError(t("Nhập đầy đủ thông tin"));
       return;
     }
     if (form.newPassword.length < 6) {
-      setError("Mật khẩu mới phải từ 6 ký tự");
+      setError(t("Mật khẩu mới phải từ 6 ký tự"));
       return;
     }
     if (form.newPassword !== form.confirmPassword) {
-      setError("Xác nhận mật khẩu không khớp");
+      setError(t("Xác nhận mật khẩu không khớp"));
       return;
     }
 
@@ -456,11 +486,11 @@ function PasswordModal({ onClose }) {
         currentPassword: form.currentPassword,
         newPassword: form.newPassword,
       });
-      toast("Đổi mật khẩu thành công!", "success");
+      toast(t("Đổi mật khẩu thành công!"), "success");
       window.dispatchEvent(new CustomEvent("refresh-user"));
       onClose();
     } catch (e) {
-      setError(e.message || "Lỗi đổi mật khẩu");
+      setError(e.message || t("Lỗi đổi mật khẩu"));
     } finally {
       setLoading(false);
     }
@@ -471,7 +501,7 @@ function PasswordModal({ onClose }) {
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Đổi mật khẩu"
+      aria-label={t("Đổi mật khẩu")}
       style={{
         position: "fixed",
         inset: 0,
@@ -493,9 +523,24 @@ function PasswordModal({ onClose }) {
         }}
       >
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h3 style={{ margin: 0, color: "var(--text-primary, #172033)", display: "flex", alignItems: "center", gap: 8 }}>
-            <Lock size={20} /> Đổi mật khẩu
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 20,
+          }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              color: "var(--text-primary, #172033)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Lock size={20} /> {t("Đổi mật khẩu")}
           </h3>
           <button
             onClick={onClose}
@@ -529,7 +574,7 @@ function PasswordModal({ onClose }) {
         )}
 
         {/* Current password */}
-        <label style={labelStyle}>Mật khẩu hiện tại</label>
+        <label style={labelStyle}>{t("Mật khẩu hiện tại")}</label>
         <div style={inputWrapStyle()}>
           <Lock size={16} style={iconStyle} />
           <input
@@ -537,7 +582,7 @@ function PasswordModal({ onClose }) {
             value={form.currentPassword}
             onChange={update("currentPassword")}
             style={inputInnerStyle}
-            placeholder="Nhập mật khẩu hiện tại"
+            placeholder={t("Nhập mật khẩu hiện tại")}
             autoFocus
           />
           <button
@@ -555,7 +600,7 @@ function PasswordModal({ onClose }) {
         </div>
 
         {/* New password */}
-        <label style={labelStyle}>Mật khẩu mới</label>
+        <label style={labelStyle}>{t("Mật khẩu mới")}</label>
         <div style={inputWrapStyle()}>
           <KeyRound size={16} style={iconStyle} />
           <input
@@ -563,12 +608,12 @@ function PasswordModal({ onClose }) {
             value={form.newPassword}
             onChange={update("newPassword")}
             style={inputInnerStyle}
-            placeholder="Tối thiểu 6 ký tự"
+            placeholder={t("Tối thiểu 6 ký tự")}
           />
         </div>
 
         {/* Confirm password */}
-        <label style={labelStyle}>Xác nhận mật khẩu mới</label>
+        <label style={labelStyle}>{t("Xác nhận mật khẩu mới")}</label>
         <div style={inputWrapStyle()}>
           <Check size={16} style={iconStyle} />
           <input
@@ -576,7 +621,7 @@ function PasswordModal({ onClose }) {
             value={form.confirmPassword}
             onChange={update("confirmPassword")}
             style={inputInnerStyle}
-            placeholder="Nhập lại mật khẩu mới"
+            placeholder={t("Nhập lại mật khẩu mới")}
             onKeyDown={(e) => e.key === "Enter" && submit()}
           />
         </div>
@@ -596,7 +641,7 @@ function PasswordModal({ onClose }) {
               fontWeight: 600,
             }}
           >
-            Hủy
+            {t("Hủy")}
           </button>
           <button
             onClick={submit}
@@ -612,7 +657,7 @@ function PasswordModal({ onClose }) {
               cursor: loading ? "not-allowed" : "pointer",
             }}
           >
-            {loading ? "Đang xử lý..." : "Đổi mật khẩu"}
+            {loading ? t("Đang xử lý...") : t("Đổi mật khẩu")}
           </button>
         </div>
       </div>
@@ -622,8 +667,6 @@ function PasswordModal({ onClose }) {
 
 // ============================================================
 // SUB-COMPONENT: InfoRow
-// ============================================================
-// Hiển thị 1 dòng thông tin (icon + label + value)
 // ============================================================
 
 function InfoRow({ icon, label, value, note }) {

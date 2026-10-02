@@ -1,25 +1,7 @@
 // ============================================================
 // OWNERSETTINGS.JSX — Cài đặt hệ thống (Admin)
 // ============================================================
-// Gồm 2 nhóm cài đặt:
-//   1. Tài khoản ngân hàng nhận tiền (VietQR)
-//   2. Thông tin liên hệ (hotline, email, địa chỉ) → hiện ở footer
-//
-// Endpoints:
-//   - api.settings.get()     → đọc cài đặt
-//   - api.settings.update()  → ghi cài đặt
-//
-// Lưu ý:
-//   - QR preview: chỉ gọi VietQR khi có đủ bank + account
-//     → tránh URL vỡ khi user mới vào
-//   - Unsaved warning: dùng beforeunload → cảnh báo khi user
-//     đóng tab có thay đổi chưa lưu
-//   - Account number: chỉ cho nhập số
-//   - Account name: tự uppercase khi blur
-//   - resetForm: dùng ConfirmDialog custom
-//
-// Batch 6C:
-//   - ✅ Cảnh báo khi chưa cấu hình STK
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -29,6 +11,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
@@ -66,6 +49,8 @@ const MAX_QR_SIZE = 2 * 1024 * 1024; // 2MB
 // ============================================================
 
 export default function OwnerSettings() {
+  const { t } = useI18n();
+
   // ---------- State ----------
   const [form, setForm] = useState(EMPTY_FORM);
   const [original, setOriginal] = useState(EMPTY_FORM);
@@ -97,17 +82,17 @@ export default function OwnerSettings() {
       setForm(next);
       setOriginal(next);
     } catch (e) {
-      setError(e.message || "Không tải được cài đặt");
+      setError(e.message || t("Không tải được cài đặt"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Auto-hide "Đã lưu" sau 3s — có cleanup để không setState sau unmount
+  // Auto-hide "Đã lưu"
   useEffect(() => {
     if (!saved) return;
     const timer = setTimeout(() => setSaved(false), 3000);
@@ -140,7 +125,7 @@ export default function OwnerSettings() {
     [form.bank]
   );
 
-  // VietQR preview: chỉ tạo URL khi có account
+  // VietQR preview
   const vietQR = useMemo(() => {
     if (!form.account.trim()) return null;
     const params = new URLSearchParams({
@@ -151,7 +136,7 @@ export default function OwnerSettings() {
     return `https://img.vietqr.io/image/${form.bank}-${form.account.trim()}-compact2.png?${params}`;
   }, [form.bank, form.account, form.accountName]);
 
-  // ✅ Batch 6C: Cảnh báo nếu chưa cấu hình STK
+  // ✅ Cảnh báo nếu chưa cấu hình STK
   const needsSetup = !original.account || !original.accountName;
 
   // ---------- Confirm helpers ----------
@@ -181,13 +166,11 @@ export default function OwnerSettings() {
   const updateText = (key) => (e) => update(key, e.target.value);
 
   const updateAccount = (e) => {
-    // Chỉ cho nhập số
     const v = e.target.value.replace(/[^0-9]/g, "");
     update("account", v);
   };
 
   const normalizeAccountName = () => {
-    // Uppercase khi blur — không làm trong onChange (tránh cursor jump)
     setForm((f) => ({
       ...f,
       accountName: f.accountName.toUpperCase().trim(),
@@ -198,19 +181,19 @@ export default function OwnerSettings() {
 
   const validate = () => {
     if (!form.account.trim()) {
-      return "Vui lòng nhập số tài khoản";
+      return t("Vui lòng nhập số tài khoản");
     }
     if (!/^[0-9]{6,20}$/.test(form.account.trim())) {
-      return "Số tài khoản phải là 6-20 chữ số";
+      return t("Số tài khoản phải là 6-20 chữ số");
     }
     if (!form.accountName.trim()) {
-      return "Vui lòng nhập tên chủ tài khoản";
+      return t("Vui lòng nhập tên chủ tài khoản");
     }
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      return "Email không hợp lệ";
+      return t("Email không hợp lệ");
     }
     if (form.hotline && !/^[0-9\s\-\+\(\)]{8,20}$/.test(form.hotline.trim())) {
-      return "Hotline không hợp lệ";
+      return t("Hotline không hợp lệ");
     }
     return null;
   };
@@ -237,29 +220,30 @@ export default function OwnerSettings() {
       setForm(payload);
       setOriginal(payload);
       setSaved(true);
-      toast("Đã lưu cài đặt!", "success");
+      toast(t("Đã lưu cài đặt!"), "success");
     } catch (e) {
-      toast(e.message || "Không lưu được", "error");
+      toast(e.message || t("Không lưu được"), "error");
     } finally {
       setSaving(false);
     }
   };
 
-  // ---------- Reset form — dùng ConfirmDialog ----------
+  // ---------- Reset form ----------
 
   const resetForm = () => {
     if (!isDirty) return;
 
     setConfirm({
-      title: "Hủy các thay đổi chưa lưu?",
-      message:
-        "Mọi thay đổi bạn vừa nhập sẽ bị mất và khôi phục về giá trị đã lưu gần nhất.",
-      confirmText: "Hủy thay đổi",
-      cancelText: "Giữ lại",
+      title: t("Hủy các thay đổi chưa lưu?"),
+      message: t(
+        "Mọi thay đổi bạn vừa nhập sẽ bị mất và khôi phục về giá trị đã lưu gần nhất."
+      ),
+      confirmText: t("Hủy thay đổi"),
+      cancelText: t("Giữ lại"),
       danger: true,
       onConfirm: async () => {
         setForm(original);
-        toast("Đã hủy thay đổi", "info");
+        toast(t("Đã hủy thay đổi"), "info");
         setConfirm(null);
       },
     });
@@ -272,33 +256,31 @@ export default function OwnerSettings() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      return toast("Chỉ chấp nhận file ảnh", "error");
+      return toast(t("Chỉ chấp nhận file ảnh"), "error");
     }
     if (file.size > MAX_QR_SIZE) {
-      return toast("Ảnh vượt quá 2MB", "error");
+      return toast(t("Ảnh vượt quá 2MB"), "error");
     }
 
     const reader = new FileReader();
     reader.onload = () => {
       update("qrCustomImage", reader.result);
-      toast("Đã chọn ảnh QR mới", "success");
+      toast(t("Đã chọn ảnh QR mới"), "success");
     };
     reader.readAsDataURL(file);
 
-    // Reset input để có thể chọn lại cùng file
     e.target.value = "";
   };
 
   const removeCustomQR = () => {
     update("qrCustomImage", "");
-    toast("Đã xóa ảnh QR riêng", "info");
+    toast(t("Đã xóa ảnh QR riêng"), "info");
   };
 
   // ============================================================
   // RENDER
   // ============================================================
 
-  // Loading lần đầu
   if (loading) {
     return (
       <div style={loadingFullStyle}>
@@ -306,7 +288,7 @@ export default function OwnerSettings() {
           size={28}
           style={{ animation: "spin 1s linear infinite", marginBottom: 10 }}
         />
-        <div>Đang tải cài đặt...</div>
+        <div>{t("Đang tải cài đặt...")}</div>
         <style>{`
           @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         `}</style>
@@ -314,19 +296,18 @@ export default function OwnerSettings() {
     );
   }
 
-  // Error lần đầu
   if (error) {
     return (
       <div style={errorFullStyle}>
         <AlertCircle size={28} style={{ marginBottom: 10 }} />
         <div style={{ fontWeight: 600, marginBottom: 4 }}>
-          Không tải được cài đặt
+          {t("Không tải được cài đặt")}
         </div>
         <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 12 }}>
           {error}
         </div>
         <button onClick={load} style={btnPrimaryStyle}>
-          <RefreshCw size={14} /> Thử lại
+          <RefreshCw size={14} /> {t("Thử lại")}
         </button>
       </div>
     );
@@ -335,9 +316,7 @@ export default function OwnerSettings() {
   return (
     <>
       <div>
-        {/* ============================================================
-            ✅ Batch 6C: CẢNH BÁO CHƯA CẤU HÌNH
-            ============================================================ */}
+        {/* CẢNH BÁO CHƯA CẤU HÌNH */}
         {needsSetup && !isDirty && (
           <div
             style={{
@@ -356,20 +335,16 @@ export default function OwnerSettings() {
             <AlertCircle size={20} style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
               <b style={{ display: "block", marginBottom: 4 }}>
-                ⚠️ Chưa cấu hình tài khoản nhận tiền
+                ⚠️ {t("Chưa cấu hình tài khoản nhận tiền")}
               </b>
               <div style={{ fontSize: 12.5, opacity: 0.9 }}>
-                Vui lòng nhập số tài khoản + tên chủ TK để khách có thể
-                thanh toán qua QR. Nếu bỏ trống, khách chỉ thanh toán được
-                bằng tiền mặt hoặc ví Canteen.
+                {t("Vui lòng nhập số tài khoản + tên chủ TK để khách có thể thanh toán qua QR. Nếu bỏ trống, khách chỉ thanh toán được bằng tiền mặt hoặc ví Canteen.")}
               </div>
             </div>
           </div>
         )}
 
-        {/* ============================================================
-            UNSAVED INDICATOR
-            ============================================================ */}
+        {/* UNSAVED INDICATOR */}
         {isDirty && (
           <div
             style={{
@@ -388,7 +363,7 @@ export default function OwnerSettings() {
           >
             <AlertCircle size={16} />
             <span style={{ flex: 1 }}>
-              Bạn có thay đổi chưa lưu
+              {t("Bạn có thay đổi chưa lưu")}
             </span>
             <button
               onClick={resetForm}
@@ -402,7 +377,7 @@ export default function OwnerSettings() {
                 textDecoration: "underline",
               }}
             >
-              Hủy thay đổi
+              {t("Hủy thay đổi")}
             </button>
           </div>
         )}
@@ -415,17 +390,15 @@ export default function OwnerSettings() {
             gap: 20,
           }}
         >
-          {/* ============================================================
-              LEFT — FORM
-              ============================================================ */}
+          {/* LEFT — FORM */}
           <div>
-            {/* ---------- Bank ---------- */}
+            {/* Bank */}
             <div style={cardStyle}>
               <h3 style={cardTitleStyle}>
-                <CreditCard size={18} /> Tài khoản nhận tiền
+                <CreditCard size={18} /> {t("Tài khoản nhận tiền")}
               </h3>
 
-              <label style={labelStyle}>Ngân hàng</label>
+              <label style={labelStyle}>{t("Ngân hàng")}</label>
               <select
                 value={form.bank}
                 onChange={updateText("bank")}
@@ -439,46 +412,46 @@ export default function OwnerSettings() {
                 ))}
               </select>
 
-              <label style={labelStyle}>Số tài khoản</label>
+              <label style={labelStyle}>{t("Số tài khoản")}</label>
               <input
                 value={form.account}
                 onChange={updateAccount}
-                placeholder="VD: 1234567890"
+                placeholder={t("VD: 1234567890")}
                 disabled={saving}
                 inputMode="numeric"
                 style={inputStyle}
               />
 
-              <label style={labelStyle}>Chủ tài khoản</label>
+              <label style={labelStyle}>{t("Chủ tài khoản")}</label>
               <input
                 value={form.accountName}
                 onChange={updateText("accountName")}
                 onBlur={normalizeAccountName}
-                placeholder="VD: NGUYEN VAN A"
+                placeholder={t("VD: NGUYEN VAN A")}
                 disabled={saving}
                 style={{ ...inputStyle, marginBottom: 0 }}
               />
             </div>
 
-            {/* ---------- Contact ---------- */}
+            {/* Contact */}
             <div style={{ ...cardStyle, marginTop: 16 }}>
               <h3 style={cardTitleStyle}>
-                <Building2 size={18} /> Thông tin liên hệ (footer)
+                <Building2 size={18} /> {t("Thông tin liên hệ (footer)")}
               </h3>
 
               <label style={labelStyle}>
-                <Phone size={12} style={inlineIconStyle} /> Hotline
+                <Phone size={12} style={inlineIconStyle} /> {t("Hotline")}
               </label>
               <input
                 value={form.hotline}
                 onChange={updateText("hotline")}
-                placeholder="VD: 0328 866 959"
+                placeholder={t("VD: 0328 866 959")}
                 disabled={saving}
                 style={inputStyle}
               />
 
               <label style={labelStyle}>
-                <Mail size={12} style={inlineIconStyle} /> Email
+                <Mail size={12} style={inlineIconStyle} /> {t("Email")}
               </label>
               <input
                 type="email"
@@ -490,18 +463,18 @@ export default function OwnerSettings() {
               />
 
               <label style={labelStyle}>
-                <MapPin size={12} style={inlineIconStyle} /> Địa chỉ
+                <MapPin size={12} style={inlineIconStyle} /> {t("Địa chỉ")}
               </label>
               <input
                 value={form.address}
                 onChange={updateText("address")}
-                placeholder="VD: 68 Nguyễn Chí Thanh, Hà Nội"
+                placeholder={t("VD: 68 Nguyễn Chí Thanh, Hà Nội")}
                 disabled={saving}
                 style={{ ...inputStyle, marginBottom: 0 }}
               />
             </div>
 
-            {/* ---------- Save button ---------- */}
+            {/* Save button */}
             <button
               onClick={save}
               disabled={saving || !isDirty}
@@ -535,30 +508,27 @@ export default function OwnerSettings() {
                     size={18}
                     style={{ animation: "spin 1s linear infinite" }}
                   />
-                  Đang lưu...
+                  {t("Đang lưu...")}
                 </>
               ) : saved ? (
                 <>
-                  <CheckCircle2 size={18} /> Đã lưu
+                  <CheckCircle2 size={18} /> {t("Đã lưu")}
                 </>
               ) : (
                 <>
-                  <Save size={18} /> Lưu thay đổi
+                  <Save size={18} /> {t("Lưu thay đổi")}
                 </>
               )}
             </button>
           </div>
 
-          {/* ============================================================
-              RIGHT — QR PREVIEW
-              ============================================================ */}
+          {/* RIGHT — QR PREVIEW */}
           <div style={{ position: "sticky", top: 90, height: "fit-content" }}>
             <div style={cardStyle}>
               <h3 style={cardTitleStyle}>
-                <QrCode size={18} /> Xem trước QR
+                <QrCode size={18} /> {t("Xem trước QR")}
               </h3>
 
-              {/* Preview box */}
               <div
                 style={{
                   background: "var(--bg-tertiary, #f8fafc)",
@@ -574,7 +544,7 @@ export default function OwnerSettings() {
                 {form.qrCustomImage ? (
                   <img
                     src={form.qrCustomImage}
-                    alt="Custom QR"
+                    alt={t("Custom QR")}
                     style={{
                       width: 200,
                       height: 200,
@@ -583,7 +553,7 @@ export default function OwnerSettings() {
                     }}
                   />
                 ) : vietQR ? (
-                  <QRImage src={vietQR} />
+                  <QRImage src={vietQR} t={t} />
                 ) : (
                   <div
                     style={{
@@ -593,8 +563,8 @@ export default function OwnerSettings() {
                     }}
                   >
                     <QrCode size={48} style={{ opacity: 0.3, marginBottom: 8 }} />
-                    <div>Nhập số tài khoản</div>
-                    <div>để xem trước QR</div>
+                    <div>{t("Nhập số tài khoản")}</div>
+                    <div>{t("để xem trước QR")}</div>
                   </div>
                 )}
               </div>
@@ -612,23 +582,23 @@ export default function OwnerSettings() {
                 }}
               >
                 <div>
-                  <b style={{ color: "var(--text-primary, #172033)" }}>NH:</b>{" "}
+                  <b style={{ color: "var(--text-primary, #172033)" }}>{t("NH:")}</b>{" "}
                   {selectedBankName}
                 </div>
                 <div>
-                  <b style={{ color: "var(--text-primary, #172033)" }}>STK:</b>{" "}
-                  {form.account || "(chưa nhập)"}
+                  <b style={{ color: "var(--text-primary, #172033)" }}>{t("STK:")}</b>{" "}
+                  {form.account || t("(chưa nhập)")}
                 </div>
                 <div>
                   <b style={{ color: "var(--text-primary, #172033)" }}>
-                    Chủ TK:
+                    {t("Chủ TK:")}
                   </b>{" "}
-                  {form.accountName || "(chưa nhập)"}
+                  {form.accountName || t("(chưa nhập)")}
                 </div>
               </div>
 
               {/* Upload custom QR */}
-              <label style={labelStyle}>Hoặc tải ảnh QR riêng lên</label>
+              <label style={labelStyle}>{t("Hoặc tải ảnh QR riêng lên")}</label>
               <input
                 type="file"
                 accept="image/*"
@@ -668,7 +638,7 @@ export default function OwnerSettings() {
                     gap: 6,
                   }}
                 >
-                  <X size={12} /> Xóa ảnh QR — dùng VietQR tự động
+                  <X size={12} /> {t("Xóa ảnh QR — dùng VietQR tự động")}
                 </button>
               )}
             </div>
@@ -705,7 +675,7 @@ export default function OwnerSettings() {
 // SUB-COMPONENT: QR Image có error state
 // ============================================================
 
-function QRImage({ src }) {
+function QRImage({ src, t }) {
   const [errored, setErrored] = useState(false);
 
   if (errored) {
@@ -719,9 +689,9 @@ function QRImage({ src }) {
         }}
       >
         <AlertCircle size={36} style={{ opacity: 0.4, marginBottom: 8 }} />
-        <div>Không tải được QR</div>
+        <div>{t("Không tải được QR")}</div>
         <div style={{ fontSize: 11, marginTop: 4 }}>
-          Kiểm tra STK có đúng không
+          {t("Kiểm tra STK có đúng không")}
         </div>
       </div>
     );

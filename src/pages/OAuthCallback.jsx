@@ -8,9 +8,8 @@
 //   4. Component này nhận ?code=xxx, gửi về backend exchange token
 //   5. Backend trả về JWT + user → lưu token → về trang chủ theo role
 //
-// Props:
-//   provider       — "google" | "facebook"
-//   onLoginSuccess — callback(user) sau khi đăng nhập thành công
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+// ✅ FIX BUG: api.auth.oauthCallback → api.oauth.callback (khớp với api.js)
 // ============================================================
 
 import { useEffect, useState } from "react";
@@ -18,6 +17,7 @@ import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { Loader2, AlertCircle } from "lucide-react";
 import { api, setToken } from "../api";
 import { toast } from "../components/Effects";
+import { useI18n } from "../hooks/useI18n";
 
 // ============================================================
 // MAIN COMPONENT
@@ -26,6 +26,7 @@ import { toast } from "../components/Effects";
 export default function OAuthCallback({ provider, onLoginSuccess }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const [status, setStatus] = useState("processing"); // processing | error
   const [errorMsg, setErrorMsg] = useState("");
@@ -37,16 +38,22 @@ export default function OAuthCallback({ provider, onLoginSuccess }) {
 
     // ---------- User huỷ hoặc Google/FB trả lỗi ----------
     if (error) {
-      const msg = errorDescription || error || "Đăng nhập bị huỷ";
+      const msg = errorDescription || error || t("Đăng nhập bị huỷ");
       setStatus("error");
       setErrorMsg(msg);
-      toast("Đăng nhập bị huỷ: " + msg, "error");
+      toast(
+        `${t("Đăng nhập bị huỷ")}: ${msg}`,
+        "error"
+      );
       return;
     }
 
     // ---------- Không có code ----------
     if (!code) {
-      const msg = "Không nhận được mã xác thực từ " + provider;
+      const msg = t("Không nhận được mã xác thực từ {provider}").replace(
+        "{provider}",
+        provider
+      );
       setStatus("error");
       setErrorMsg(msg);
       toast(msg, "error");
@@ -59,13 +66,13 @@ export default function OAuthCallback({ provider, onLoginSuccess }) {
     const redirectUri =
       window.location.origin + `/auth/${provider}/callback`;
 
-    api.auth
-      .oauthCallback(provider, code, redirectUri)
+    api.oauth
+      .callback(provider, code, redirectUri)
       .then(({ token, user }) => {
         if (cancelled) return;
 
         setToken(token);
-        toast("Xin chào " + user.name + "!", "success");
+        toast(`${t("Xin chào")} ${user.name}!`, "success");
 
         // Gọi callback từ App.jsx để set user state
         if (onLoginSuccess) {
@@ -84,7 +91,7 @@ export default function OAuthCallback({ provider, onLoginSuccess }) {
       })
       .catch((e) => {
         if (cancelled) return;
-        const msg = e.message || "Đăng nhập thất bại";
+        const msg = e.message || t("Đăng nhập thất bại");
         setStatus("error");
         setErrorMsg(msg);
         toast(msg, "error");
@@ -161,7 +168,7 @@ export default function OAuthCallback({ provider, onLoginSuccess }) {
                 color: "#172033",
               }}
             >
-              Đang xử lý đăng nhập
+              {t("Đang xử lý đăng nhập")}
             </h2>
             <p
               style={{
@@ -171,11 +178,8 @@ export default function OAuthCallback({ provider, onLoginSuccess }) {
                 lineHeight: 1.6,
               }}
             >
-              Vui lòng chờ trong giây lát khi chúng tôi xác thực tài khoản{" "}
-              <b style={{ color: "#2634d5", textTransform: "capitalize" }}>
-                {provider}
-              </b>{" "}
-              của bạn...
+              {t("Vui lòng chờ trong giây lát khi chúng tôi xác thực tài khoản {provider} của bạn...")
+                .replace("{provider}", provider)}
             </p>
           </>
         ) : (
@@ -192,7 +196,7 @@ export default function OAuthCallback({ provider, onLoginSuccess }) {
                 color: "#172033",
               }}
             >
-              Đăng nhập thất bại
+              {t("Đăng nhập thất bại")}
             </h2>
             <p
               style={{
@@ -219,7 +223,7 @@ export default function OAuthCallback({ provider, onLoginSuccess }) {
                 fontSize: 14,
               }}
             >
-              ← Về trang đăng nhập
+              ← {t("Về trang đăng nhập")}
             </Link>
           </>
         )}

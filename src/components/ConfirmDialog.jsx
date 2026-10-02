@@ -1,10 +1,12 @@
 // ============================================================
 // CONFIRMDIALOG.JSX — Modal xác nhận (thay cho confirm() native)
 // ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+// ============================================================
 
 import { useEffect, useRef } from "react";
 import { AlertTriangle, LogOut, Loader2 } from "lucide-react";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const MODAL_Z = 2147483600;
 
@@ -20,13 +22,13 @@ export default function ConfirmDialog({
   onConfirm,
   onClose,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const cancelRef = useRef(null);
 
   // Fallback default
-  const finalTitle = title || t("confirm.title");
-  const finalConfirm = confirmText || t("common.confirm");
-  const finalCancel = cancelText || t("common.cancel");
+  const finalTitle = title || t("Xác nhận");
+  const finalConfirm = confirmText || t("Xác nhận");
+  const finalCancel = cancelText || t("Hủy");
 
   useEffect(() => {
     if (!open) return;
@@ -206,7 +208,7 @@ export default function ConfirmDialog({
                   size={14}
                   style={{ animation: "confirmSpin 1s linear infinite" }}
                 />
-                {t("common.processing")}
+                {t("Đang xử lý...")}
               </>
             ) : (
               finalConfirm

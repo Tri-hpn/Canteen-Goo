@@ -4,7 +4,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
@@ -15,7 +15,7 @@ export default function Pagination({
   onPageChange,
   onPageSizeChange,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;

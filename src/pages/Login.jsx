@@ -1,19 +1,13 @@
 // ============================================================
 // LOGIN.JSX — Trang đăng nhập (style Login Animation V8)
 // ============================================================
-// OAuth: Google + Facebook redirect thật (cần ENV VITE_GOOGLE_CLIENT_ID
-//        và VITE_FACEBOOK_APP_ID). Nếu chưa cấu hình → hiện toast.
-//
-// FIX v9:
-//   - ✅ Áp dụng i18n cho TẤT CẢ text (title, label, demo, bubble)
-// ============================================================
 
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Eye, EyeOff, LockKeyhole, Mail, ArrowRight, Loader2,
 } from "lucide-react";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 import { toast } from "../components/Effects";
 import CuteCharacters from "../components/LoginIllustration";
 
@@ -23,11 +17,11 @@ import CuteCharacters from "../components/LoginIllustration";
 
 const REMEMBER_KEY = "canteen_remember_email";
 
-// Demo accounts — role dùng i18n key (dịch khi render)
+// Demo accounts — role dùng source-text (dịch khi render)
 const DEMO_ACCOUNTS = [
-  { roleKey: "login.demoAdmin",    email: "admin@vwa.vn",    password: "123456" },
-  { roleKey: "login.demoEmployee", email: "nhanvien@vwa.vn", password: "123456" },
-  { roleKey: "login.demoCustomer", email: "sinhvien@vwa.vn", password: "123456" },
+  { role: "Quản trị viên", email: "admin@vwa.vn",    password: "123456" },
+  { role: "Nhân viên",     email: "nhanvien@vwa.vn", password: "123456" },
+  { role: "Khách hàng",    email: "sinhvien@vwa.vn", password: "123456" },
 ];
 
 // ============================================================
@@ -37,7 +31,7 @@ const DEMO_ACCOUNTS = [
 function startGoogleOAuth(t) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   if (!clientId) {
-    toast(t("login.oauthGoogleMissing"), "error");
+    toast(t("Chưa cấu hình Google Client ID"), "error");
     return;
   }
 
@@ -60,7 +54,7 @@ function startGoogleOAuth(t) {
 function startFacebookOAuth(t) {
   const appId = import.meta.env.VITE_FACEBOOK_APP_ID;
   if (!appId) {
-    toast(t("login.oauthFacebookMissing"), "error");
+    toast(t("Chưa cấu hình Facebook App ID"), "error");
     return;
   }
 
@@ -83,7 +77,7 @@ function startFacebookOAuth(t) {
 // ============================================================
 
 export default function Login({ onLogin }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -123,8 +117,8 @@ export default function Login({ onLogin }) {
     if (e) e.preventDefault();
     if (loading) return;
 
-    if (!email.trim()) return setError(t("login.errorEmailRequired"));
-    if (!password) return setError(t("login.errorPasswordRequired"));
+    if (!email.trim()) return setError(t("Vui lòng nhập email"));
+    if (!password) return setError(t("Vui lòng nhập mật khẩu"));
 
     setError("");
     setLoading(true);
@@ -133,7 +127,7 @@ export default function Login({ onLogin }) {
       const result = await onLogin(email.trim(), password);
 
       if (!result) {
-        setError(t("login.errorInvalid"));
+        setError(t("Tài khoản hoặc mật khẩu không đúng."));
         return;
       }
 
@@ -145,15 +139,14 @@ export default function Login({ onLogin }) {
         }
       } catch {}
     } catch (err) {
-      setError(err.message || t("login.errorFailed"));
+      setError(err.message || t("Đăng nhập thất bại"));
     } finally {
       setLoading(false);
     }
   };
 
-  // Bubble text — tính 1 lần, không tính lại mỗi render
   const bubbleText = useMemo(() => {
-    return peeking ? t("login.peekBubble") : t("login.privacyBubble");
+    return peeking ? t("Đừng nhìn mật khẩu nhé! 🙈") : t("Chào mừng đến Canteen VWA! 👋");
   }, [peeking, t]);
 
   return (
@@ -163,8 +156,8 @@ export default function Login({ onLogin }) {
         <div className="v8-login-brand">
           <div className="v8-brand-mark">C</div>
           <div className="v8-brand-text">
-            <b>{t("login.brandName")}</b>
-            <small>{t("login.brandSub")}</small>
+            <b>{t("CANTEEN VWA")}</b>
+            <small>{t("HỆ THỐNG QUẢN LÝ")}</small>
           </div>
         </div>
 
@@ -177,8 +170,8 @@ export default function Login({ onLogin }) {
         </div>
 
         <div className="v8-left-caption">
-          <b>{t("login.welcomeTo")}</b>
-          <span>{t("login.tagline")}</span>
+          <b>{t("Chào mừng đến Canteen VWA")}</b>
+          <span>{t("Đặt món nhanh chóng, tiện lợi mỗi ngày.")}</span>
         </div>
       </section>
 
@@ -190,21 +183,21 @@ export default function Login({ onLogin }) {
               <div className="v8-form-logo-mark">C</div>
             </div>
 
-            <nav className="v8-tabs" aria-label="Chuyển trang">
-              <span className="v8-tab active">{t("login.tabLogin")}</span>
+            <nav className="v8-tabs" aria-label={t("Chuyển trang")}>
+              <span className="v8-tab active">{t("Đăng nhập")}</span>
               <Link to="/register" className="v8-tab">
-                {t("login.tabRegister")}
+                {t("Đăng ký")}
               </Link>
             </nav>
           </div>
 
-          <h1 className="v8-form-title">{t("login.welcomeBack")}</h1>
-          <p className="v8-form-subtitle">{t("login.enterInfo")}</p>
+          <h1 className="v8-form-title">{t("Chào mừng trở lại")}</h1>
+          <p className="v8-form-subtitle">{t("Nhập thông tin để tiếp tục")}</p>
 
           {error && <div className="v8-error-box">{error}</div>}
 
           <form onSubmit={submit} autoComplete="off" data-form-type="other">
-            <label className="v8-label">{t("login.emailOrUsername")}</label>
+            <label className="v8-label">{t("Email hoặc tên đăng nhập")}</label>
             <div className="v8-input-wrap">
               <Mail size={16} className="v8-input-icon" />
               <input
@@ -216,15 +209,15 @@ export default function Login({ onLogin }) {
                 autoCapitalize="off"
                 autoComplete="off"
                 data-form-type="other"
-                placeholder={t("login.emailPlaceholder")}
+                placeholder={t("email@vwa.vn")}
                 disabled={loading}
               />
             </div>
 
             <label className="v8-label v8-label-row">
-              <span>{t("login.passwordLabel")}</span>
+              <span>{t("Mật khẩu")}</span>
               <Link to="/forgot-password" className="v8-forgot">
-                {t("login.forgot")}
+                {t("Quên mật khẩu?")}
               </Link>
             </label>
             <div className="v8-input-wrap">
@@ -238,7 +231,7 @@ export default function Login({ onLogin }) {
                 autoCapitalize="off"
                 autoComplete="new-password"
                 data-form-type="other"
-                placeholder={t("login.passwordPlaceholder")}
+                placeholder={t("Nhập mật khẩu")}
                 disabled={loading}
                 onFocus={() => setPeeking(true)}
                 onBlur={() => setPeeking(false)}
@@ -247,7 +240,7 @@ export default function Login({ onLogin }) {
               <button
                 type="button"
                 onClick={() => setShow(!show)}
-                aria-label={show ? t("login.hidePassword") : t("login.showPassword")}
+                aria-label={show ? t("Ẩn mật khẩu") : t("Hiện mật khẩu")}
                 tabIndex={-1}
                 className="v8-eye-btn"
               >
@@ -261,18 +254,18 @@ export default function Login({ onLogin }) {
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
               />
-              <span>{t("login.rememberDays")}</span>
+              <span>{t("Ghi nhớ đăng nhập 7 ngày")}</span>
             </label>
 
             <button type="submit" className="v8-cta" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 size={16} className="spin" />
-                  {t("login.loggingIn")}
+                  {t("Đang đăng nhập...")}
                 </>
               ) : (
                 <>
-                  {t("login.loginBtn")}
+                  {t("Đăng nhập")}
                   <ArrowRight size={16} />
                 </>
               )}
@@ -280,12 +273,11 @@ export default function Login({ onLogin }) {
           </form>
 
           <div className="v8-divider">
-            <span>{t("login.orContinueWith")}</span>
+            <span>{t("Hoặc tiếp tục với")}</span>
           </div>
 
           {/* ============ SOCIAL ============ */}
           <div className="v8-socials">
-            {/* GOOGLE */}
             <button
               type="button"
               className="v8-social"
@@ -300,7 +292,6 @@ export default function Login({ onLogin }) {
               Google
             </button>
 
-            {/* FACEBOOK */}
             <button
               type="button"
               className="v8-social"
@@ -314,12 +305,12 @@ export default function Login({ onLogin }) {
           </div>
 
           <p className="v8-bottom-text">
-            {t("login.noAccountRegister")}{" "}
-            <Link to="/register">{t("login.registerFree")}</Link>
+            {t("Chưa có tài khoản?")}{" "}
+            <Link to="/register">{t("Đăng ký miễn phí")}</Link>
           </p>
 
           <div className="v8-demo">
-            <div className="v8-demo-title">{t("login.demoAccounts")}</div>
+            <div className="v8-demo-title">{t("Tài khoản demo")}</div>
             <div className="v8-demo-list">
               {DEMO_ACCOUNTS.map((acc) => (
                 <button
@@ -329,12 +320,12 @@ export default function Login({ onLogin }) {
                   disabled={loading}
                   className="v8-demo-item"
                 >
-                  <span className="v8-demo-role">{t(acc.roleKey)}</span>
+                  <span className="v8-demo-role">{t(acc.role)}</span>
                   <span className="v8-demo-email">{acc.email}</span>
                 </button>
               ))}
             </div>
-            <div className="v8-demo-hint">{t("login.demoHint")}</div>
+            <div className="v8-demo-hint">{t("Bấm để điền nhanh tài khoản demo")}</div>
           </div>
         </div>
       </main>

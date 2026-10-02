@@ -1,5 +1,7 @@
-﻿// ============================================================
+// ============================================================
 // FOODDETAILMODAL.JSX — Modal chi tiết món ăn
+// ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -7,9 +9,9 @@ import { useNavigate } from "react-router-dom";
 import { Star, Plus, ShoppingBag, Save, X } from "lucide-react";
 import { money } from "./UI";
 import { toast } from "./Effects";
+import { useI18n } from "../hooks/useI18n";
 import ToppingSelector from "./ToppingSelector";
 import ReviewSection from "./ReviewSection";
-import { useTranslation } from "../i18n";
 
 const MODAL_Z = 2147483600;
 const DEFAULT_MAX_QTY = 99;
@@ -49,7 +51,7 @@ export default function FoodDetailModal({
   initialQty,
   onUpdate,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const navigate = useNavigate();
 
   const [selectedToppings, setSelectedToppings] = useState([]);
@@ -104,10 +106,7 @@ export default function FoodDetailModal({
     const sizePart = selectedSize !== "S" ? ` (${selectedSize})` : "";
     const topPart =
       selectedToppings.length > 0
-        ? t("food.nameWithToppings").replace(
-            "{n}",
-            selectedToppings.length
-          )
+        ? ` (${selectedToppings.length} ${t("topping")})`
         : "";
     return `${item.name}${sizePart}${topPart}`;
   }, [item, selectedSize, selectedToppings.length, t]);
@@ -127,7 +126,7 @@ export default function FoodDetailModal({
 
   const addToCart = () => {
     if (isOutOfStock) {
-      toast(t("food.outOfStock"), "error");
+      toast(t("Hết hàng"), "error");
       return null;
     }
 
@@ -155,32 +154,32 @@ export default function FoodDetailModal({
   const handleAddToCart = () => {
     if (editingKey && onUpdate) {
       if (isOutOfStock) {
-        toast(t("food.outOfStock"), "error");
+        toast(t("Hết hàng"), "error");
         return;
       }
 
       if (qty > maxQty) {
-        toast(t("cart.onlyLeftMsg").replace("{n}", maxQty), "error");
+        toast(`${t("Chỉ còn")} ${maxQty} ${t("phần")}`, "error");
         return;
       }
 
       const key = buildKey();
       const entry = buildCartEntry(qty);
       onUpdate(editingKey, key, entry);
-      toast(t("food.updated").replace("{name}", entry.name), "success");
+      toast(`${t("Đã cập nhật")} ${entry.name}`, "success");
       onClose?.();
       return;
     }
 
     if (isOutOfStock) {
-      toast(t("food.outOfStock"), "error");
+      toast(t("Hết hàng"), "error");
       return;
     }
 
     const key = buildKey();
     const existing = cart?.[key];
     if (existing && Number(existing.qty) >= maxQty) {
-      toast(t("cart.onlyLeftMsg").replace("{n}", maxQty), "error");
+      toast(`${t("Chỉ còn")} ${maxQty} ${t("phần")}`, "error");
       return;
     }
 
@@ -196,13 +195,13 @@ export default function FoodDetailModal({
       });
     }
 
-    toast(t("food.addedToCart").replace("{name}", name), "success");
+    toast(`${t("Đã thêm")} ${name} ${t("vào giỏ")}`, "success");
     onClose?.();
   };
 
   const handleBuyNow = () => {
     if (isOutOfStock) {
-      toast(t("food.outOfStock"), "error");
+      toast(t("Hết hàng"), "error");
       return;
     }
 
@@ -219,7 +218,7 @@ export default function FoodDetailModal({
       });
     }
 
-    toast(t("food.buyNowToast").replace("{name}", name), "success");
+    toast(`${t("Đã thêm")} ${name} — ${t("chuyển đến thanh toán")}`, "success");
     onClose?.();
     navigate("/customer/checkout");
   };
@@ -228,7 +227,7 @@ export default function FoodDetailModal({
   const handleQtyPlus = () => {
     setQty((q) => {
       if (q >= maxQty) {
-        toast(t("cart.onlyLeftMsg").replace("{n}", maxQty), "error");
+        toast(`${t("Chỉ còn")} ${maxQty} ${t("phần")}`, "error");
         return q;
       }
       return q + 1;
@@ -246,7 +245,7 @@ export default function FoodDetailModal({
       className="food-detail-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={t("food.detailAria").replace("{name}", item.name)}
+      aria-label={`${t("Chi tiết")} ${item.name}`}
       style={{
         position: "fixed",
         inset: 0,
@@ -294,7 +293,7 @@ export default function FoodDetailModal({
           </h3>
           <button
             onClick={onClose}
-            aria-label={t("common.close")}
+            aria-label={t("Đóng")}
             type="button"
             style={{
               background: "transparent",
@@ -366,8 +365,8 @@ export default function FoodDetailModal({
               }}
             >
               {isOutOfStock
-                ? t("food.outOfStock")
-                : t("food.stockLeft").replace("{n}", item.stock)}
+                ? t("Hết hàng")
+                : `${t("Còn")} ${item.stock} ${t("phần")}`}
             </span>
           )}
         </div>
@@ -388,10 +387,7 @@ export default function FoodDetailModal({
               {item.rating}
             </b>
             <span style={{ color: "var(--text-light, #8993a3)" }}>
-              {t("food.reviewCount").replace(
-                "{n}",
-                item.review_count || 0
-              )}
+              ({item.review_count || 0} {t("đánh giá")})
             </span>
           </div>
         )}
@@ -425,7 +421,7 @@ export default function FoodDetailModal({
               fontWeight: 600,
             }}
           >
-            {t("common.quantity")}:
+            {t("Số lượng")}:
           </span>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -433,7 +429,7 @@ export default function FoodDetailModal({
               type="button"
               onClick={handleQtyMinus}
               disabled={atMin}
-              aria-label={t("cart.decreaseQty")}
+              aria-label={t("Giảm số lượng")}
               style={{
                 width: 32,
                 height: 32,
@@ -466,7 +462,7 @@ export default function FoodDetailModal({
               type="button"
               onClick={handleQtyPlus}
               disabled={atMax || isOutOfStock}
-              aria-label={t("cart.increaseQty")}
+              aria-label={t("Tăng số lượng")}
               style={{
                 width: 32,
                 height: 32,
@@ -493,7 +489,7 @@ export default function FoodDetailModal({
               color: "var(--text-light, #8993a3)",
             }}
           >
-            {t("cart.maxQty")}: {maxQty}
+            {t("tối đa")}: {maxQty}
           </span>
         </div>
 
@@ -516,7 +512,7 @@ export default function FoodDetailModal({
                 color: "var(--text-muted, #64748b)",
               }}
             >
-              {t("cart.total")}:
+              {t("Tổng")}:
             </div>
             {qty > 1 && (
               <div
@@ -580,7 +576,7 @@ export default function FoodDetailModal({
                 gap: 8,
               }}
             >
-              {t("food.outOfStock")}
+              {t("Hết hàng")}
             </button>
           ) : mode === "buy" ? (
             <button
@@ -602,7 +598,7 @@ export default function FoodDetailModal({
                 gap: 8,
               }}
             >
-              <ShoppingBag size={16} /> {t("food.buyNow")}
+              <ShoppingBag size={16} /> {t("Mua ngay")}
             </button>
           ) : (
             <button
@@ -625,7 +621,7 @@ export default function FoodDetailModal({
               }}
             >
               {editingKey ? <Save size={16} /> : <Plus size={16} />}
-              {editingKey ? t("food.updateBtn") : t("food.addToCartBtn")}
+              {editingKey ? t("Cập nhật") : t("Thêm vào giỏ")}
             </button>
           )}
         </div>

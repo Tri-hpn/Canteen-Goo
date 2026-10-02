@@ -1,25 +1,7 @@
 ﻿// ============================================================
 // OWNERPRICEHISTORY.JSX — Lịch sử thay đổi giá (Admin)
 // ============================================================
-// Tính năng:
-//   - Xem tất cả lần đổi giá (món nào, từ giá nào sang giá nào)
-//   - Filter: gõ tên món (client-side, searchable datalist)
-//   - Stats: tổng lần đổi, số lần tăng, số lần giảm
-//
-// Endpoints:
-//   - api.priceHistory.list()             → TẤT CẢ lịch sử (không filter)
-//   - api.menu.list(..., all=true)        → datalist suggest tên món
-//
-// Lưu ý:
-//   - Percent = |diff| / old_price * 100
-//     Nếu old_price = 0 → hiện "—" thay vì chia cho 0
-//   - Money diff: dùng trực tiếp number (không replace chuỗi)
-//   - Race-safe: dùng reqIdRef để bỏ qua response cũ
-//
-// Batch 2:
-//   - ✅ Gộp 2 fetch thành 1 (chỉ load ALL, filter client)
-//   - ✅ Thay <select> → <input list="..."> + <datalist>
-//     → gõ để tìm, không cần gọi API khi filter
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -29,6 +11,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
+import { useI18n } from "../../hooks/useI18n";
 import { SkeletonStats } from "../../components/Skeleton";
 
 // ============================================================
@@ -56,6 +39,8 @@ const tdStyle = {
 // ============================================================
 
 export default function OwnerPriceHistory() {
+  const { t } = useI18n();
+
   // ---------- Data ----------
   const [history, setHistory] = useState([]);
   const [menu, setMenu] = useState([]);
@@ -81,7 +66,6 @@ export default function OwnerPriceHistory() {
   }, []);
 
   // ---------- Load ALL history (race-safe) ----------
-  // ✅ Batch 2: không truyền filterItem → luôn load hết
   const loadHistory = useCallback(async () => {
     const myReqId = ++reqIdRef.current;
     setLoading(true);
@@ -93,12 +77,12 @@ export default function OwnerPriceHistory() {
       setHistory(Array.isArray(data) ? data : []);
     } catch (e) {
       if (myReqId !== reqIdRef.current) return;
-      setError(e.message || "Không tải được lịch sử giá");
+      setError(e.message || t("Không tải được lịch sử giá"));
       setHistory([]);
     } finally {
       if (myReqId === reqIdRef.current) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadHistory();
@@ -106,7 +90,7 @@ export default function OwnerPriceHistory() {
 
   // ---------- Computed (memo) ----------
 
-  // ✅ Batch 2: filter client theo tên món (partial match)
+  // ✅ Filter client theo tên món (partial match)
   const filtered = useMemo(() => {
     if (!filterText.trim()) return history;
     const s = filterText.toLowerCase().trim();
@@ -138,9 +122,8 @@ export default function OwnerPriceHistory() {
 
   return (
     <div>
-          {/* ============================================================
+      {/* ============================================================
           STATS
-          ✅ Batch 6E: Skeleton khi loading
           ============================================================ */}
       {loading ? (
         <div style={{ marginBottom: 20 }}>
@@ -160,19 +143,19 @@ export default function OwnerPriceHistory() {
         >
           <StatCard
             icon={<History size={20} />}
-            label="Tổng lần đổi giá"
+            label={t("Tổng lần đổi giá")}
             value={stats.total}
             color="#2634d5"
           />
           <StatCard
             icon={<TrendingUp size={20} />}
-            label="Tăng giá"
+            label={t("Tăng giá")}
             value={stats.up}
             color="#ef4444"
           />
           <StatCard
             icon={<TrendingDown size={20} />}
-            label="Giảm giá"
+            label={t("Giảm giá")}
             value={stats.down}
             color="#18a967"
           />
@@ -195,7 +178,7 @@ export default function OwnerPriceHistory() {
           alignItems: "center",
         }}
       >
-        {/* ✅ Batch 2: Search box với datalist suggest */}
+        {/* Search box với datalist suggest */}
         <div
           style={{
             display: "flex",
@@ -218,8 +201,8 @@ export default function OwnerPriceHistory() {
             onKeyDown={(e) => {
               if (e.key === "Escape") setFilterText("");
             }}
-            placeholder="Gõ hoặc chọn tên món..."
-            aria-label="Tìm theo tên món"
+            placeholder={t("Gõ hoặc chọn tên món...")}
+            aria-label={t("Tìm theo tên món")}
             style={{
               border: 0,
               outline: "none",
@@ -234,7 +217,7 @@ export default function OwnerPriceHistory() {
             <button
               onClick={() => setFilterText("")}
               style={clearBtnStyle}
-              aria-label="Xoá tìm kiếm"
+              aria-label={t("Xoá tìm kiếm")}
               type="button"
             >
               <X size={14} />
@@ -279,7 +262,7 @@ export default function OwnerPriceHistory() {
               e.currentTarget.style.color = "#ef4444";
             }}
           >
-            <X size={13} /> Xoá lọc
+            <X size={13} /> {t("Xoá lọc")}
           </button>
         )}
 
@@ -294,7 +277,7 @@ export default function OwnerPriceHistory() {
           <b style={{ color: "var(--text-primary, #172033)" }}>
             {filtered.length}
           </b>{" "}
-          bản ghi
+          {t("bản ghi")}
         </div>
       </div>
 
@@ -320,7 +303,7 @@ export default function OwnerPriceHistory() {
             fontSize: 15,
           }}
         >
-          <Calendar size={18} /> Lịch sử thay đổi giá ({filtered.length})
+          <Calendar size={18} /> {t("Lịch sử thay đổi giá")} ({filtered.length})
         </h3>
 
         {/* Loading */}
@@ -330,13 +313,13 @@ export default function OwnerPriceHistory() {
               size={26}
               style={{ animation: "spin 1s linear infinite", marginBottom: 10 }}
             />
-            <div>Đang tải lịch sử...</div>
+            <div>{t("Đang tải lịch sử...")}</div>
           </div>
         )}
 
         {/* Error */}
         {!loading && error && (
-          <ErrorBox message={error} onRetry={loadHistory} />
+          <ErrorBox message={error} onRetry={loadHistory} t={t} />
         )}
 
         {/* Data */}
@@ -345,13 +328,13 @@ export default function OwnerPriceHistory() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                  <th style={thStyle}>Thời gian</th>
-                  <th style={thStyle}>Món ăn</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Giá cũ</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Giá mới</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Chênh lệch</th>
-                  <th style={thStyle}>Người đổi</th>
-                  <th style={thStyle}>Lý do</th>
+                  <th style={thStyle}>{t("Thời gian")}</th>
+                  <th style={thStyle}>{t("Món ăn")}</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>{t("Giá cũ")}</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>{t("Giá mới")}</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>{t("Chênh lệch")}</th>
+                  <th style={thStyle}>{t("Người đổi")}</th>
+                  <th style={thStyle}>{t("Lý do")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -438,7 +421,7 @@ export default function OwnerPriceHistory() {
                               fontWeight: 600,
                             }}
                           >
-                            <Minus size={14} /> Không đổi
+                            <Minus size={14} /> {t("Không đổi")}
                           </span>
                         ) : (
                           <span
@@ -507,8 +490,8 @@ export default function OwnerPriceHistory() {
                       />
                       <div>
                         {hasFilter
-                          ? `Không có bản ghi nào khớp "${filterText}"`
-                          : "Chưa có lịch sử thay đổi giá"}
+                          ? `${t("Không có bản ghi nào khớp")} "${filterText}"`
+                          : t("Chưa có lịch sử thay đổi giá")}
                       </div>
                     </td>
                   </tr>
@@ -575,7 +558,7 @@ function StatCard({ icon, label, value, color }) {
   );
 }
 
-function ErrorBox({ message, onRetry }) {
+function ErrorBox({ message, onRetry, t }) {
   return (
     <div
       style={{
@@ -589,7 +572,7 @@ function ErrorBox({ message, onRetry }) {
     >
       <AlertCircle size={26} style={{ marginBottom: 10 }} />
       <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        Không tải được dữ liệu
+        {t("Không tải được dữ liệu")}
       </div>
       <div
         style={{ fontSize: 13, opacity: 0.85, marginBottom: onRetry ? 12 : 0 }}
@@ -610,7 +593,7 @@ function ErrorBox({ message, onRetry }) {
             fontSize: 13,
           }}
         >
-          Thử lại
+          {t("Thử lại")}
         </button>
       )}
     </div>

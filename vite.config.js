@@ -2,6 +2,7 @@
 // vite.config.js — Vite configuration
 // ============================================================
 // - React plugin
+// - i18n auto-extract plugin
 // - Dev server proxy /api → localhost:3000 (tránh CORS)
 // - Build optimizations (chunk splitting)
 // - Path aliases
@@ -10,6 +11,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import i18nPlugin from "./vite-plugin-i18n.mjs";
 
 export default defineConfig(({ mode }) => {
   // Load .env theo mode
@@ -18,7 +20,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     // ---------- Plugins ----------
-    plugins: [react()],
+    // ✅ FIX: Cả 2 plugin đều NẰM TRONG array này
+    plugins: [
+      react(),
+      i18nPlugin(),
+    ],
 
     // ---------- Resolve ----------
     resolve: {

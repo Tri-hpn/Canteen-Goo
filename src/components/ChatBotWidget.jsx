@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // CHATBOTWIDGET.JSX — Widget chat nổi (góc phải dưới)
 // ============================================================
 
@@ -11,16 +11,16 @@ import { api } from "../api";
 import { money } from "./UI";
 import { toast } from "./Effects";
 import { getBotReply } from "./ChatBot";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 import FoodDetailModal from "./FoodDetailModal";
 
 const QUICK_REPLIES_KEYS = [
-  "bot.quick.under30k",
-  "bot.quick.vegetarian",
-  "bot.quick.drinks",
-  "bot.quick.spicy",
-  "bot.quick.bestSeller",
-  "bot.quick.suggest",
+  "Dưới 30k",
+  "Món chay",
+  "Đồ uống",
+  "Món cay",
+  "Bán chạy",
+  "Gợi ý",
 ];
 
 const AI_REPLY_DELAY_MS = 600;
@@ -54,7 +54,7 @@ function getMaxQty(item) {
 }
 
 export default function ChatBotWidget({ cart, setCart, user }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("ai");
 
@@ -124,9 +124,9 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       {
         id: "welcome",
         from: "bot",
-        content: t("chatbot.welcome").replace(
+        content: t("Xin chào {name}! Mình có thể giúp gì cho bạn?").replace(
           "{name}",
-          user?.name || t("profile.guest")
+          user?.name || t("Khách")
         ),
         created_at: new Date().toISOString(),
       },
@@ -154,7 +154,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       setStaffMessages(Array.isArray(data) ? data : []);
     } catch (e) {
       if (myReqId === staffReqIdRef.current && !silent) {
-        setStaffError(e.message || t("chat.loadError"));
+        setStaffError(e.message || t("Không tải được tin nhắn"));
       }
     } finally {
       if (myReqId === staffReqIdRef.current) setStaffLoading(false);
@@ -251,7 +251,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
 
     if (val.length > MAX_MESSAGE_LENGTH) {
       toast(
-        t("chatbot.maxLength").replace("{n}", MAX_MESSAGE_LENGTH),
+        t("Tin nhắn tối đa {n} ký tự").replace("{n}", MAX_MESSAGE_LENGTH),
         "error"
       );
       return;
@@ -295,7 +295,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
     if (!val || staffSending) return;
     if (val.length > MAX_MESSAGE_LENGTH) {
       toast(
-        t("chatbot.maxLength").replace("{n}", MAX_MESSAGE_LENGTH),
+        t("Tin nhắn tối đa {n} ký tự").replace("{n}", MAX_MESSAGE_LENGTH),
         "error"
       );
       return;
@@ -307,7 +307,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       setStaffText("");
       setStaffMessages((m) => [...m, msg]);
     } catch (e) {
-      toast(e.message || t("chat.sendError"), "error");
+      toast(e.message || t("Không gửi được tin nhắn"), "error");
     } finally {
       setStaffSending(false);
     }
@@ -325,7 +325,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       const existing = c[key];
       const currentQty = Number(existing?.qty) || 0;
       if (currentQty >= maxQty) {
-        reason = t("cart.onlyLeftMsg").replace("{n}", maxQty);
+        reason = t("Chỉ còn {n} phần trong kho").replace("{n}", maxQty);
         return c;
       }
       added = true;
@@ -345,7 +345,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
 
     if (added) {
       toast(
-        t("chatbot.addedToCart").replace("{name}", m.name),
+        t("Đã thêm {name} vào giỏ").replace("{name}", m.name),
         "success"
       );
     } else {
@@ -360,7 +360,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label={t("chatbot.openAria")}
+          aria-label={t("Trợ lý Canteen")}
           className="chatbot-fab"
           style={{
             position: "fixed",
@@ -383,7 +383,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
           <MessageCircleHeart size={26} />
           {hasNew && (
             <span
-              aria-label={t("chatbot.hasNew")}
+              aria-label={t("Có tin nhắn mới")}
               style={{
                 position: "absolute",
                 top: 0,
@@ -415,7 +415,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
           className="chatbot-panel"
           role="dialog"
           aria-modal="true"
-          aria-label={t("chatbot.title")}
+          aria-label={t("Trợ lý Canteen")}
           style={{
             position: "fixed",
             bottom: 24,
@@ -473,17 +473,17 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {mode === "ai" ? t("chatbot.aiName") : t("chatbot.staffName")}
+                  {mode === "ai" ? t("Trợ lý AI") : t("Nhân viên Canteen")}
                 </b>
                 <span style={{ fontSize: 11, opacity: 0.92 }}>
                   {mode === "ai"
-                    ? t("chatbot.aiSubtitle")
-                    : t("chatbot.staffSubtitle")}
+                    ? t("Gợi ý món, hỏi đáp nhanh")
+                    : t("Chat với nhân viên Canteen")}
                 </span>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                aria-label={t("chatbot.closeAria")}
+                aria-label={t("Đóng")}
                 type="button"
                 style={{
                   background: "rgba(255,255,255,0.18)",
@@ -533,7 +533,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                   gap: 5,
                 }}
               >
-                <Bot size={14} /> {t("chatbot.tabAi")}
+                <Bot size={14} /> {t("Trợ lý")}
               </button>
               <button
                 onClick={() => setMode("staff")}
@@ -555,7 +555,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
                   gap: 5,
                 }}
               >
-                <Store size={14} /> {t("chatbot.tabStaff")}
+                <Store size={14} /> {t("Nhân viên")}
               </button>
             </div>
           </div>
@@ -742,8 +742,8 @@ function AIContent({
                         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                           <button
                             onClick={() => onQuickAdd(it)}
-                            title={t("chatbot.addToCart")}
-                            aria-label={t("chatbot.addToCart")}
+                            title={t("Thêm vào giỏ")}
+                            aria-label={t("Thêm vào giỏ")}
                             type="button"
                             style={{
                               background: "#2634d5",
@@ -761,7 +761,7 @@ function AIContent({
                           </button>
                           <button
                             onClick={() => onView(it)}
-                            title={t("common.view")}
+                            title={t("Xem")}
                             type="button"
                             style={{
                               background: "#f59e0b",
@@ -775,7 +775,7 @@ function AIContent({
                               fontWeight: 700,
                             }}
                           >
-                            {t("common.view")}
+                            {t("Xem")}
                           </button>
                         </div>
                       </div>
@@ -878,7 +878,7 @@ function AIContent({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={t("chatbot.inputPlaceholder")}
+          placeholder={t("Nhập tin nhắn cho trợ lý...")}
           disabled={typing}
           maxLength={MAX_MESSAGE_LENGTH}
           style={{
@@ -896,7 +896,7 @@ function AIContent({
         <button
           onClick={() => onSend()}
           disabled={typing || !text.trim()}
-          aria-label={t("chat.sendAria")}
+          aria-label={t("Gửi")}
           type="button"
           style={{
             width: 42,
@@ -984,7 +984,7 @@ function StaffContent({
                 gap: 4,
               }}
             >
-              <RefreshCw size={11} /> {t("common.retry")}
+              <RefreshCw size={11} /> {t("Thử lại")}
             </button>
           </div>
         )}
@@ -1002,7 +1002,7 @@ function StaffContent({
               size={20}
               style={{ animation: "spin 1s linear infinite", marginBottom: 6 }}
             />
-            <div>{t("common.loading")}</div>
+            <div>{t("Đang tải...")}</div>
           </div>
         )}
 
@@ -1027,9 +1027,9 @@ function StaffContent({
                 marginBottom: 6,
               }}
             >
-              {t("chatbot.staffEmptyTitle")}
+              {t("Chưa có tin nhắn")}
             </b>
-            <p style={{ margin: 0 }}>{t("chatbot.staffEmptyDesc")}</p>
+            <p style={{ margin: 0 }}>{t("Gửi tin nhắn để được hỗ trợ trực tiếp.")}</p>
           </div>
         )}
 
@@ -1071,7 +1071,7 @@ function StaffContent({
                     marginBottom: 4,
                   }}
                 >
-                  {m.from_name || t("chatbot.staffFallbackName")}
+                  {m.from_name || t("Nhân viên")}
                 </div>
               )}
               <div style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
@@ -1099,7 +1099,7 @@ function StaffContent({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={t("chatbot.staffInputPlaceholder")}
+          placeholder={t("Nhập tin nhắn...")}
           disabled={sending}
           maxLength={MAX_MESSAGE_LENGTH}
           style={{
@@ -1117,7 +1117,7 @@ function StaffContent({
         <button
           onClick={onSend}
           disabled={sending || !text.trim()}
-          aria-label={t("chat.sendAria")}
+          aria-label={t("Gửi")}
           type="button"
           style={{
             width: 42,

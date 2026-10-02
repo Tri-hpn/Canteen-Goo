@@ -1,41 +1,20 @@
 ﻿// ============================================================
 // OWNERVOUCHERS.JSX — Quản lý voucher (Admin)
 // ============================================================
-// Tính năng:
-//   - Danh sách voucher: template (public) + personal (user)
-//   - Filter: search / source / status / customer / sort
-//   - Thao tác: tạo / sửa / xoá / bulk xoá / toggle used
-//   - Xem lượt claim của template
-//   - Export CSV (có escape đúng chuẩn)
-//
-// Endpoints:
-//   - api.vouchers.all / create / update / remove
-//   - api.vouchers.claims(templateId)
-//   - api.users.list("CUSTOMER")
-//
-// Lưu ý:
-//   - Customer lookup dùng Map thay vì find() → O(1)
-//   - CSV escape đúng: dấu " được nhân đôi, cell được bọc trong ""
-//   - copyCode + exportCSV có cleanup
-//
-// Batch 3B fixes:
-//   - ✅ V1: Validate trùng mã voucher (case-insensitive)
-//     bỏ qua chính nó khi edit
-//   - ✅ V2: Đổi label "Chưa dùng" → "Khả dụng (cá nhân)" cho rõ
-//   - ✅ V3: Persist filter (source/status/sort) vào localStorage
-//     - Restore khi mount
-//     - Reset về default khi bấm "Xoá lọc"
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
+
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   Plus, Search, Trash2, Edit, Ticket, Gift, Save, Check, Download,
   Power, Globe, User as UserIcon, Eye, X, Users, Copy,
-  Loader2, AlertCircle, Filter as FilterIcon, SortAsc,
+  Loader2, AlertCircle,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
@@ -45,25 +24,6 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 const MODAL_Z = 2147483600;
 const COPY_FEEDBACK_MS = 1500;
 const FILTER_STORAGE_KEY = "vouchers_filter";
-
-const SOURCE_FILTERS = [
-  { id: "all",      label: "Tất cả" },
-  { id: "public",   label: "🌐 Public" },
-  { id: "personal", label: "👤 Cá nhân" },
-];
-
-const STATUS_FILTERS = [
-  { id: "all",    label: "Tất cả TT" },
-  { id: "unused", label: "Chưa dùng" },
-  { id: "used",   label: "Đã dùng" },
-];
-
-const SORT_OPTIONS = [
-  { id: "newest",     label: "Mới nhất" },
-  { id: "oldest",     label: "Cũ nhất" },
-  { id: "value-desc", label: "Giá trị ↓" },
-  { id: "value-asc",  label: "Giá trị ↑" },
-];
 
 const QUICK_VALUES = [10000, 20000, 50000, 100000];
 
@@ -80,9 +40,7 @@ const DEFAULT_FILTERS = {
 // ============================================================
 
 /**
- * Escape 1 cell cho CSV:
- *   - Bọc trong "" nếu có `,` / `"` / `\n`
- *   - Nhân đôi dấu `"` bên trong
+ * Escape 1 cell cho CSV.
  */
 function csvCell(v) {
   const s = String(v ?? "");
@@ -92,7 +50,9 @@ function csvCell(v) {
   return s;
 }
 
-/** ✅ V3: Đọc filter đã lưu từ localStorage (an toàn). */
+/**
+ * ✅ V3: Đọc filter đã lưu từ localStorage (an toàn).
+ */
 function readStoredFilters() {
   if (typeof window === "undefined") return DEFAULT_FILTERS;
   try {
@@ -101,16 +61,15 @@ function readStoredFilters() {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return DEFAULT_FILTERS;
 
-    // Chỉ nhận các giá trị hợp lệ
     return {
       q: typeof parsed.q === "string" ? parsed.q : DEFAULT_FILTERS.q,
-      source: SOURCE_FILTERS.some((f) => f.id === parsed.source)
+      source: ["all", "public", "personal"].includes(parsed.source)
         ? parsed.source
         : DEFAULT_FILTERS.source,
-      status: STATUS_FILTERS.some((f) => f.id === parsed.status)
+      status: ["all", "unused", "used"].includes(parsed.status)
         ? parsed.status
         : DEFAULT_FILTERS.status,
-      sortBy: SORT_OPTIONS.some((f) => f.id === parsed.sortBy)
+      sortBy: ["newest", "oldest", "value-desc", "value-asc"].includes(parsed.sortBy)
         ? parsed.sortBy
         : DEFAULT_FILTERS.sortBy,
     };
@@ -124,6 +83,37 @@ function readStoredFilters() {
 // ============================================================
 
 export default function OwnerVouchers() {
+  const { t } = useI18n();
+
+  // Filter options — useMemo vì phụ thuộc t
+  const SOURCE_FILTERS = useMemo(
+    () => [
+      { id: "all",      label: t("Tất cả") },
+      { id: "public",   label: `🌐 ${t("Public")}` },
+      { id: "personal", label: `👤 ${t("Cá nhân")}` },
+    ],
+    [t]
+  );
+
+  const STATUS_FILTERS = useMemo(
+    () => [
+      { id: "all",    label: t("Tất cả TT") },
+      { id: "unused", label: t("Chưa dùng") },
+      { id: "used",   label: t("Đã dùng") },
+    ],
+    [t]
+  );
+
+  const SORT_OPTIONS = useMemo(
+    () => [
+      { id: "newest",     label: t("Mới nhất") },
+      { id: "oldest",     label: t("Cũ nhất") },
+      { id: "value-desc", label: t("Giá trị ↓") },
+      { id: "value-asc",  label: t("Giá trị ↑") },
+    ],
+    [t]
+  );
+
   // ---------- Data ----------
   const [list, setList] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -182,12 +172,12 @@ export default function OwnerVouchers() {
       setCustomers(Array.isArray(uRes) ? uRes : []);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || "Không tải được danh sách voucher");
+        setError(e.message || t("Không tải được danh sách voucher"));
       }
     } finally {
       if (myReqId === reqIdRef.current) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
@@ -203,8 +193,8 @@ export default function OwnerVouchers() {
   // Cleanup timeout copy feedback khi unmount
   useEffect(() => {
     if (!copiedId) return;
-    const t = setTimeout(() => setCopiedId(null), COPY_FEEDBACK_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setCopiedId(null), COPY_FEEDBACK_MS);
+    return () => clearTimeout(timer);
   }, [copiedId]);
 
   // ESC đóng modals
@@ -253,7 +243,7 @@ export default function OwnerVouchers() {
       result = result.filter((v) => v.user_id);
     }
 
-    // Sort (immutable-safe: đã có `[...list]`)
+    // Sort
     switch (sortBy) {
       case "oldest":
         result.sort((a, b) => (a.id || 0) - (b.id || 0));
@@ -306,7 +296,6 @@ export default function OwnerVouchers() {
   const allSelected =
     filtered.length > 0 && selected.length === filtered.length;
 
-  // Có filter đang bật khác default?
   const hasActiveFilter =
     q.trim() !== "" ||
     filterSource !== "all" ||
@@ -331,10 +320,10 @@ export default function OwnerVouchers() {
 
   const getSource = (v) => {
     if (v.claimed_from)
-      return { label: "Đã nhận từ ƯĐ", color: "#8b5cf6", bg: "#ede9fe" };
+      return { label: t("Đã nhận từ ƯĐ"), color: "#8b5cf6", bg: "#ede9fe" };
     if (!v.user_id)
-      return { label: "Toàn hệ thống", color: "#ec4899", bg: "#fce7f3" };
-    return { label: "Cá nhân", color: "#2634d5", bg: "#eef2ff" };
+      return { label: t("Toàn hệ thống"), color: "#ec4899", bg: "#fce7f3" };
+    return { label: t("Cá nhân"), color: "#2634d5", bg: "#eef2ff" };
   };
 
   const generateCode = () => {
@@ -345,10 +334,9 @@ export default function OwnerVouchers() {
   const copyCode = (v) => {
     navigator.clipboard.writeText(v.code);
     setCopiedId(v.id);
-    toast("Đã sao chép mã " + v.code, "success");
+    toast(`${t("Đã sao chép mã")} ${v.code}`, "success");
   };
 
-  // Confirm helpers
   const closeConfirm = useCallback(() => {
     if (confirmBusy) return;
     setConfirm(null);
@@ -388,11 +376,11 @@ export default function OwnerVouchers() {
     const pointsUsed = Number(f.get("points_used")) || 0;
 
     // Validate cơ bản
-    if (!code) return toast("Vui lòng nhập mã voucher", "error");
-    if (!value || value <= 0) return toast("Giá trị phải lớn hơn 0", "error");
+    if (!code) return toast(t("Vui lòng nhập mã voucher"), "error");
+    if (!value || value <= 0) return toast(t("Giá trị phải lớn hơn 0"), "error");
     if (value > 10_000_000)
-      return toast("Giá trị tối đa 10 triệu", "error");
-    if (pointsUsed < 0) return toast("Số điểm không được âm", "error");
+      return toast(t("Giá trị tối đa 10 triệu"), "error");
+    if (pointsUsed < 0) return toast(t("Số điểm không được âm"), "error");
 
     // ✅ V1: Validate trùng mã (case-insensitive, bỏ qua chính nó khi edit)
     const currentId = modal?.id;
@@ -403,7 +391,7 @@ export default function OwnerVouchers() {
     );
     if (dup) {
       return toast(
-        `Đã có voucher mã "${dup.code}" — vui lòng đặt mã khác`,
+        `${t("Đã có voucher mã")} "${dup.code}" — ${t("vui lòng đặt mã khác")}`,
         "error"
       );
     }
@@ -413,15 +401,15 @@ export default function OwnerVouchers() {
       const data = { code, value, user_id: userId, points_used: pointsUsed };
       if (modal?.id) {
         await api.vouchers.update(modal.id, data);
-        toast("Đã cập nhật voucher", "success");
+        toast(t("Đã cập nhật voucher"), "success");
       } else {
         await api.vouchers.create(data);
-        toast("Đã tạo voucher " + code, "success");
+        toast(`${t("Đã tạo voucher")} ${code}`, "success");
       }
       setModal(null);
       load();
     } catch (e) {
-      toast(e.message || "Không lưu được", "error");
+      toast(e.message || t("Không lưu được"), "error");
     } finally {
       setSaving(false);
     }
@@ -429,22 +417,22 @@ export default function OwnerVouchers() {
 
   const removeVoucher = (v) => {
     setConfirm({
-      title: `Xóa voucher "${v.code}"?`,
+      title: `${t("Xóa voucher")} "${v.code}"?`,
       message:
-        `Voucher trị giá ${money(v.value)} sẽ bị xoá vĩnh viễn. ` +
-        "Hành động này không thể hoàn tác.",
-      confirmText: "Xóa voucher",
-      cancelText: "Hủy",
+        `${t("Voucher trị giá")} ${money(v.value)} ${t("sẽ bị xoá vĩnh viễn.")} ` +
+        t("Hành động này không thể hoàn tác."),
+      confirmText: t("Xóa voucher"),
+      cancelText: t("Hủy"),
       danger: true,
       onConfirm: async () => {
         try {
           await api.vouchers.remove(v.id);
-          toast("Đã xóa voucher", "success");
+          toast(t("Đã xóa voucher"), "success");
           setSelected((s) => s.filter((x) => x !== v.id));
           setConfirm(null);
           load();
         } catch (e) {
-          toast(e.message || "Không xóa được", "error");
+          toast(e.message || t("Không xóa được"), "error");
         }
       },
     });
@@ -455,22 +443,22 @@ export default function OwnerVouchers() {
     const count = selected.length;
 
     setConfirm({
-      title: `Xóa ${count} voucher đã chọn?`,
+      title: `${t("Xóa")} ${count} ${t("voucher đã chọn?")}`,
       message:
-        `${count} voucher sẽ bị xoá vĩnh viễn. ` +
-        "Hành động này không thể hoàn tác.",
-      confirmText: `Xóa ${count} voucher`,
-      cancelText: "Hủy",
+        `${count} ${t("voucher sẽ bị xoá vĩnh viễn.")} ` +
+        t("Hành động này không thể hoàn tác."),
+      confirmText: `${t("Xóa")} ${count} ${t("voucher")}`,
+      cancelText: t("Hủy"),
       danger: true,
       onConfirm: async () => {
         try {
           await Promise.all(selected.map((id) => api.vouchers.remove(id)));
-          toast(`Đã xóa ${count} voucher`, "success");
+          toast(`${t("Đã xóa")} ${count} ${t("voucher")}`, "success");
           setSelected([]);
           setConfirm(null);
           load();
         } catch (e) {
-          toast(e.message || "Không xóa được", "error");
+          toast(e.message || t("Không xóa được"), "error");
         }
       },
     });
@@ -478,24 +466,24 @@ export default function OwnerVouchers() {
 
   const toggleUsed = (v) => {
     const newUsed = !v.used;
-    const action = newUsed ? "đã dùng" : "chưa dùng";
+    const action = newUsed ? t("đã dùng") : t("chưa dùng");
 
     setConfirm({
-      title: `Đánh dấu "${v.code}" là ${action}?`,
+      title: `${t("Đánh dấu")} "${v.code}" ${t("là")} ${action}?`,
       message: newUsed
-        ? "Voucher sẽ được đánh dấu là đã sử dụng. Khách hàng sẽ không dùng được nữa."
-        : "Voucher sẽ được khôi phục về trạng thái chưa dùng.",
-      confirmText: `Đánh dấu ${action}`,
-      cancelText: "Hủy",
+        ? t("Voucher sẽ được đánh dấu là đã sử dụng. Khách hàng sẽ không dùng được nữa.")
+        : t("Voucher sẽ được khôi phục về trạng thái chưa dùng."),
+      confirmText: `${t("Đánh dấu")} ${action}`,
+      cancelText: t("Hủy"),
       danger: newUsed,
       onConfirm: async () => {
         try {
           await api.vouchers.update(v.id, { used: newUsed });
-          toast(`Đã đánh dấu ${action}`, "success");
+          toast(`${t("Đã đánh dấu")} ${action}`, "success");
           setConfirm(null);
           load();
         } catch (e) {
-          toast(e.message || "Không cập nhật được", "error");
+          toast(e.message || t("Không cập nhật được"), "error");
         }
       },
     });
@@ -511,7 +499,7 @@ export default function OwnerVouchers() {
       const data = await api.vouchers.claims(template.id).catch(() => []);
       setClaims(Array.isArray(data) ? data : []);
     } catch (e) {
-      toast(e.message || "Không tải được danh sách", "error");
+      toast(e.message || t("Không tải được danh sách"), "error");
     } finally {
       setLoadingClaims(false);
     }
@@ -521,29 +509,29 @@ export default function OwnerVouchers() {
 
   const exportCSV = () => {
     if (!filtered.length) {
-      return toast("Không có voucher nào để xuất", "error");
+      return toast(t("Không có voucher nào để xuất"), "error");
     }
 
     let url = null;
     let a = null;
     try {
       const rows = [
-        ["Mã", "Giá trị", "Nguồn", "Khách hàng", "Điểm đổi", "Trạng thái", "Ngày tạo"],
+        [t("Mã"), t("Giá trị"), t("Nguồn"), t("Khách hàng"), t("Điểm đổi"), t("Trạng thái"), t("Ngày tạo")],
         ...filtered.map((v) => {
           const c = customerMap.get(String(v.user_id));
           const src = getSource(v).label;
           const customerName = c
             ? c.name
             : v.user_id
-            ? "User #" + v.user_id
-            : "Toàn hệ thống";
+            ? `User #${v.user_id}`
+            : t("Toàn hệ thống");
           return [
             v.code,
             v.value,
             src,
             customerName,
             v.points_used || 0,
-            v.used ? "Đã dùng" : "Chưa dùng",
+            v.used ? t("Đã dùng") : t("Chưa dùng"),
             v.created_at
               ? new Date(v.created_at).toLocaleString("vi-VN")
               : "",
@@ -564,9 +552,9 @@ export default function OwnerVouchers() {
       document.body.appendChild(a);
       a.click();
 
-      toast(`Đã xuất ${filtered.length} voucher`, "success");
+      toast(`${t("Đã xuất")} ${filtered.length} ${t("voucher")}`, "success");
     } catch (e) {
-      toast(e.message || "Không xuất được", "error");
+      toast(e.message || t("Không xuất được"), "error");
     } finally {
       if (a && a.parentNode) a.parentNode.removeChild(a);
       if (url) URL.revokeObjectURL(url);
@@ -581,7 +569,6 @@ export default function OwnerVouchers() {
     <div>
       {/* ============================================================
           STATS
-          ✅ V2: đổi label "Chưa dùng" → "Khả dụng (cá nhân)"
           ============================================================ */}
       <div
         style={{
@@ -591,12 +578,12 @@ export default function OwnerVouchers() {
           marginBottom: 20,
         }}
       >
-        <Stat label="Tổng voucher" value={stats.total} color="#2634d5" icon={<Ticket size={16} />} />
-        <Stat label="Toàn hệ thống" value={stats.public} color="#ec4899" icon={<Globe size={16} />} />
-        <Stat label="Cá nhân" value={stats.personal} color="#8b5cf6" icon={<UserIcon size={16} />} />
-        <Stat label="Khả dụng (cá nhân)" value={stats.personalAvailable} color="#18a967" icon={<Gift size={16} />} />
-        <Stat label="Đã dùng" value={stats.used} color="#ef4444" icon={<Check size={16} />} />
-        <Stat label="Lượt nhận" value={stats.totalClaims} color="#f59e0b" icon={<Users size={16} />} />
+        <Stat label={t("Tổng voucher")} value={stats.total} color="#2634d5" icon={<Ticket size={16} />} />
+        <Stat label={t("Toàn hệ thống")} value={stats.public} color="#ec4899" icon={<Globe size={16} />} />
+        <Stat label={t("Cá nhân")} value={stats.personal} color="#8b5cf6" icon={<UserIcon size={16} />} />
+        <Stat label={t("Khả dụng (cá nhân)")} value={stats.personalAvailable} color="#18a967" icon={<Gift size={16} />} />
+        <Stat label={t("Đã dùng")} value={stats.used} color="#ef4444" icon={<Check size={16} />} />
+        <Stat label={t("Lượt nhận")} value={stats.totalClaims} color="#f59e0b" icon={<Users size={16} />} />
       </div>
 
       {/* ============================================================
@@ -629,7 +616,7 @@ export default function OwnerVouchers() {
             <input
               value={q}
               onChange={(e) => setFilterField("q", e.target.value)}
-              placeholder="Tìm mã, giá trị, khách..."
+              placeholder={t("Tìm mã, giá trị, khách...")}
               style={{
                 flex: 1,
                 border: 0,
@@ -644,7 +631,7 @@ export default function OwnerVouchers() {
               <button
                 onClick={() => setFilterField("q", "")}
                 style={clearBtnStyle}
-                aria-label="Xoá tìm kiếm"
+                aria-label={t("Xoá tìm kiếm")}
               >
                 <X size={14} />
               </button>
@@ -690,7 +677,7 @@ export default function OwnerVouchers() {
             ))}
           </select>
 
-          {/* ✅ V3: Clear filters (chỉ hiện khi có filter đang bật) */}
+          {/* Clear filters */}
           {hasActiveFilter && (
             <button
               onClick={clearFilters}
@@ -708,13 +695,13 @@ export default function OwnerVouchers() {
                 gap: 4,
               }}
             >
-              <X size={13} /> Xoá lọc
+              <X size={13} /> {t("Xoá lọc")}
             </button>
           )}
 
           {/* Export */}
           <button onClick={exportCSV} style={toolBtnStyle} disabled={loading}>
-            <Download size={14} /> Xuất CSV
+            <Download size={14} /> {t("Xuất CSV")}
           </button>
 
           {/* Create */}
@@ -722,7 +709,7 @@ export default function OwnerVouchers() {
             onClick={() => setModal({ code: generateCode() })}
             style={btnPrimaryStyle}
           >
-            <Plus size={16} /> Tạo voucher
+            <Plus size={16} /> {t("Tạo voucher")}
           </button>
         </div>
 
@@ -744,7 +731,7 @@ export default function OwnerVouchers() {
             }}
           >
             <span style={{ color: "#ef4444", fontWeight: 600 }}>
-              Đã chọn <b>{selected.length}</b> voucher
+              {t("Đã chọn")} <b>{selected.length}</b> {t("voucher")}
             </span>
             <button
               onClick={removeSelected}
@@ -762,7 +749,7 @@ export default function OwnerVouchers() {
                 gap: 4,
               }}
             >
-              <Trash2 size={13} /> Xóa {selected.length}
+              <Trash2 size={13} /> {t("Xóa")} {selected.length}
             </button>
           </div>
         )}
@@ -775,7 +762,7 @@ export default function OwnerVouchers() {
             color: "var(--text-light, #8993a3)",
           }}
         >
-          Hiển thị <b>{filtered.length}</b> / {list.length} voucher
+          {t("Hiển thị")} <b>{filtered.length}</b> / {list.length} {t("voucher")}
         </div>
       </div>
 
@@ -783,33 +770,38 @@ export default function OwnerVouchers() {
           TABLE
           ============================================================ */}
       <div style={{ ...cardStyle, marginTop: 16 }}>
-        {/* Loading — skeleton table */}
         {loading && (
           <SkeletonTable
             columns={8}
             rows={5}
-            headers={["", "Mã", "Giá trị", "Nguồn", "Khách / Lượt nhận", "Trạng thái", "Ngày", "Thao tác"]}
+            headers={[
+              "",
+              t("Mã"),
+              t("Giá trị"),
+              t("Nguồn"),
+              t("Khách / Lượt nhận"),
+              t("Trạng thái"),
+              t("Ngày"),
+              t("Thao tác"),
+            ]}
           />
         )}
 
-        {/* Error */}
         {!loading && error && (
-          <ErrorBox message={error} onRetry={load} />
+          <ErrorBox message={error} onRetry={load} t={t} />
         )}
 
-        {/* Empty */}
         {!loading && !error && filtered.length === 0 && (
           <div style={emptyBoxStyle}>
             <Ticket size={40} style={{ opacity: 0.3, marginBottom: 8 }} />
             <div style={{ fontSize: 13 }}>
               {list.length === 0
-                ? "Chưa có voucher nào — bấm \"Tạo voucher\" để bắt đầu"
-                : "Không có voucher khớp bộ lọc"}
+                ? `${t("Chưa có voucher nào — bấm")} "${t("Tạo voucher")}" ${t("để bắt đầu")}`
+                : t("Không có voucher khớp bộ lọc")}
             </div>
           </div>
         )}
 
-        {/* Data */}
         {!loading && !error && filtered.length > 0 && (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -821,16 +813,16 @@ export default function OwnerVouchers() {
                       checked={allSelected}
                       onChange={toggleSelectAll}
                       style={{ cursor: "pointer" }}
-                      aria-label="Chọn tất cả"
+                      aria-label={t("Chọn tất cả")}
                     />
                   </th>
-                  <th style={thStyle}>Mã</th>
-                  <th style={thStyle}>Giá trị</th>
-                  <th style={thStyle}>Nguồn</th>
-                  <th style={thStyle}>Khách / Lượt nhận</th>
-                  <th style={thStyle}>Trạng thái</th>
-                  <th style={thStyle}>Ngày</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
+                  <th style={thStyle}>{t("Mã")}</th>
+                  <th style={thStyle}>{t("Giá trị")}</th>
+                  <th style={thStyle}>{t("Nguồn")}</th>
+                  <th style={thStyle}>{t("Khách / Lượt nhận")}</th>
+                  <th style={thStyle}>{t("Trạng thái")}</th>
+                  <th style={thStyle}>{t("Ngày")}</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>{t("Thao tác")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -860,7 +852,7 @@ export default function OwnerVouchers() {
                           checked={isSelected}
                           onChange={() => toggleSelect(v.id)}
                           style={{ cursor: "pointer" }}
-                          aria-label={`Chọn ${v.code}`}
+                          aria-label={`${t("Chọn")} ${v.code}`}
                         />
                       </td>
 
@@ -884,8 +876,8 @@ export default function OwnerVouchers() {
                           </b>
                           <button
                             onClick={() => copyCode(v)}
-                            title="Sao chép mã"
-                            aria-label="Sao chép mã"
+                            title={t("Sao chép mã")}
+                            aria-label={t("Sao chép mã")}
                             style={{
                               background: "transparent",
                               border: 0,
@@ -956,8 +948,8 @@ export default function OwnerVouchers() {
                           >
                             <Users size={12} />
                             {claimCount > 0
-                              ? `${claimCount} khách đã nhận`
-                              : "Chưa ai nhận"}
+                              ? `${claimCount} ${t("khách đã nhận")}`
+                              : t("Chưa ai nhận")}
                           </button>
                         ) : cust ? (
                           cust.name
@@ -985,7 +977,7 @@ export default function OwnerVouchers() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {v.used ? "Đã dùng" : "Chưa dùng"}
+                          {v.used ? t("Đã dùng") : t("Chưa dùng")}
                         </span>
                       </td>
 
@@ -1015,7 +1007,7 @@ export default function OwnerVouchers() {
                           {isTemplate && (
                             <IconButton
                               onClick={() => openClaims(v)}
-                              title="Xem lượt nhận"
+                              title={t("Xem lượt nhận")}
                               color="#8b5cf6"
                             >
                               <Eye size={14} />
@@ -1025,8 +1017,8 @@ export default function OwnerVouchers() {
                             onClick={() => toggleUsed(v)}
                             title={
                               v.used
-                                ? "Đánh dấu chưa dùng"
-                                : "Đánh dấu đã dùng"
+                                ? t("Đánh dấu chưa dùng")
+                                : t("Đánh dấu đã dùng")
                             }
                             color={v.used ? "#18a967" : "#f59e0b"}
                           >
@@ -1034,13 +1026,13 @@ export default function OwnerVouchers() {
                           </IconButton>
                           <IconButton
                             onClick={() => setModal(v)}
-                            title="Sửa"
+                            title={t("Sửa")}
                           >
                             <Edit size={14} />
                           </IconButton>
                           <IconButton
                             onClick={() => removeVoucher(v)}
-                            title="Xóa"
+                            title={t("Xóa")}
                             color="#ef4444"
                           >
                             <Trash2 size={14} />
@@ -1067,19 +1059,19 @@ export default function OwnerVouchers() {
           <div style={modalHeaderStyle}>
             <h3 style={modalTitleStyle}>
               <Ticket size={20} />{" "}
-              {modal.id ? "Sửa voucher" : "Tạo voucher mới"}
+              {modal.id ? t("Sửa voucher") : t("Tạo voucher mới")}
             </h3>
             <button
               onClick={() => !saving && setModal(null)}
               style={modalCloseStyle}
-              aria-label="Đóng"
+              aria-label={t("Đóng")}
             >
               <X size={20} />
             </button>
           </div>
 
           <form onSubmit={saveVoucher} autoComplete="off">
-            <label style={labelStyle}>Mã voucher *</label>
+            <label style={labelStyle}>{t("Mã voucher")} *</label>
             <input
               name="code"
               defaultValue={modal.code || generateCode()}
@@ -1094,7 +1086,7 @@ export default function OwnerVouchers() {
               }}
             />
 
-            <label style={labelStyle}>Giá trị (VNĐ) *</label>
+            <label style={labelStyle}>{t("Giá trị (VNĐ)")} *</label>
             <div
               style={{
                 display: "grid",
@@ -1141,7 +1133,7 @@ export default function OwnerVouchers() {
               step="1000"
               value={formValue}
               onChange={(e) => setFormValue(e.target.value)}
-              placeholder="VD: 50000"
+              placeholder={t("VD: 50000")}
               required
               disabled={saving}
               style={inputStyle}
@@ -1163,12 +1155,12 @@ export default function OwnerVouchers() {
                 gap: 6,
               }}
             >
-              <Globe size={14} /> Để trống "Khách hàng" → voucher sẽ hiện ở
-              trang "Ưu đãi" cho mọi khách nhận
+              <Globe size={14} />{" "}
+              {t('Để trống "Khách hàng" → voucher sẽ hiện ở trang "Ưu đãi" cho mọi khách nhận')}
             </div>
 
             <label style={labelStyle}>
-              Khách hàng (để trống = toàn hệ thống)
+              {t("Khách hàng (để trống = toàn hệ thống)")}
             </label>
             <select
               name="user_id"
@@ -1176,7 +1168,7 @@ export default function OwnerVouchers() {
               disabled={saving}
               style={inputStyle}
             >
-              <option value="">— Toàn hệ thống —</option>
+              <option value="">{t("— Toàn hệ thống —")}</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} ({c.email})
@@ -1184,7 +1176,7 @@ export default function OwnerVouchers() {
               ))}
             </select>
 
-            <label style={labelStyle}>Số điểm đổi (nếu có)</label>
+            <label style={labelStyle}>{t("Số điểm đổi (nếu có)")}</label>
             <input
               name="points_used"
               type="number"
@@ -1201,7 +1193,7 @@ export default function OwnerVouchers() {
                 disabled={saving}
                 style={{ ...btnCancelStyle, flex: 1 }}
               >
-                Hủy
+                {t("Hủy")}
               </button>
               <button
                 type="submit"
@@ -1214,11 +1206,11 @@ export default function OwnerVouchers() {
                       size={14}
                       style={{ animation: "spin 1s linear infinite" }}
                     />
-                    Đang lưu...
+                    {t("Đang lưu...")}
                   </>
                 ) : (
                   <>
-                    <Save size={14} /> Lưu
+                    <Save size={14} /> {t("Lưu")}
                   </>
                 )}
               </button>
@@ -1238,12 +1230,12 @@ export default function OwnerVouchers() {
         >
           <div style={modalHeaderStyle}>
             <h3 style={modalTitleStyle}>
-              <Users size={20} /> Khách đã nhận voucher
+              <Users size={20} /> {t("Khách đã nhận voucher")}
             </h3>
             <button
               onClick={() => setClaimsModal(null)}
               style={modalCloseStyle}
-              aria-label="Đóng"
+              aria-label={t("Đóng")}
             >
               <X size={20} />
             </button>
@@ -1262,20 +1254,25 @@ export default function OwnerVouchers() {
               {claimsModal.code}
             </b>{" "}
             · {money(claimsModal.value)} ·{" "}
-            <b>{claims.length}</b> khách đã nhận
+            <b>{claims.length}</b> {t("khách đã nhận")}
           </div>
 
           {loadingClaims ? (
             <SkeletonTable
               columns={4}
               rows={3}
-              headers={["Khách hàng", "Mã cá nhân", "Ngày nhận", "Trạng thái"]}
+              headers={[
+                t("Khách hàng"),
+                t("Mã cá nhân"),
+                t("Ngày nhận"),
+                t("Trạng thái"),
+              ]}
             />
           ) : claims.length === 0 ? (
             <div style={emptyBoxStyle}>
               <Users size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
               <div style={{ fontSize: 13 }}>
-                Chưa có khách nào nhận voucher này
+                {t("Chưa có khách nào nhận voucher này")}
               </div>
             </div>
           ) : (
@@ -1283,10 +1280,10 @@ export default function OwnerVouchers() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                    <th style={thStyle}>Khách hàng</th>
-                    <th style={thStyle}>Mã cá nhân</th>
-                    <th style={thStyle}>Ngày nhận</th>
-                    <th style={thStyle}>Trạng thái</th>
+                    <th style={thStyle}>{t("Khách hàng")}</th>
+                    <th style={thStyle}>{t("Mã cá nhân")}</th>
+                    <th style={thStyle}>{t("Ngày nhận")}</th>
+                    <th style={thStyle}>{t("Trạng thái")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1340,7 +1337,7 @@ export default function OwnerVouchers() {
                             color: c.used ? "#ef4444" : "#18a967",
                           }}
                         >
-                          {c.used ? "Đã dùng" : "Chưa dùng"}
+                          {c.used ? t("Đã dùng") : t("Chưa dùng")}
                         </span>
                       </td>
                     </tr>
@@ -1354,7 +1351,7 @@ export default function OwnerVouchers() {
             onClick={() => setClaimsModal(null)}
             style={{ ...btnPrimaryStyle, marginTop: 16, width: "100%" }}
           >
-            Đóng
+            {t("Đóng")}
           </button>
         </Modal>
       )}
@@ -1500,7 +1497,7 @@ function Modal({ children, onClose, maxWidth = 500, zIndex = MODAL_Z }) {
   );
 }
 
-function ErrorBox({ message, onRetry }) {
+function ErrorBox({ message, onRetry, t }) {
   return (
     <div
       style={{
@@ -1514,7 +1511,7 @@ function ErrorBox({ message, onRetry }) {
     >
       <AlertCircle size={26} style={{ marginBottom: 10 }} />
       <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        Không tải được dữ liệu
+        {t("Không tải được dữ liệu")}
       </div>
       <div
         style={{
@@ -1539,7 +1536,7 @@ function ErrorBox({ message, onRetry }) {
             fontSize: 13,
           }}
         >
-          Thử lại
+          {t("Thử lại")}
         </button>
       )}
     </div>

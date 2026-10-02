@@ -1,5 +1,8 @@
-﻿// ============================================================
+// ============================================================
 // CUSTOMERCHAT.JSX — Chat khách hàng
+// ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+//    Không còn key cũ kiểu "chat.xxx" / "common.xxx"
 // ============================================================
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -11,7 +14,7 @@ import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
 import { getBotReply } from "../../components/ChatBot";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 import FoodDetailModal from "../../components/FoodDetailModal";
 
 // ============================================================
@@ -166,15 +169,16 @@ function TabButton({ active, onClick, icon, title, subtitle, color }) {
 // ============================================================
 
 export default function CustomerChat({ cart, setCart, user }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
+  // ✅ SOURCE-TEXT: quick replies dùng tiếng Việt trực tiếp
   const QUICK_REPLIES = [
-    t("chat.quick.under30"),
-    t("chat.quick.veg"),
-    t("chat.quick.drinks"),
-    t("chat.quick.spicy"),
-    t("chat.quick.bestSeller"),
-    t("chat.quick.suggest"),
+    t("Dưới 30k"),
+    t("Món chay"),
+    t("Đồ uống"),
+    t("Món cay"),
+    t("Bán chạy"),
+    t("Gợi ý"),
   ];
 
   const [tab, setTab] = useState("ai");
@@ -232,7 +236,7 @@ export default function CustomerChat({ cart, setCart, user }) {
       setMessages(Array.isArray(data) ? data : []);
     } catch (e) {
       if (myReqId === staffReqIdRef.current && !silent) {
-        setStaffError(e.message || t("chat.loadError"));
+        setStaffError(e.message || t("Không tải được tin nhắn"));
       }
     } finally {
       if (myReqId === staffReqIdRef.current) setLoading(false);
@@ -304,7 +308,10 @@ export default function CustomerChat({ cart, setCart, user }) {
     if (!val || sending) return;
 
     if (val.length > MAX_MESSAGE_LENGTH) {
-      toast(t("chat.maxLength").replace("{n}", MAX_MESSAGE_LENGTH), "error");
+      toast(
+        t("Tin nhắn tối đa {n} ký tự").replace("{n}", MAX_MESSAGE_LENGTH),
+        "error"
+      );
       return;
     }
 
@@ -314,7 +321,7 @@ export default function CustomerChat({ cart, setCart, user }) {
       setText("");
       setMessages((m) => [...m, msg]);
     } catch (e) {
-      toast(e.message || t("chat.sendError"), "error");
+      toast(e.message || t("Không gửi được tin nhắn"), "error");
     } finally {
       setSending(false);
     }
@@ -325,7 +332,10 @@ export default function CustomerChat({ cart, setCart, user }) {
     if (!val || aiTyping) return;
 
     if (val.length > MAX_MESSAGE_LENGTH) {
-      toast(t("chat.maxLength").replace("{n}", MAX_MESSAGE_LENGTH), "error");
+      toast(
+        t("Tin nhắn tối đa {n} ký tự").replace("{n}", MAX_MESSAGE_LENGTH),
+        "error"
+      );
       return;
     }
 
@@ -389,11 +399,17 @@ export default function CustomerChat({ cart, setCart, user }) {
     const existing = cart[key];
     const maxStock = typeof m.stock === "number" ? Math.max(1, m.stock) : 99;
     if (existing && existing.qty >= maxStock) {
-      toast(t("chat.stockLeft").replace("{n}", maxStock), "error");
+      toast(
+        t("Chỉ còn {n} phần trong kho").replace("{n}", maxStock),
+        "error"
+      );
       return;
     }
 
-    toast(t("chat.addedToCart").replace("{name}", m.name), "success");
+    toast(
+      t("Đã thêm {name} vào giỏ").replace("{name}", m.name),
+      "success"
+    );
   };
 
   const onAiKey = (e) => {
@@ -435,16 +451,16 @@ export default function CustomerChat({ cart, setCart, user }) {
           active={tab === "ai"}
           onClick={() => setTab("ai")}
           icon={<Bot size={16} />}
-          title={t("chat.tab.ai")}
-          subtitle={t("chat.tab.aiSubtitle")}
+          title={t("Trợ lý AI")}
+          subtitle={t("Gợi ý món, hỏi đáp nhanh")}
           color="#8b5cf6"
         />
         <TabButton
           active={tab === "staff"}
           onClick={() => setTab("staff")}
           icon={<Store size={16} />}
-          title={t("chat.tab.staff")}
-          subtitle={t("chat.tab.staffSubtitle")}
+          title={t("Nhân viên Canteen")}
+          subtitle={t("Hỗ trợ trực tiếp")}
           color="#2634d5"
         />
       </div>
@@ -483,11 +499,11 @@ export default function CustomerChat({ cart, setCart, user }) {
                       marginBottom: 6,
                     }}
                   >
-                    🤖 {t("chat.botName")}
+                    🤖 {t("Trợ lý Canteen")}
                   </div>
                   <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
-                    {t("chat.greeting")
-                      .replace("{name}", user?.name || t("account.you"))}
+                    {t("Xin chào {name}! Mình có thể giúp gì cho bạn?")
+                      .replace("{name}", user?.name || t("bạn"))}
                   </div>
                 </div>
               </div>
@@ -529,7 +545,7 @@ export default function CustomerChat({ cart, setCart, user }) {
                           marginBottom: 4,
                         }}
                       >
-                        🤖 {t("chat.assistant")}
+                        🤖 {t("Trợ lý")}
                       </div>
                     )}
                     <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
@@ -601,7 +617,10 @@ export default function CustomerChat({ cart, setCart, user }) {
                             >
                               <button
                                 onClick={() => quickAdd(it)}
-                                aria-label={`${t("chat.addToCart")} ${it.name}`}
+                                aria-label={t("Thêm vào giỏ {name}").replace(
+                                  "{name}",
+                                  it.name
+                                )}
                                 style={{
                                   background: "#2634d5",
                                   color: "#fff",
@@ -630,7 +649,7 @@ export default function CustomerChat({ cart, setCart, user }) {
                                   fontWeight: 700,
                                 }}
                               >
-                                {t("common.view")}
+                                {t("Xem")}
                               </button>
                             </div>
                           </div>
@@ -725,7 +744,7 @@ export default function CustomerChat({ cart, setCart, user }) {
               value={aiText}
               onChange={(e) => setAiText(e.target.value)}
               onKeyDown={onAiKey}
-              placeholder={t("chat.aiPlaceholder")}
+              placeholder={t("Nhập tin nhắn cho trợ lý...")}
               disabled={aiTyping}
               maxLength={MAX_MESSAGE_LENGTH}
               style={{
@@ -743,7 +762,7 @@ export default function CustomerChat({ cart, setCart, user }) {
             <button
               onClick={() => sendAI()}
               disabled={aiTyping || !aiText.trim()}
-              aria-label={t("chat.send")}
+              aria-label={t("Gửi tin nhắn")}
               style={{
                 width: 44,
                 height: 44,
@@ -807,7 +826,7 @@ export default function CustomerChat({ cart, setCart, user }) {
                     fontSize: 12,
                   }}
                 >
-                  {t("common.retry")}
+                  {t("Thử lại")}
                 </button>
               </div>
             )}
@@ -828,7 +847,7 @@ export default function CustomerChat({ cart, setCart, user }) {
                     marginBottom: 8,
                   }}
                 />
-                <div>{t("chat.loadingMsgs")}</div>
+                <div>{t("Đang tải tin nhắn...")}</div>
               </div>
             )}
 
@@ -857,9 +876,11 @@ export default function CustomerChat({ cart, setCart, user }) {
                     marginBottom: 6,
                   }}
                 >
-                  {t("chat.staffTitle")}
+                  {t("Chat với nhân viên Canteen")}
                 </b>
-                <p style={{ margin: 0 }}>{t("chat.staffDesc")}</p>
+                <p style={{ margin: 0 }}>
+                  {t("Gửi tin nhắn để được hỗ trợ trực tiếp.")}
+                </p>
               </div>
             )}
 
@@ -900,7 +921,7 @@ export default function CustomerChat({ cart, setCart, user }) {
                           marginBottom: 4,
                         }}
                       >
-                        {m.from_name || t("chat.staffName")}
+                        {m.from_name || t("Nhân viên Canteen")}
                       </div>
                     )}
                     <div
@@ -941,7 +962,7 @@ export default function CustomerChat({ cart, setCart, user }) {
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={onStaffKey}
-              placeholder={t("chat.staffPlaceholder")}
+              placeholder={t("Nhập tin nhắn...")}
               disabled={sending}
               maxLength={MAX_MESSAGE_LENGTH}
               style={{
@@ -959,7 +980,7 @@ export default function CustomerChat({ cart, setCart, user }) {
             <button
               onClick={sendStaff}
               disabled={sending || !text.trim()}
-              aria-label={t("chat.send")}
+              aria-label={t("Gửi tin nhắn")}
               style={{
                 width: 44,
                 height: 44,

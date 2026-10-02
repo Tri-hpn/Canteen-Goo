@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // BOTTOMNAV.JSX — Bottom navigation cho Customer (mobile)
 // ============================================================
 
@@ -9,23 +9,24 @@ import {
   Wallet, Gift, LogOut, X,
 } from "lucide-react";
 import { api, setToken } from "../api";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 import ConfirmDialog, { LogoutIcon } from "./ConfirmDialog";
 
 const CART_KEY = "canteen_cart";
 const ORDERS_SEEN_KEY = "orders_last_seen";
 
+// ✅ SOURCE-TEXT: Dùng tiếng Việt trực tiếp
 const TABS = [
-  { key: "home",   labelKey: "nav.home",   icon: Home,            path: "/customer" },
-  { key: "menu",   labelKey: "nav.menu",   icon: UtensilsCrossed, path: "/customer/menu" },
-  { key: "cart",   labelKey: "nav.cart",   icon: ShoppingCart,    path: "/customer/cart",   badge: "cart" },
-  { key: "orders", labelKey: "nav.orders", icon: Package,         path: "/customer/orders", badge: "orders" },
+  { key: "home",   label: "Trang chủ",   icon: Home,            path: "/customer" },
+  { key: "menu",   label: "Thực đơn",     icon: UtensilsCrossed, path: "/customer/menu" },
+  { key: "cart",   label: "Giỏ hàng",     icon: ShoppingCart,    path: "/customer/cart",   badge: "cart" },
+  { key: "orders", label: "Đơn hàng",     icon: Package,         path: "/customer/orders", badge: "orders" },
 ];
 
 const MORE_ITEMS = [
-  { key: "wallet",     labelKey: "nav.wallet",     icon: Wallet, path: "/customer/wallet" },
-  { key: "promotions", labelKey: "nav.promotions", icon: Gift,   path: "/customer/promotions" },
-  { key: "profile",    labelKey: "nav.profile",    icon: User,   path: "/customer/profile" },
+  { key: "wallet",     label: "Ví Canteen",  icon: Wallet, path: "/customer/wallet" },
+  { key: "promotions", label: "Khuyến mãi",  icon: Gift,   path: "/customer/promotions" },
+  { key: "profile",    label: "Hồ sơ",       icon: User,   path: "/customer/profile" },
 ];
 
 const ACTIVE_ORDER_STATUSES = [
@@ -62,7 +63,7 @@ export default function BottomNav({ onLogout }) {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
   const [showMore, setShowMore] = useState(false);
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -204,18 +205,18 @@ export default function BottomNav({ onLogout }) {
           onClick={() => setShowMore(false)}
           role="dialog"
           aria-modal="true"
-          aria-label={t("nav.moreMenu")}
+          aria-label={t("Menu mở rộng")}
         >
           <div
             className="bottom-nav-more-menu"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bottom-nav-more-head">
-              <span>{t("nav.menu")}</span>
+              <span>{t("Thực đơn")}</span>
               <button
                 onClick={() => setShowMore(false)}
                 className="bottom-nav-more-close"
-                aria-label={t("common.closeMenu")}
+                aria-label={t("Đóng menu")}
                 type="button"
               >
                 <X size={16} />
@@ -237,7 +238,7 @@ export default function BottomNav({ onLogout }) {
                   }}
                 >
                   <Icon size={20} />
-                  <span>{t(item.labelKey)}</span>
+                  <span>{t(item.label)}</span>
                 </button>
               );
             })}
@@ -250,13 +251,13 @@ export default function BottomNav({ onLogout }) {
               onClick={openLogoutConfirm}
             >
               <LogOut size={20} />
-              <span>{t("common.logout")}</span>
+              <span>{t("Đăng xuất")}</span>
             </button>
           </div>
         </div>
       )}
 
-      <nav className="bottom-nav" aria-label={t("nav.mainNav")}>
+      <nav className="bottom-nav" aria-label={t("Điều hướng chính")}>
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const badge = getBadge(tab.badge);
@@ -274,7 +275,7 @@ export default function BottomNav({ onLogout }) {
                 <Icon size={22} />
                 {renderBadge(badge)}
               </div>
-              <span className="bottom-nav-label">{t(tab.labelKey)}</span>
+              <span className="bottom-nav-label">{t(tab.label)}</span>
             </NavLink>
           );
         })}
@@ -285,24 +286,24 @@ export default function BottomNav({ onLogout }) {
             "bottom-nav-item" + (isMoreActive || showMore ? " active" : "")
           }
           onClick={handleMoreToggle}
-          aria-label={t("nav.openMore")}
+          aria-label={t("Mở menu thêm")}
           aria-expanded={showMore}
           aria-haspopup="menu"
         >
           <div className="bottom-nav-icon">
             <Menu size={22} />
           </div>
-          <span className="bottom-nav-label">{t("nav.more")}</span>
+          <span className="bottom-nav-label">{t("Thêm")}</span>
         </button>
       </nav>
 
       <ConfirmDialog
         open={confirmLogout}
         icon={LogoutIcon}
-        title={t("logout.confirmTitle")}
-        message={t("logout.confirmMessageCart")}
-        confirmText={t("common.logout")}
-        cancelText={t("logout.stay")}
+        title={t("Đăng xuất khỏi Canteen VWA?")}
+        message={t("Giỏ hàng hiện tại sẽ bị xoá. Bạn sẽ cần đăng nhập lại để tiếp tục.")}
+        confirmText={t("Đăng xuất")}
+        cancelText={t("Ở lại")}
         danger
         loading={loggingOut}
         onConfirm={performLogout}

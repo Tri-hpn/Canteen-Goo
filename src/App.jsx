@@ -34,7 +34,6 @@ import CustomerMenu from "./pages/customer/CustomerMenu";
 import CustomerCart from "./pages/customer/CustomerCart";
 import CustomerCheckout from "./pages/customer/CustomerCheckout";
 import CustomerOrders from "./pages/customer/CustomerOrders";
-import CustomerPoints from "./pages/customer/CustomerPoints";
 import CustomerProfile from "./pages/customer/CustomerProfile";
 import CustomerPromotions from "./pages/customer/CustomerPromotions";
 import CustomerSuccess from "./pages/customer/CustomerSuccess";
@@ -337,10 +336,10 @@ export default function App() {
         />
 
         {/* Điểm tích lũy → chuyển sang promotions (đã gộp tính năng) */}
-        <Route
-          path="/customer/points"
-          element={<Navigate to="/customer/promotions" replace />}
-        />
+<Route
+  path="/customer/points"
+  element={<Navigate to="/customer/promotions" replace />}
+/>
 
         {/* Đơn hàng */}
         <Route

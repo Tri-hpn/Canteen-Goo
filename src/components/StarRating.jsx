@@ -1,10 +1,10 @@
-﻿// ============================================================
+// ============================================================
 // STARRATING.JSX — Đánh giá sao (1-5)
 // ============================================================
 
 import { useState, useMemo, useCallback, useRef } from "react";
 import { Star } from "lucide-react";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const STARS = [1, 2, 3, 4, 5];
 const FILL_COLOR = "#f59e0b";
@@ -22,7 +22,7 @@ export default function StarRating({
   size = 20,
   readonly = false,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [hover, setHover] = useState(0);
   const containerRef = useRef(null);
 

@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // GLOBALSEARCH.JSX — Ô tìm kiếm toàn cục trên topbar
 // ============================================================
 
@@ -7,7 +7,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Search, Utensils, X, Loader2 } from "lucide-react";
 import { api } from "../api";
 import { money } from "./UI";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const DEBOUNCE_MS = 300;
 const MAX_RESULTS = 5;
@@ -54,7 +54,7 @@ function highlightText(text, query) {
 }
 
 export default function GlobalSearch({ role }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [menuResults, setMenuResults] = useState([]);
@@ -214,8 +214,8 @@ export default function GlobalSearch({ role }) {
           onChange={handleInput}
           onFocus={() => hasQuery && setOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder={t("search.placeholder")}
-          aria-label={t("search.placeholder")}
+          placeholder={t("Tìm món ăn...")}
+          aria-label={t("Tìm món ăn...")}
           aria-autocomplete="list"
           maxLength={100}
         />
@@ -236,7 +236,7 @@ export default function GlobalSearch({ role }) {
           <button
             onClick={clearSearch}
             className="clear-btn"
-            aria-label={t("search.clear")}
+            aria-label={t("Xoá tìm kiếm")}
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             style={{
@@ -278,7 +278,7 @@ export default function GlobalSearch({ role }) {
                   marginBottom: 6,
                 }}
               />
-              <div>{t("search.searching")}</div>
+              <div>{t("Đang tìm...")}</div>
             </div>
           )}
 
@@ -291,14 +291,14 @@ export default function GlobalSearch({ role }) {
                 fontSize: 13,
               }}
             >
-              {t("search.noResults").replace("{q}", q)}
+              {t('Không tìm thấy kết quả cho "{q}"').replace("{q}", q)}
             </div>
           )}
 
           {total > 0 && (
             <div>
               <div className="dropdown-section-title">
-                <Utensils size={12} /> {t("search.dishesLabel")} ({total})
+                <Utensils size={12} /> {t("Món ăn")} ({total})
               </div>
 
               {menuResults.map((m, idx) => {
@@ -389,8 +389,8 @@ export default function GlobalSearch({ role }) {
               }}
             >
               <span>
-                <kbd>↑</kbd> <kbd>↓</kbd> {t("search.navHintSelect")} ·{" "}
-                <kbd>Enter</kbd> {t("search.navHintOpen")}
+                <kbd>↑</kbd> <kbd>↓</kbd> {t("chọn")} ·{" "}
+                <kbd>Enter</kbd> {t("mở")}
               </span>
               <button
                 type="button"
@@ -404,7 +404,7 @@ export default function GlobalSearch({ role }) {
                   fontWeight: 600,
                 }}
               >
-                {t("search.seeAll")} →
+                {t("Xem tất cả")} →
               </button>
             </div>
           )}

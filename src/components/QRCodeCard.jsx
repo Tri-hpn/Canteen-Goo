@@ -5,7 +5,7 @@
 import { useMemo, useCallback } from "react";
 import { Copy, AlertTriangle, QrCode as QrIcon } from "lucide-react";
 import { toast } from "./Effects";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const QR_SIZE = 240;
 const FALLBACK_QR_API = "https://api.qrserver.com/v1/create-qr-code/";
@@ -55,7 +55,7 @@ async function copyToClipboard(text) {
 }
 
 export default function QRCodeCard({ bankInfo, amount, orderCode }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const bank = bankInfo?.bank?.trim() || "";
   const account = bankInfo?.account?.trim() || "";

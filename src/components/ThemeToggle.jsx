@@ -1,10 +1,10 @@
-﻿// ============================================================
+// ============================================================
 // THEMETOGGLE.JSX — Nút đổi theme (Light / Dark)
 // ============================================================
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Sun, Moon } from "lucide-react";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const STORAGE_KEY = "theme";
 const THEME_LIGHT = "light";
@@ -50,7 +50,7 @@ function saveTheme(theme) {
 }
 
 export default function ThemeToggle() {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [theme, setTheme] = useState(readStoredTheme);
 
   useEffect(() => {

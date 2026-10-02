@@ -9,17 +9,7 @@
 //   - Conversation list: 3s
 //   - Messages (nếu đang mở): 3s
 //
-// Fixes:
-//   - Race-safe: dùng reqId ref để bỏ qua response cũ khi user
-//     đổi conversation nhanh
-//   - Smart scroll: chỉ tự scroll xuống đáy khi:
-//       + User đang ở gần đáy (không đọc tin cũ)
-//       + HOẶC vừa gửi tin mới
-//   - ✅ FIX CRITICAL: đổi <aside> → <div className="chat-conv-panel">
-//     (trước bị CSS base `aside { position: fixed; width: 250px }`
-//     đè → che sidebar chính, layout vỡ)
-//   - ✅ FIX: <section> → <div className="chat-main-panel">
-//   - ✅ Căn lại grid (320px cố định) + height calc cho topbar 72px
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -29,6 +19,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -66,6 +57,8 @@ function getInitials(name) {
 // ============================================================
 
 export default function EmployeeChat() {
+  const { t } = useI18n();
+
   // ---------- Conversations ----------
   const [conversations, setConversations] = useState([]);
   const [loadingConvs, setLoadingConvs] = useState(true);
@@ -102,11 +95,11 @@ export default function EmployeeChat() {
       setConversations(Array.isArray(data) ? data : []);
       if (!silent) setConvsError("");
     } catch (e) {
-      if (!silent) setConvsError(e.message || "Không tải được tin nhắn");
+      if (!silent) setConvsError(e.message || t("Không tải được tin nhắn"));
     } finally {
       if (!silent) setLoadingConvs(false);
     }
-  }, []);
+  }, [t]);
 
   // ---------- Load messages ----------
 
@@ -125,12 +118,12 @@ export default function EmployeeChat() {
       setMessages(Array.isArray(data) ? data : []);
     } catch (e) {
       if (!silent && myReqId === msgsReqIdRef.current) {
-        toast(e.message || "Không tải được tin nhắn", "error");
+        toast(e.message || t("Không tải được tin nhắn"), "error");
       }
     } finally {
       if (myReqId === msgsReqIdRef.current) setLoadingMsgs(false);
     }
-  }, []);
+  }, [t]);
 
   // ---------- Load lần đầu ----------
 
@@ -201,7 +194,10 @@ export default function EmployeeChat() {
     const val = text.trim();
     if (!val || !selected || sending) return;
     if (val.length > MAX_MESSAGE_LENGTH) {
-      return toast(`Tin nhắn tối đa ${MAX_MESSAGE_LENGTH} ký tự`, "error");
+      return toast(
+        t("Tin nhắn tối đa {n} ký tự").replace("{n}", MAX_MESSAGE_LENGTH),
+        "error"
+      );
     }
 
     setSending(true);
@@ -210,7 +206,7 @@ export default function EmployeeChat() {
     const tempMsg = {
       id: tempId,
       from: "staff",
-      from_name: "Bạn",
+      from_name: t("Bạn"),
       content: val,
       created_at: new Date().toISOString(),
       _pending: true,
@@ -231,7 +227,7 @@ export default function EmployeeChat() {
       loadMessages(selected.user_id, true);
     } catch (e) {
       setMessages((m) => m.filter((x) => x.id !== tempId));
-      toast(e.message || "Không gửi được", "error");
+      toast(e.message || t("Không gửi được"), "error");
     } finally {
       setSending(false);
     }
@@ -272,19 +268,17 @@ export default function EmployeeChat() {
     >
       {/* ============================================================
           CỘT TRÁI — DANH SÁCH CONVERSATIONS
-          ⚠️ Đổi từ <aside> → <div> để không bị CSS base
-             `aside { position: fixed; width: 250px }` đè
           ============================================================ */}
       <div className="chat-conv-panel" style={panelStyle}>
         {/* Header */}
         <div style={panelHeaderStyle}>
           <b style={{ color: "var(--text-primary, #172033)", fontSize: 14 }}>
-            Tin nhắn khách hàng
+            {t("Tin nhắn khách hàng")}
           </b>
           <button
             onClick={() => loadConvs(false)}
-            title="Làm mới"
-            aria-label="Làm mới danh sách"
+            title={t("Làm mới")}
+            aria-label={t("Làm mới danh sách")}
             style={iconBtnStyle}
           >
             <RefreshCw
@@ -320,7 +314,7 @@ export default function EmployeeChat() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm khách hàng..."
+                placeholder={t("Tìm khách hàng...")}
                 style={{
                   flex: 1,
                   border: 0,
@@ -335,7 +329,7 @@ export default function EmployeeChat() {
                 <button
                   onClick={() => setSearch("")}
                   style={clearBtnStyle}
-                  aria-label="Xoá tìm kiếm"
+                  aria-label={t("Xoá tìm kiếm")}
                 >
                   <X size={12} />
                 </button>
@@ -352,7 +346,7 @@ export default function EmployeeChat() {
                 size={22}
                 style={{ animation: "spin 1s linear infinite", marginBottom: 8 }}
               />
-              <div style={{ fontSize: 12 }}>Đang tải...</div>
+              <div style={{ fontSize: 12 }}>{t("Đang tải...")}</div>
             </div>
           ) : convsError ? (
             <div style={centeredBoxStyle}>
@@ -364,7 +358,7 @@ export default function EmployeeChat() {
                 onClick={() => loadConvs(false)}
                 style={smallBtnStyle}
               >
-                Thử lại
+                {t("Thử lại")}
               </button>
             </div>
           ) : filteredConversations.length === 0 ? (
@@ -372,8 +366,8 @@ export default function EmployeeChat() {
               <MessageCircle size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
               <div style={{ fontSize: 13 }}>
                 {search
-                  ? `Không tìm thấy "${search}"`
-                  : "Chưa có tin nhắn nào"}
+                  ? `${t("Không tìm thấy")} "${search}"`
+                  : t("Chưa có tin nhắn nào")}
               </div>
             </div>
           ) : (
@@ -439,7 +433,7 @@ export default function EmployeeChat() {
                           flex: 1,
                         }}
                       >
-                        {c.user_name || "Khách"}
+                        {c.user_name || t("Khách")}
                       </b>
                       {c.unread > 0 && (
                         <span
@@ -467,7 +461,7 @@ export default function EmployeeChat() {
                         marginTop: 2,
                       }}
                     >
-                      {c.last_message || "Chưa có tin nhắn"}
+                      {c.last_message || t("Chưa có tin nhắn")}
                     </div>
                   </div>
                 </button>
@@ -479,7 +473,6 @@ export default function EmployeeChat() {
 
       {/* ============================================================
           CỘT PHẢI — KHUNG CHAT
-          ⚠️ Đổi từ <section> → <div> để an toàn với CSS base
           ============================================================ */}
       <div className="chat-main-panel" style={panelStyle}>
         {!selected ? (
@@ -499,7 +492,7 @@ export default function EmployeeChat() {
                 style={{ opacity: 0.3, marginBottom: 12 }}
               />
               <p style={{ margin: 0, fontSize: 14 }}>
-                Chọn 1 cuộc trò chuyện để bắt đầu
+                {t("Chọn 1 cuộc trò chuyện để bắt đầu")}
               </p>
             </div>
           </div>
@@ -532,7 +525,7 @@ export default function EmployeeChat() {
                       fontSize: 14,
                     }}
                   >
-                    {selected.user_name || "Khách"}
+                    {selected.user_name || t("Khách")}
                   </b>
                   <span
                     style={{
@@ -540,7 +533,7 @@ export default function EmployeeChat() {
                       color: "var(--text-light, #8993a3)",
                     }}
                   >
-                    Đang hoạt động
+                    {t("Đang hoạt động")}
                   </span>
                 </div>
               </div>
@@ -565,7 +558,7 @@ export default function EmployeeChat() {
                       marginBottom: 8,
                     }}
                   />
-                  <div style={{ fontSize: 12 }}>Đang tải tin nhắn...</div>
+                  <div style={{ fontSize: 12 }}>{t("Đang tải tin nhắn...")}</div>
                 </div>
               ) : messages.length === 0 ? (
                 <div style={centeredBoxStyle}>
@@ -574,7 +567,7 @@ export default function EmployeeChat() {
                     style={{ opacity: 0.3, marginBottom: 8 }}
                   />
                   <div style={{ fontSize: 13 }}>
-                    Chưa có tin nhắn. Bắt đầu trò chuyện!
+                    {t("Chưa có tin nhắn. Bắt đầu trò chuyện!")}
                   </div>
                 </div>
               ) : (
@@ -624,7 +617,7 @@ export default function EmployeeChat() {
                           }}
                         >
                           {formatTime(m.created_at)}
-                          {m._pending && " · Đang gửi..."}
+                          {m._pending && ` · ${t("Đang gửi...")}`}
                         </div>
                       </div>
                     </div>
@@ -645,41 +638,41 @@ export default function EmployeeChat() {
               }}
             >
               <textarea
-  value={text}
-  onChange={(e) => {
-    setText(e.target.value);
-    // Auto-grow theo nội dung (max 120px)
-    e.target.style.height = "auto";
-    e.target.style.height =
-      Math.min(e.target.scrollHeight, 120) + "px";
-  }}
-  onKeyDown={onKey}
-  placeholder="Trả lời khách hàng..."
-  disabled={sending}
-  rows={1}
-  style={{
-    flex: 1,
-    padding: "12px 16px",
-    border: "1px solid var(--border-color, #e5e9ef)",
-    borderRadius: 22,
-    outline: "none",
-    background: "var(--bg-secondary, #f5f7fb)",
-    color: "var(--text-primary, #172033)",
-    fontSize: 13,
-    resize: "none",
-    minHeight: 44,
-    maxHeight: 120,
-    lineHeight: 1.5,
-    fontFamily: "inherit",
-    overflowY: "auto",
-    transition: "border-color 0.15s, box-shadow 0.15s",
-  }}
-/>
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  // Auto-grow theo nội dung (max 120px)
+                  e.target.style.height = "auto";
+                  e.target.style.height =
+                    Math.min(e.target.scrollHeight, 120) + "px";
+                }}
+                onKeyDown={onKey}
+                placeholder={t("Trả lời khách hàng...")}
+                disabled={sending}
+                rows={1}
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  border: "1px solid var(--border-color, #e5e9ef)",
+                  borderRadius: 22,
+                  outline: "none",
+                  background: "var(--bg-secondary, #f5f7fb)",
+                  color: "var(--text-primary, #172033)",
+                  fontSize: 13,
+                  resize: "none",
+                  minHeight: 44,
+                  maxHeight: 120,
+                  lineHeight: 1.5,
+                  fontFamily: "inherit",
+                  overflowY: "auto",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
+                }}
+              />
               <button
                 onClick={send}
                 disabled={sending || !text.trim()}
-                title="Gửi"
-                aria-label="Gửi tin nhắn"
+                title={t("Gửi")}
+                aria-label={t("Gửi tin nhắn")}
                 style={{
                   width: 44,
                   height: 44,

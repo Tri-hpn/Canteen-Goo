@@ -1,6 +1,9 @@
 // ============================================================
 // OWNERORDERS.JSX — Trang quản lý đơn hàng cho Admin
 // ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+//    (file này chỉ wrap EmployeeOrders, không có text riêng)
+//
 // Admin và Employee dùng CHUNG component EmployeeOrders:
 //   - Admin: URL /owner/orders
 //   - Employee: URL /employee/orders

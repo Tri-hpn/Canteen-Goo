@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // HEADERNAV.JSX — Menu ngang cho Customer (desktop)
 // ============================================================
 
@@ -8,7 +8,7 @@ import {
   Home, UtensilsCrossed, Package, Wallet, Gift,
 } from "lucide-react";
 import { api } from "../api";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const CART_KEY = "canteen_cart";
 const ORDERS_SEEN_KEY = "orders_last_seen";
@@ -21,12 +21,13 @@ const ACTIVE_ORDER_STATUSES = [
   "Sẵn sàng nhận",
 ];
 
+// ✅ SOURCE-TEXT: Dùng tiếng Việt trực tiếp thay vì key
 const TABS = [
-  { key: "home",       labelKey: "nav.home",       icon: Home,            path: "/customer" },
-  { key: "menu",       labelKey: "nav.menu",       icon: UtensilsCrossed, path: "/customer/menu" },
-  { key: "orders",     labelKey: "nav.orders",     icon: Package,         path: "/customer/orders",     badge: "orders" },
-  { key: "wallet",     labelKey: "nav.wallet",     icon: Wallet,          path: "/customer/wallet" },
-  { key: "promotions", labelKey: "nav.promotions", icon: Gift,            path: "/customer/promotions" },
+  { key: "home",       label: "Trang chủ",      icon: Home,            path: "/customer" },
+  { key: "menu",       label: "Thực đơn",        icon: UtensilsCrossed, path: "/customer/menu" },
+  { key: "orders",     label: "Đơn hàng",        icon: Package,         path: "/customer/orders",     badge: "orders" },
+  { key: "wallet",     label: "Ví Canteen",      icon: Wallet,          path: "/customer/wallet" },
+  { key: "promotions", label: "Khuyến mãi",      icon: Gift,            path: "/customer/promotions" },
 ];
 
 const BADGE_MAX = 99;
@@ -72,7 +73,7 @@ function useIsWideScreen() {
 export default function HeaderNav() {
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const isWide = useIsWideScreen();
 
@@ -161,7 +162,7 @@ export default function HeaderNav() {
   if (!isWide) return null;
 
   return (
-    <nav className="header-nav" aria-label={t("nav.mainMenu")}>
+    <nav className="header-nav" aria-label={t("Menu chính")}>
       <div
         className="header-nav-inner"
         style={{
@@ -205,7 +206,8 @@ export default function HeaderNav() {
                 <Icon size={16} />
                 {renderBadge(badge)}
               </span>
-              <span>{t(tab.labelKey)}</span>
+              {/* ✅ SOURCE-TEXT: t(tab.label) thay vì t(tab.labelKey) */}
+              <span>{t(tab.label)}</span>
             </NavLink>
           );
         })}

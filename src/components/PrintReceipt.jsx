@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // PRINTRECEIPT.JSX — In hóa đơn đơn hàng
 // ============================================================
 
@@ -6,7 +6,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { Printer, X } from "lucide-react";
 import { money } from "./UI";
 import { api } from "../api";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const MODAL_Z = 2147483600;
 const DEFAULT_HOTLINE = "0900 000 000";
@@ -37,7 +37,7 @@ function fmtDateTime(iso) {
 }
 
 export default function PrintReceipt({ order, onClose }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [hotline, setHotline] = useState(DEFAULT_HOTLINE);
 
   useEffect(() => {

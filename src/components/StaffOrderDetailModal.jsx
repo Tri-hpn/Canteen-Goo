@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { money } from "./UI";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const MODAL_Z = 2147483600;
 const POLL_MS = 5000;
@@ -78,7 +78,7 @@ export default function StaffOrderDetailModal({
   onClose,
   onUpdate,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [order, setOrder] = useState(initialOrder);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);

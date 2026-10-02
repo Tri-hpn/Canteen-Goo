@@ -3,21 +3,9 @@
 // ============================================================
 // Admin và Employee dùng chung component (OwnerOrders wrap cái này).
 //
-// Fixes (so với bản gốc):
-//   - Race-safe: dùng reqIdRef để bỏ qua response cũ khi đổi filter
-//   - Error state + nút retry
-//   - Loading state (lần đầu) + refreshing (thủ công)
-//   - advance(): loading per-button, disable khi đang gửi
-//   - Polling: chống overlap bằng inFlightRef
-//   - Filter chip: hiện số đơn trong mỗi trạng thái
-//   - Bảng: overflow-x cho mobile
-//   - Manual refresh button
-//   - Sort: đổi tên biến cho rõ nghĩa
-//   - ✅ Thay confirm() native bằng ConfirmDialog custom
-//   - ✅ BATCH 2: Load ALL 1 lần + filter client theo status
-//     → đổi chip tức thì (không gọi API)
-//   - ✅ BATCH 2: Cột "Ngày/Giờ" gộp (dd/MM HH:mm)
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
+
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Printer, Eye, Loader2, AlertCircle, RefreshCw } from "lucide-react";
@@ -27,7 +15,7 @@ import { toast } from "../../components/Effects";
 import PrintReceipt from "../../components/PrintReceipt";
 import StaffOrderDetailModal from "../../components/StaffOrderDetailModal";
 import ConfirmDialog from "../../components/ConfirmDialog";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -51,11 +39,12 @@ const NEXT = {
   "Sẵn sàng nhận": "Hoàn thành",
 };
 
+// Nhãn nút "Chuyển trạng thái"
 const NEXT_LABEL = {
-  "Chờ xác nhận": "employee.confirm",
-  "Đã xác nhận": "employee.startPrep",
-  "Đang chuẩn bị": "employee.readyForPickup",
-  "Sẵn sàng nhận": "employee.markDone",
+  "Chờ xác nhận": "Xác nhận",
+  "Đã xác nhận": "Bắt đầu chuẩn bị",
+  "Đang chuẩn bị": "Sẵn sàng nhận",
+  "Sẵn sàng nhận": "Hoàn thành",
 };
 
 const POLL_MS = 10000;
@@ -90,7 +79,7 @@ function fmtDateTime(iso) {
 // ============================================================
 
 export default function EmployeeOrders() {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   // ---------- Data ----------
   const [status, setStatus] = useState("Tất cả");
@@ -106,15 +95,15 @@ export default function EmployeeOrders() {
   const [printOrder, setPrintOrder] = useState(null);
   const [detailOrder, setDetailOrder] = useState(null);
 
-  // ✅ Confirm dialog state (chỉ dùng cho hủy đơn)
+  // Confirm dialog state (chỉ dùng cho hủy đơn)
   const [confirmCancel, setConfirmCancel] = useState(null);
 
   // ---------- Refs ----------
   const reqIdRef = useRef(0); // race-safe cho load
 
   // ---------- Load ----------
-  // ✅ BATCH 2: Luôn load ALL (không truyền status)
-  //    → đổi chip filter ở client, không cần gọi API lại
+  // Luôn load ALL (không truyền status)
+  // → đổi chip filter ở client, không cần gọi API lại
 
   const load = useCallback(async (silent = false) => {
     const myReqId = ++reqIdRef.current;
@@ -136,7 +125,7 @@ export default function EmployeeOrders() {
       setAllOrders(sorted);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || "Không tải được đơn hàng");
+        setError(e.message || t("Không tải được đơn hàng"));
       }
     } finally {
       if (myReqId === reqIdRef.current) {
@@ -144,7 +133,7 @@ export default function EmployeeOrders() {
         if (!silent) setRefreshing(false);
       }
     }
-  }, []);
+  }, [t]);
 
   // Load 1 lần khi mount (không phụ thuộc status nữa)
   useEffect(() => {
@@ -158,7 +147,6 @@ export default function EmployeeOrders() {
   }, [load]);
 
   // ---------- Filter client theo status (memo) ----------
-  // ✅ BATCH 2: đổi chip tức thì, không chờ API
   const orders = useMemo(() => {
     if (status === "Tất cả") return allOrders;
     return allOrders.filter((o) => o.status === status);
@@ -178,14 +166,14 @@ export default function EmployeeOrders() {
       toast(`"${o.code}" → "${next}"`, "success");
       await load(true); // silent reload
     } catch (e) {
-      toast(e.message || "Không chuyển được trạng thái", "error");
+      toast(e.message || t("Không chuyển được trạng thái"), "error");
     } finally {
       setAdvancingId(null);
     }
   };
 
   /**
-   * ✅ Mở confirm dialog thay vì confirm() native.
+   * Mở confirm dialog thay vì confirm() native.
    */
   const cancel = (o) => {
     if (advancingId !== null) return;
@@ -193,7 +181,7 @@ export default function EmployeeOrders() {
   };
 
   /**
-   * ✅ Thực thi hủy đơn sau khi user xác nhận.
+   * Thực thi hủy đơn sau khi user xác nhận.
    */
   const executeCancel = async () => {
     if (!confirmCancel) return;
@@ -203,11 +191,11 @@ export default function EmployeeOrders() {
     setAdvancingId(id);
     try {
       await api.orders.setStatus(id, "Đã hủy");
-      toast(t("orders.cancelled"), "success");
+      toast(t("Đã hủy đơn"), "success");
       setConfirmCancel(null);
       await load(true);
     } catch (e) {
-      toast(e.message || "Không hủy được", "error");
+      toast(e.message || t("Không hủy được"), "error");
     } finally {
       setAdvancingId(null);
     }
@@ -262,99 +250,99 @@ export default function EmployeeOrders() {
                 fontSize: 12,
               }}
             >
-              Thử lại
+              {t("Thử lại")}
             </button>
           </div>
         )}
 
         {/* ============ FILTER CHIPS + REFRESH ============ */}
         <div className="emp-orders-filter">
-  <div className="emp-orders-chips">
-    {STATUSES.map((s) => {
-      const active = status === s;
-      const count = statusCounts[s] || 0;
+          <div className="emp-orders-chips">
+            {STATUSES.map((s) => {
+              const active = status === s;
+              const count = statusCounts[s] || 0;
 
-      return (
-        <button
-          key={s}
-          onClick={() => setStatus(s)}
-          style={{
-            padding: "8px 14px",
-            border: active
-              ? "1px solid #2634d5"
-              : "1px solid var(--border-color, #e5e9ef)",
-            background: active
-              ? "#2634d5"
-              : "var(--card-bg, #fff)",
-            color: active
-              ? "#fff"
-              : "var(--text-muted, #475569)",
-            borderRadius: 20,
-            fontSize: 12,
-            cursor: "pointer",
-            fontWeight: active ? 600 : 400,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            transition: "all 0.15s",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {s}
-          {count > 0 && (
-            <span
-              style={{
-                background: active
-                  ? "rgba(255,255,255,0.3)"
-                  : "var(--bg-tertiary, #e2e8f0)",
-                color: active ? "#fff" : "var(--text-muted, #64748b)",
-                minWidth: 20,
-                height: 18,
-                padding: "0 6px",
-                borderRadius: 9,
-                fontSize: 10.5,
-                fontWeight: 700,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {count}
-            </span>
-          )}
-        </button>
-      );
-    })}
-  </div>
+              return (
+                <button
+                  key={s}
+                  onClick={() => setStatus(s)}
+                  style={{
+                    padding: "8px 14px",
+                    border: active
+                      ? "1px solid #2634d5"
+                      : "1px solid var(--border-color, #e5e9ef)",
+                    background: active
+                      ? "#2634d5"
+                      : "var(--card-bg, #fff)",
+                    color: active
+                      ? "#fff"
+                      : "var(--text-muted, #475569)",
+                    borderRadius: 20,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontWeight: active ? 600 : 400,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    transition: "all 0.15s",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {s}
+                  {count > 0 && (
+                    <span
+                      style={{
+                        background: active
+                          ? "rgba(255,255,255,0.3)"
+                          : "var(--bg-tertiary, #e2e8f0)",
+                        color: active ? "#fff" : "var(--text-muted, #64748b)",
+                        minWidth: 20,
+                        height: 18,
+                        padding: "0 6px",
+                        borderRadius: 9,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-  <button
-    onClick={() => load(false)}
-    disabled={refreshing}
-    title="Làm mới"
-    aria-label="Làm mới"
-    style={{
-      padding: "8px 14px",
-      background: "var(--card-bg, #fff)",
-      border: "1px solid var(--border-color, #e5e9ef)",
-      borderRadius: 20,
-      cursor: refreshing ? "not-allowed" : "pointer",
-      fontSize: 12,
-      color: "var(--text-primary, #172033)",
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 6,
-      opacity: refreshing ? 0.6 : 1,
-      flexShrink: 0,
-    }}
-  >
-    {refreshing ? (
-      <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
-    ) : (
-      <RefreshCw size={13} />
-    )}
-    Làm mới
-  </button>
-</div>
+          <button
+            onClick={() => load(false)}
+            disabled={refreshing}
+            title={t("Làm mới")}
+            aria-label={t("Làm mới")}
+            style={{
+              padding: "8px 14px",
+              background: "var(--card-bg, #fff)",
+              border: "1px solid var(--border-color, #e5e9ef)",
+              borderRadius: 20,
+              cursor: refreshing ? "not-allowed" : "pointer",
+              fontSize: 12,
+              color: "var(--text-primary, #172033)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              opacity: refreshing ? 0.6 : 1,
+              flexShrink: 0,
+            }}
+          >
+            {refreshing ? (
+              <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+            ) : (
+              <RefreshCw size={13} />
+            )}
+            {t("Làm mới")}
+          </button>
+        </div>
 
         {/* ============ BẢNG ĐƠN HÀNG ============ */}
         <div
@@ -371,12 +359,12 @@ export default function EmployeeOrders() {
               columns={6}
               rows={5}
               headers={[
-                t("orders.code"),
-                "Customer",
-                "Ngày/Giờ",
-                t("cart.total"),
-                t("common.status"),
-                t("common.action"),
+                t("Mã đơn"),
+                t("Khách hàng"),
+                t("Ngày/Giờ"),
+                t("Tổng cộng"),
+                t("Trạng thái"),
+                t("Thao tác"),
               ]}
             />
           )}
@@ -384,15 +372,18 @@ export default function EmployeeOrders() {
           {/* Data */}
           {!loading && (
             <div className="emp-orders-table-wrap">
-  <table className="emp-orders-table" style={{ borderCollapse: "collapse" }}>
+              <table
+                className="emp-orders-table"
+                style={{ borderCollapse: "collapse" }}
+              >
                 <thead>
                   <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                    <th style={thLeft}>{t("orders.code")}</th>
-                    <th style={thLeft}>Customer</th>
-                    <th style={thLeft}>Ngày/Giờ</th>
-                    <th style={thRight}>{t("cart.total")}</th>
-                    <th style={thLeft}>{t("common.status")}</th>
-                    <th style={thLeft}>{t("common.action")}</th>
+                    <th style={thLeft}>{t("Mã đơn")}</th>
+                    <th style={thLeft}>{t("Khách hàng")}</th>
+                    <th style={thLeft}>{t("Ngày/Giờ")}</th>
+                    <th style={thRight}>{t("Tổng cộng")}</th>
+                    <th style={thLeft}>{t("Trạng thái")}</th>
+                    <th style={thLeft}>{t("Thao tác")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -485,7 +476,7 @@ export default function EmployeeOrders() {
                                         animation: "spin 1s linear infinite",
                                       }}
                                     />
-                                    Đang xử lý...
+                                    {t("Đang xử lý...")}
                                   </>
                                 ) : (
                                   <>→ {t(NEXT_LABEL[o.status])}</>
@@ -495,15 +486,15 @@ export default function EmployeeOrders() {
 
                             <IconButton
                               onClick={() => setDetailOrder(o)}
-                              title="Chi tiết"
+                              title={t("Chi tiết")}
                               disabled={advancingId !== null}
                             >
-                              <Eye size={13} /> Chi tiết
+                              <Eye size={13} /> {t("Chi tiết")}
                             </IconButton>
 
                             <IconButton
                               onClick={() => setPrintOrder(o)}
-                              title="In hóa đơn"
+                              title={t("In hóa đơn")}
                               disabled={advancingId !== null}
                             >
                               <Printer size={13} />
@@ -530,7 +521,7 @@ export default function EmployeeOrders() {
                                     whiteSpace: "nowrap",
                                   }}
                                 >
-                                  Hủy
+                                  {t("Hủy")}
                                 </button>
                               )}
                           </div>
@@ -551,8 +542,8 @@ export default function EmployeeOrders() {
                         }}
                       >
                         {status === "Tất cả"
-                          ? t("orders.noOrders")
-                          : `Không có đơn "${status}"`}
+                          ? t("Chưa có đơn hàng nào")
+                          : `${t("Không có đơn")} "${status}"`}
                       </td>
                     </tr>
                   )}
@@ -581,17 +572,17 @@ export default function EmployeeOrders() {
         `}</style>
       </div>
 
-      {/* ============ ✅ CONFIRM CANCEL DIALOG ============ */}
+      {/* ============ CONFIRM CANCEL DIALOG ============ */}
       <ConfirmDialog
         open={!!confirmCancel}
-        title="Hủy đơn hàng này?"
+        title={t("Hủy đơn hàng này?")}
         message={
           confirmCancel
-            ? `Đơn ${confirmCancel.code} sẽ bị hủy và không thể khôi phục. Bạn chắc chắn chứ?`
+            ? `${t("Đơn")} ${confirmCancel.code} ${t("sẽ bị hủy và không thể khôi phục. Bạn chắc chắn chứ?")}`
             : ""
         }
-        confirmText="Hủy đơn"
-        cancelText="Giữ đơn"
+        confirmText={t("Hủy đơn")}
+        cancelText={t("Giữ đơn")}
         danger
         loading={!!advancingId}
         onConfirm={executeCancel}

@@ -1,32 +1,9 @@
 ﻿// ============================================================
 // OWNERWALLET.JSX — Quản lý Ví Canteen (Admin)
 // ============================================================
-// Tính năng:
-//   - Dashboard stats: số dư tổng, đã nạp/rút/thanh toán
-//   - Danh sách giao dịch ví (nạp/rút/payment)
-//   - Filter theo status / type / search / thời gian
-//   - Duyệt / Từ chối yêu cầu (nạp/rút pending)
-//   - Bulk approve (duyệt nhiều giao dịch 1 lúc)
-//   - Auto-refresh mỗi 20s
-//
-// Endpoints:
-//   - api.wallet.all()              → tất cả giao dịch
-//   - api.wallet.stats()            → thống kê
-//   - api.wallet.approve(id, note)  → duyệt
-//   - api.wallet.reject(id, note)   → từ chối
-//
-// Lưu ý:
-//   - Duyệt tiền cần confirm (không thể undo)
-//   - Từ chối dùng modal thay prompt() native
-//   - Race-safe: dùng reqIdRef để bỏ qua response cũ
-//
-// Batch 4 fixes:
-//   - ✅ #8.1: Skeleton stats khi loading (thay vì "..." text)
-//   - ✅ #8.2: Bulk approve — chọn nhiều pending, duyệt 1 lúc
-//   - ✅ #8.3: Filter thời gian (hôm nay / 7 ngày / 30 ngày / tất cả)
-//   - ✅ #8.4: SkeletonList khi loading (đã có, giữ nguyên)
-//   - ✅ #8.5: Stats grid dùng SkeletonStats khi loading
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
+
 import { Skeleton, SkeletonList, SkeletonStats } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
@@ -38,6 +15,7 @@ import {
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
@@ -47,45 +25,23 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 const MODAL_Z = 2147483600;
 const REFRESH_MS = 20000;
 
-const STATUS_TABS = [
-  { id: "pending",  label: "Chờ duyệt", color: "#f59e0b" },
-  { id: "approved", label: "Đã duyệt",  color: "#18a967" },
-  { id: "rejected", label: "Từ chối",   color: "#ef4444" },
-  { id: "all",      label: "Tất cả",    color: "#2634d5" },
-];
-
-const TYPE_OPTIONS = [
-  { id: "all",      label: "Tất cả loại" },
-  { id: "deposit",  label: "Nạp tiền" },
-  { id: "withdraw", label: "Rút tiền" },
-  { id: "payment",  label: "Thanh toán" },
-];
-
-// ✅ #8.3: Time range filter
-const TIME_RANGES = [
-  { id: "today",  label: "Hôm nay", days: 1 },
-  { id: "7d",     label: "7 ngày",  days: 7 },
-  { id: "30d",    label: "30 ngày", days: 30 },
-  { id: "all",    label: "Tất cả",  days: null },
-];
-
-const TX_CONFIG = {
-  deposit:  { icon: ArrowDownCircle, color: "#18a967", bg: "#e8f9f1", label: "Nạp tiền", sign: "+" },
-  withdraw: { icon: ArrowUpCircle,   color: "#f59e0b", bg: "#fef3c7", label: "Rút tiền", sign: "−" },
-  payment:  { icon: ShoppingBag,     color: "#8b5cf6", bg: "#ede9fe", label: "Thanh toán", sign: "−" },
+const TX_KEYS = {
+  deposit:  { icon: ArrowDownCircle, color: "#18a967", bg: "#e8f9f1", sign: "+" },
+  withdraw: { icon: ArrowUpCircle,   color: "#f59e0b", bg: "#fef3c7", sign: "−" },
+  payment:  { icon: ShoppingBag,     color: "#8b5cf6", bg: "#ede9fe", sign: "−" },
 };
 
-const STATUS_CONFIG = {
-  pending:  { label: "Chờ duyệt", color: "#f59e0b", bg: "#fef3c7" },
-  approved: { label: "Thành công", color: "#18a967", bg: "#e8f9f1" },
-  rejected: { label: "Từ chối",   color: "#ef4444", bg: "#fee2e2" },
+const STATUS_KEYS = {
+  pending:  { color: "#f59e0b", bg: "#fef3c7" },
+  approved: { color: "#18a967", bg: "#e8f9f1" },
+  rejected: { color: "#ef4444", bg: "#fee2e2" },
 };
 
-const METHOD_BADGES = {
-  QR:     { label: "VietQR",    color: "#2634d5", bg: "#eef2ff" },
-  CASH:   { label: "Tiền mặt",  color: "#18a967", bg: "#e8f9f1" },
-  BANK:   { label: "Bank",      color: "#f59e0b", bg: "#fef3c7" },
-  WALLET: { label: "Ví",        color: "#8b5cf6", bg: "#ede9fe" },
+const METHOD_KEYS = {
+  QR:     { color: "#2634d5", bg: "#eef2ff" },
+  CASH:   { color: "#18a967", bg: "#e8f9f1" },
+  BANK:   { color: "#f59e0b", bg: "#fef3c7" },
+  WALLET: { color: "#8b5cf6", bg: "#ede9fe" },
 };
 
 const EMPTY_STATS = {
@@ -99,7 +55,7 @@ const EMPTY_STATS = {
 // ============================================================
 
 /** Ngưỡng thời gian bắt đầu của range (ms). null = không filter */
-function getRangeStart(rangeId) {
+function getRangeStart(rangeId, TIME_RANGES) {
   const r = TIME_RANGES.find((x) => x.id === rangeId);
   if (!r || !r.days) return null;
   const d = new Date();
@@ -113,6 +69,67 @@ function getRangeStart(rangeId) {
 // ============================================================
 
 export default function OwnerWallet() {
+  const { t } = useI18n();
+
+  // Config (useMemo vì phụ thuộc t)
+  const STATUS_TABS = useMemo(
+    () => [
+      { id: "pending",  label: t("Chờ duyệt"), color: "#f59e0b" },
+      { id: "approved", label: t("Đã duyệt"),  color: "#18a967" },
+      { id: "rejected", label: t("Từ chối"),   color: "#ef4444" },
+      { id: "all",      label: t("Tất cả"),    color: "#2634d5" },
+    ],
+    [t]
+  );
+
+  const TYPE_OPTIONS = useMemo(
+    () => [
+      { id: "all",      label: t("Tất cả loại") },
+      { id: "deposit",  label: t("Nạp tiền") },
+      { id: "withdraw", label: t("Rút tiền") },
+      { id: "payment",  label: t("Thanh toán") },
+    ],
+    [t]
+  );
+
+  const TIME_RANGES = useMemo(
+    () => [
+      { id: "today",  label: t("Hôm nay"), days: 1 },
+      { id: "7d",     label: t("7 ngày"),  days: 7 },
+      { id: "30d",    label: t("30 ngày"), days: 30 },
+      { id: "all",    label: t("Tất cả"),  days: null },
+    ],
+    [t]
+  );
+
+  const TX_CONFIG = useMemo(
+    () => ({
+      deposit:  { ...TX_KEYS.deposit,  label: t("Nạp tiền") },
+      withdraw: { ...TX_KEYS.withdraw, label: t("Rút tiền") },
+      payment:  { ...TX_KEYS.payment,  label: t("Thanh toán") },
+    }),
+    [t]
+  );
+
+  const STATUS_CONFIG = useMemo(
+    () => ({
+      pending:  { ...STATUS_KEYS.pending,  label: t("Chờ duyệt") },
+      approved: { ...STATUS_KEYS.approved, label: t("Thành công") },
+      rejected: { ...STATUS_KEYS.rejected, label: t("Từ chối") },
+    }),
+    [t]
+  );
+
+  const METHOD_BADGES = useMemo(
+    () => ({
+      QR:     { ...METHOD_KEYS.QR,     label: t("VietQR") },
+      CASH:   { ...METHOD_KEYS.CASH,   label: t("Tiền mặt") },
+      BANK:   { ...METHOD_KEYS.BANK,   label: t("Bank") },
+      WALLET: { ...METHOD_KEYS.WALLET, label: t("Ví") },
+    }),
+    [t]
+  );
+
   // ---------- Data ----------
   const [allTx, setAllTx] = useState([]);
   const [stats, setStats] = useState(EMPTY_STATS);
@@ -123,13 +140,13 @@ export default function OwnerWallet() {
   // ---------- Filters ----------
   const [tab, setTab] = useState("pending");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [rangeFilter, setRangeFilter] = useState("all"); // ✅ #8.3
+  const [rangeFilter, setRangeFilter] = useState("all");
   const [q, setQ] = useState("");
 
-  // ---------- Processing state (per-transaction) ----------
-  const [processing, setProcessing] = useState({}); // { [id]: "approve" | "reject" }
+  // ---------- Processing state ----------
+  const [processing, setProcessing] = useState({});
 
-  // ---------- ✅ #8.2: Bulk selection ----------
+  // ---------- Bulk selection ----------
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkProcessing, setBulkProcessing] = useState(false);
 
@@ -137,7 +154,7 @@ export default function OwnerWallet() {
   const [detailTx, setDetailTx] = useState(null);
   const [rejectModal, setRejectModal] = useState(null);
 
-  // Confirm dialog (bulk approve)
+  // Confirm dialog
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -163,7 +180,7 @@ export default function OwnerWallet() {
       setStats(st || EMPTY_STATS);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || "Không tải được dữ liệu ví");
+        setError(e.message || t("Không tải được dữ liệu ví"));
       }
     } finally {
       if (myReqId === reqIdRef.current) {
@@ -171,13 +188,13 @@ export default function OwnerWallet() {
         if (!silent) setRefreshing(false);
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load(false);
   }, [load]);
 
-  // Auto-refresh mỗi 20s
+  // Auto-refresh
   useEffect(() => {
     const timer = setInterval(() => load(true), REFRESH_MS);
     return () => clearInterval(timer);
@@ -207,8 +224,7 @@ export default function OwnerWallet() {
     if (tab !== "all") result = result.filter((t) => t.status === tab);
     if (typeFilter !== "all") result = result.filter((t) => t.type === typeFilter);
 
-    // ✅ #8.3: Time filter
-    const rangeStart = getRangeStart(rangeFilter);
+    const rangeStart = getRangeStart(rangeFilter, TIME_RANGES);
     if (rangeStart !== null) {
       result = result.filter((t) => {
         const ts = new Date(t.created_at || 0).getTime();
@@ -245,7 +261,6 @@ export default function OwnerWallet() {
   const hasFilter =
     tab !== "pending" || typeFilter !== "all" || rangeFilter !== "all" || q.trim();
 
-  // ✅ #8.2: Danh sách pending có thể bulk select
   const selectableTxs = useMemo(
     () => filtered.filter((t) => t.status === "pending"),
     [filtered]
@@ -273,34 +288,30 @@ export default function OwnerWallet() {
 
   // ---------- Actions ----------
 
-  /**
-   * ✅ Batch 4: Mở ConfirmDialog cho duyệt đơn lẻ
-   * (thay cho confirm() native → đồng bộ UX toàn app)
-   */
   const openApprove = (tx) => {
     if (processing[tx.id]) return;
 
-    const action = tx.type === "deposit" ? "nạp" : "rút";
+    const action = tx.type === "deposit" ? t("nạp") : t("rút");
     const amount = money(tx.amount);
 
     setConfirm({
-      title: `Duyệt yêu cầu ${action}?`,
+      title: `${t("Duyệt yêu cầu")} ${action}?`,
       message:
-        `Xác nhận duyệt ${action} ${amount} cho "${tx.user_name}".\n\n` +
-        `Mã GD: ${tx.code}\n` +
-        "Hành động này không thể hoàn tác.",
-      confirmText: "Duyệt",
-      cancelText: "Hủy",
+        `${t("Xác nhận duyệt")} ${action} ${amount} ${t("cho")} "${tx.user_name}".\n\n` +
+        `${t("Mã GD")}: ${tx.code}\n` +
+        t("Hành động này không thể hoàn tác."),
+      confirmText: t("Duyệt"),
+      cancelText: t("Hủy"),
       danger: false,
       onConfirm: async () => {
         setProcessing((p) => ({ ...p, [tx.id]: "approve" }));
         try {
           await api.wallet.approve(tx.id);
-          toast(`Đã duyệt ${tx.code}`, "success");
+          toast(`${t("Đã duyệt")} ${tx.code}`, "success");
           setConfirm(null);
           load(true);
         } catch (e) {
-          toast(e.message || "Không duyệt được", "error");
+          toast(e.message || t("Không duyệt được"), "error");
         } finally {
           setProcessing((p) => {
             const n = { ...p };
@@ -312,9 +323,6 @@ export default function OwnerWallet() {
     });
   };
 
-  /**
-   * ✅ #8.2: Bulk approve — mở ConfirmDialog trước
-   */
   const openBulkApprove = () => {
     if (!selectedIds.length || bulkProcessing) return;
 
@@ -324,13 +332,13 @@ export default function OwnerWallet() {
     const totalAmount = txs.reduce((s, t) => s + (t.amount || 0), 0);
 
     setConfirm({
-      title: `Duyệt ${txs.length} giao dịch đã chọn?`,
+      title: `${t("Duyệt")} ${txs.length} ${t("giao dịch đã chọn?")}`,
       message:
-        `Bao gồm ${depositCount} nạp và ${withdrawCount} rút. ` +
-        `Tổng giá trị ${money(totalAmount)}.\n\n` +
-        "Hành động này không thể hoàn tác.",
-      confirmText: `Duyệt ${txs.length}`,
-      cancelText: "Hủy",
+        `${t("Bao gồm")} ${depositCount} ${t("nạp và")} ${withdrawCount} ${t("rút.")} ` +
+        `${t("Tổng giá trị")} ${money(totalAmount)}.\n\n` +
+        t("Hành động này không thể hoàn tác."),
+      confirmText: `${t("Duyệt")} ${txs.length}`,
+      cancelText: t("Hủy"),
       danger: false,
       onConfirm: async () => {
         setBulkProcessing(true);
@@ -351,12 +359,12 @@ export default function OwnerWallet() {
         setSelectedIds([]);
 
         if (failed === 0) {
-          toast(`Đã duyệt thành công ${success} giao dịch`, "success");
+          toast(`${t("Đã duyệt thành công")} ${success} ${t("giao dịch")}`, "success");
         } else if (success === 0) {
-          toast(`Không duyệt được giao dịch nào`, "error");
+          toast(t("Không duyệt được giao dịch nào"), "error");
         } else {
           toast(
-            `Đã duyệt ${success}, thất bại ${failed} giao dịch`,
+            `${t("Đã duyệt")} ${success}, ${t("thất bại")} ${failed} ${t("giao dịch")}`,
             "warning"
           );
         }
@@ -388,10 +396,10 @@ export default function OwnerWallet() {
     setRejectModal(null);
     try {
       await api.wallet.reject(tx.id, note);
-      toast(`Đã từ chối ${tx.code}`, "success");
+      toast(`${t("Đã từ chối")} ${tx.code}`, "success");
       load(true);
     } catch (e) {
-      toast(e.message || "Không từ chối được", "error");
+      toast(e.message || t("Không từ chối được"), "error");
     } finally {
       setProcessing((p) => {
         const n = { ...p };
@@ -408,17 +416,10 @@ export default function OwnerWallet() {
     setQ("");
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
   return (
     <>
       <div>
-        {/* ============================================================
-            STATS
-            ✅ #8.1: Dùng SkeletonStats khi loading
-            ============================================================ */}
+        {/* STATS */}
         {loading ? (
           <div style={{ marginBottom: 20 }}>
             <SkeletonStats count={4} columns="repeat(auto-fit, minmax(200px, 1fr))" />
@@ -434,34 +435,32 @@ export default function OwnerWallet() {
           >
             <StatBox
               icon={<Wallet size={20} />}
-              label="Tổng số dư ví"
+              label={t("Tổng số dư ví")}
               value={money(stats.totalBalance)}
               color="#2634d5"
             />
             <StatBox
               icon={<ArrowDownCircle size={20} />}
-              label="Đã nạp"
+              label={t("Đã nạp")}
               value={money(stats.totalDeposited)}
               color="#18a967"
             />
             <StatBox
               icon={<ArrowUpCircle size={20} />}
-              label="Đã rút"
+              label={t("Đã rút")}
               value={money(stats.totalWithdrawn)}
               color="#f59e0b"
             />
             <StatBox
               icon={<ShoppingBag size={20} />}
-              label="Đã thanh toán"
+              label={t("Đã thanh toán")}
               value={money(stats.totalPaid)}
               color="#8b5cf6"
             />
           </div>
         )}
 
-        {/* ============================================================
-            PENDING ALERT
-            ============================================================ */}
+        {/* PENDING ALERT */}
         {stats.pendingCount > 0 && (
           <div
             style={{
@@ -500,11 +499,11 @@ export default function OwnerWallet() {
                   marginBottom: 2,
                 }}
               >
-                Có {stats.pendingCount} yêu cầu chờ duyệt
+                {t("Có")} {stats.pendingCount} {t("yêu cầu chờ duyệt")}
               </b>
               <span style={{ fontSize: 13, color: "#78350f" }}>
-                {stats.pendingDepositCount} nạp · {stats.pendingWithdrawCount} rút
-                — vui lòng xử lý sớm
+                {stats.pendingDepositCount} {t("nạp")} · {stats.pendingWithdrawCount} {t("rút")}{" "}
+                — {t("vui lòng xử lý sớm")}
               </span>
             </div>
             <button
@@ -524,14 +523,12 @@ export default function OwnerWallet() {
                 fontSize: 13,
               }}
             >
-              Xem ngay
+              {t("Xem ngay")}
             </button>
           </div>
         )}
 
-        {/* ============================================================
-            ERROR BANNER
-            ============================================================ */}
+        {/* ERROR BANNER */}
         {error && (
           <div
             style={{
@@ -562,14 +559,12 @@ export default function OwnerWallet() {
                 fontSize: 12,
               }}
             >
-              Thử lại
+              {t("Thử lại")}
             </button>
           </div>
         )}
 
-        {/* ============================================================
-            FILTERS
-            ============================================================ */}
+        {/* FILTERS */}
         <div
           style={{
             background: "var(--card-bg, #fff)",
@@ -606,7 +601,7 @@ export default function OwnerWallet() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Tìm theo tên, email, mã GD..."
+                placeholder={t("Tìm theo tên, email, mã GD...")}
                 style={{
                   flex: 1,
                   border: 0,
@@ -621,7 +616,7 @@ export default function OwnerWallet() {
                 <button
                   onClick={() => setQ("")}
                   style={clearBtnStyle}
-                  aria-label="Xoá tìm kiếm"
+                  aria-label={t("Xoá tìm kiếm")}
                 >
                   <X size={14} />
                 </button>
@@ -645,7 +640,7 @@ export default function OwnerWallet() {
             <button
               onClick={() => load(false)}
               disabled={refreshing}
-              title="Làm mới"
+              title={t("Làm mới")}
               style={{
                 padding: "9px 14px",
                 background: "var(--bg-tertiary, #f5f7fb)",
@@ -665,7 +660,7 @@ export default function OwnerWallet() {
               ) : (
                 <RefreshCw size={14} />
               )}
-              Làm mới
+              {t("Làm mới")}
             </button>
 
             {/* Clear */}
@@ -684,12 +679,12 @@ export default function OwnerWallet() {
                 }}
               >
                 <X size={13} style={{ marginRight: 4, verticalAlign: -2 }} />
-                Xoá lọc
+                {t("Xoá lọc")}
               </button>
             )}
           </div>
 
-          {/* ✅ #8.3: Time range chips */}
+          {/* Time range chips */}
           <div
             style={{
               display: "flex",
@@ -708,7 +703,7 @@ export default function OwnerWallet() {
                 marginRight: 4,
               }}
             >
-              <Clock size={12} /> Thời gian:
+              <Clock size={12} /> {t("Thời gian:")}
             </span>
             {TIME_RANGES.map((r) => {
               const active = rangeFilter === r.id;
@@ -745,16 +740,16 @@ export default function OwnerWallet() {
               flexWrap: "wrap",
             }}
           >
-            {STATUS_TABS.map((t) => {
-              const active = tab === t.id;
-              const count = counts[t.id] || 0;
+            {STATUS_TABS.map((s) => {
+              const active = tab === s.id;
+              const count = counts[s.id] || 0;
               return (
                 <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
+                  key={s.id}
+                  onClick={() => setTab(s.id)}
                   style={{
                     padding: "9px 14px",
-                    background: active ? t.color : "transparent",
+                    background: active ? s.color : "transparent",
                     color: active ? "#fff" : "var(--text-muted, #475569)",
                     border: 0,
                     borderRadius: 8,
@@ -767,18 +762,18 @@ export default function OwnerWallet() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {t.label}
+                  {s.label}
                   {count > 0 && (
                     <span
                       style={{
                         background: active
                           ? "rgba(255,255,255,0.3)"
-                          : t.id === "pending"
+                          : s.id === "pending"
                           ? "#ef4444"
                           : "var(--card-bg, #e2e8f0)",
                         color: active
                           ? "#fff"
-                          : t.id === "pending"
+                          : s.id === "pending"
                           ? "#fff"
                           : "var(--text-muted, #64748b)",
                         minWidth: 20,
@@ -801,9 +796,7 @@ export default function OwnerWallet() {
           </div>
         </div>
 
-        {/* ============================================================
-            ✅ #8.2: BULK ACTION BAR
-            ============================================================ */}
+        {/* BULK ACTION BAR */}
         {selectedIds.length > 0 && (
           <div
             style={{
@@ -831,7 +824,7 @@ export default function OwnerWallet() {
               }}
             >
               <CheckSquare size={16} />
-              Đã chọn <b>{selectedIds.length}</b> giao dịch
+              {t("Đã chọn")} <b>{selectedIds.length}</b> {t("giao dịch")}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               <button
@@ -848,7 +841,7 @@ export default function OwnerWallet() {
                   cursor: bulkProcessing ? "not-allowed" : "pointer",
                 }}
               >
-                Bỏ chọn
+                {t("Bỏ chọn")}
               </button>
               <button
                 onClick={openBulkApprove}
@@ -870,11 +863,11 @@ export default function OwnerWallet() {
                 {bulkProcessing ? (
                   <>
                     <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
-                    Đang duyệt...
+                    {t("Đang duyệt...")}
                   </>
                 ) : (
                   <>
-                    <Check size={13} /> Duyệt {selectedIds.length}
+                    <Check size={13} /> {t("Duyệt")} {selectedIds.length}
                   </>
                 )}
               </button>
@@ -882,9 +875,7 @@ export default function OwnerWallet() {
           </div>
         )}
 
-        {/* ============================================================
-            TRANSACTIONS LIST
-            ============================================================ */}
+        {/* TRANSACTIONS LIST */}
         <div
           style={{
             background: "var(--card-bg, #fff)",
@@ -893,7 +884,6 @@ export default function OwnerWallet() {
             padding: 20,
           }}
         >
-          {/* ✅ #8.2: Select all header (chỉ khi tab pending) */}
           {tab === "pending" && selectableTxs.length > 0 && !loading && (
             <div
               style={{
@@ -925,7 +915,7 @@ export default function OwnerWallet() {
                 ) : (
                   <Square size={18} />
                 )}
-                {allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+                {allSelected ? t("Bỏ chọn tất cả") : t("Chọn tất cả")}
               </button>
               <span
                 style={{
@@ -933,7 +923,7 @@ export default function OwnerWallet() {
                   color: "var(--text-light, #8993a3)",
                 }}
               >
-                ({selectableTxs.length} giao dịch chờ duyệt trong view này)
+                ({selectableTxs.length} {t("giao dịch chờ duyệt trong view này")})
               </span>
             </div>
           )}
@@ -949,10 +939,10 @@ export default function OwnerWallet() {
               <Wallet size={40} style={{ opacity: 0.3, marginBottom: 8 }} />
               <p style={{ margin: 0, fontSize: 13 }}>
                 {hasFilter
-                  ? "Không có giao dịch nào khớp bộ lọc"
+                  ? t("Không có giao dịch nào khớp bộ lọc")
                   : tab === "pending"
-                  ? "Không có yêu cầu nào chờ duyệt"
-                  : "Chưa có giao dịch nào"}
+                  ? t("Không có yêu cầu nào chờ duyệt")
+                  : t("Chưa có giao dịch nào")}
               </p>
             </div>
           ) : (
@@ -961,23 +951,32 @@ export default function OwnerWallet() {
                 <TxRow
                   key={tx.id}
                   tx={tx}
+                  TX_CONFIG={TX_CONFIG}
+                  STATUS_CONFIG={STATUS_CONFIG}
+                  METHOD_BADGES={METHOD_BADGES}
                   processing={processing[tx.id]}
                   selected={selectedIds.includes(tx.id)}
                   onToggleSelect={() => toggleSelect(tx.id)}
                   onApprove={() => openApprove(tx)}
                   onReject={() => openReject(tx)}
                   onView={() => setDetailTx(tx)}
+                  t={t}
                 />
               ))}
             </div>
           )}
         </div>
 
-        {/* ============================================================
-            MODALS
-            ============================================================ */}
+        {/* MODALS */}
         {detailTx && (
-          <DetailModal tx={detailTx} onClose={() => setDetailTx(null)} />
+          <DetailModal
+            tx={detailTx}
+            onClose={() => setDetailTx(null)}
+            TX_CONFIG={TX_CONFIG}
+            STATUS_CONFIG={STATUS_CONFIG}
+            METHOD_BADGES={METHOD_BADGES}
+            t={t}
+          />
         )}
 
         {rejectModal && (
@@ -985,6 +984,7 @@ export default function OwnerWallet() {
             tx={rejectModal}
             onClose={() => setRejectModal(null)}
             onConfirm={(note) => confirmReject(rejectModal, note)}
+            t={t}
           />
         )}
 
@@ -996,7 +996,7 @@ export default function OwnerWallet() {
         `}</style>
       </div>
 
-      {/* ✅ #8.2: ConfirmDialog cho bulk approve */}
+      {/* ConfirmDialog */}
       {confirm && (
         <ConfirmDialog
           open
@@ -1018,12 +1018,16 @@ export default function OwnerWallet() {
 // SUB-COMPONENT: TxRow
 // ============================================================
 
-function TxRow({ tx, processing, selected, onToggleSelect, onApprove, onReject, onView }) {
+function TxRow({
+  tx, TX_CONFIG, STATUS_CONFIG, METHOD_BADGES,
+  processing, selected, onToggleSelect,
+  onApprove, onReject, onView, t,
+}) {
   const config = TX_CONFIG[tx.type] || {
     icon: Wallet,
     color: "#2634d5",
     bg: "#eef2ff",
-    label: "Giao dịch",
+    label: t("Giao dịch"),
     sign: "",
   };
   const statusConfig = STATUS_CONFIG[tx.status] || {
@@ -1058,12 +1062,12 @@ function TxRow({ tx, processing, selected, onToggleSelect, onApprove, onReject, 
         transition: "all 0.2s",
       }}
     >
-      {/* ✅ #8.2: Checkbox khi pending */}
+      {/* Checkbox khi pending */}
       {canSelect && (
         <button
           onClick={onToggleSelect}
           disabled={isProcessing}
-          title={selected ? "Bỏ chọn" : "Chọn để duyệt hàng loạt"}
+          title={selected ? t("Bỏ chọn") : t("Chọn để duyệt hàng loạt")}
           style={{
             background: "transparent",
             border: 0,
@@ -1110,7 +1114,7 @@ function TxRow({ tx, processing, selected, onToggleSelect, onApprove, onReject, 
           }}
         >
           <b style={{ fontSize: 13, color: "var(--text-primary, #172033)" }}>
-            {tx.user_name || "Khách"}
+            {tx.user_name || t("Khách")}
           </b>
           <span
             style={{
@@ -1182,8 +1186,8 @@ function TxRow({ tx, processing, selected, onToggleSelect, onApprove, onReject, 
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         <button
           onClick={onView}
-          title="Chi tiết"
-          aria-label="Chi tiết"
+          title={t("Chi tiết")}
+          aria-label={t("Chi tiết")}
           style={iconBtnStyle}
         >
           <Eye size={14} />
@@ -1194,8 +1198,8 @@ function TxRow({ tx, processing, selected, onToggleSelect, onApprove, onReject, 
             <button
               onClick={onApprove}
               disabled={isProcessing}
-              title="Duyệt"
-              aria-label="Duyệt"
+              title={t("Duyệt")}
+              aria-label={t("Duyệt")}
               style={{
                 padding: "7px 12px",
                 background: "#18a967",
@@ -1216,13 +1220,13 @@ function TxRow({ tx, processing, selected, onToggleSelect, onApprove, onReject, 
               ) : (
                 <Check size={13} />
               )}
-              Duyệt
+              {t("Duyệt")}
             </button>
             <button
               onClick={onReject}
               disabled={isProcessing}
-              title="Từ chối"
-              aria-label="Từ chối"
+              title={t("Từ chối")}
+              aria-label={t("Từ chối")}
               style={{
                 padding: "7px 12px",
                 background: "var(--card-bg, #fff)",
@@ -1238,7 +1242,7 @@ function TxRow({ tx, processing, selected, onToggleSelect, onApprove, onReject, 
                 opacity: isProcessing ? 0.5 : 1,
               }}
             >
-              <Ban size={13} /> Từ chối
+              <Ban size={13} /> {t("Từ chối")}
             </button>
           </>
         )}
@@ -1251,46 +1255,47 @@ function TxRow({ tx, processing, selected, onToggleSelect, onApprove, onReject, 
 // SUB-COMPONENT: DetailModal
 // ============================================================
 
-function DetailModal({ tx, onClose }) {
+function DetailModal({ tx, onClose, TX_CONFIG, STATUS_CONFIG, METHOD_BADGES, t }) {
   const config = TX_CONFIG[tx.type] || {
     icon: Wallet,
     color: "#2634d5",
-    label: "Giao dịch",
+    label: t("Giao dịch"),
   };
   const Icon = config.icon;
 
-  const statusLabel =
-    tx.status === "pending"
-      ? "Chờ duyệt"
-      : tx.status === "approved"
-      ? "Đã duyệt"
-      : "Từ chối";
+  const statusConfig = STATUS_CONFIG[tx.status] || {
+    label: "—",
+    color: "#64748b",
+  };
 
   return (
     <Modal onClose={onClose} maxWidth={500}>
       <div style={modalHeaderStyle}>
         <h3 style={modalTitleStyle}>
-          <Icon size={20} style={{ color: config.color }} /> Chi tiết giao dịch
+          <Icon size={20} style={{ color: config.color }} /> {t("Chi tiết giao dịch")}
         </h3>
-        <button onClick={onClose} style={modalCloseStyle} aria-label="Đóng">
+        <button onClick={onClose} style={modalCloseStyle} aria-label={t("Đóng")}>
           <X size={20} />
         </button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <InfoRow label="Mã GD" value={tx.code} mono />
-        <InfoRow label="Loại" value={config.label} />
+        <InfoRow label={t("Mã GD")} value={tx.code} mono />
+        <InfoRow label={t("Loại")} value={config.label} />
         <InfoRow
-          label="Số tiền"
+          label={t("Số tiền")}
           value={money(tx.amount)}
           highlight={config.color}
         />
-        <InfoRow label="Khách hàng" value={tx.user_name || "—"} />
-        <InfoRow label="Email" value={tx.user_email || "—"} />
-        <InfoRow label="Phương thức" value={tx.method || "—"} />
-        <InfoRow label="Trạng thái" value={statusLabel} />
+        <InfoRow label={t("Khách hàng")} value={tx.user_name || "—"} />
+        <InfoRow label={t("Email")} value={tx.user_email || "—"} />
         <InfoRow
-          label="Ngày tạo"
+          label={t("Phương thức")}
+          value={METHOD_BADGES[tx.method]?.label || tx.method || "—"}
+        />
+        <InfoRow label={t("Trạng thái")} value={statusConfig.label} />
+        <InfoRow
+          label={t("Ngày tạo")}
           value={
             tx.created_at
               ? new Date(tx.created_at).toLocaleString("vi-VN")
@@ -1299,11 +1304,11 @@ function DetailModal({ tx, onClose }) {
         />
         {tx.approved_at && (
           <InfoRow
-            label="Ngày duyệt"
+            label={t("Ngày duyệt")}
             value={new Date(tx.approved_at).toLocaleString("vi-VN")}
           />
         )}
-        {tx.approved_by && <InfoRow label="Người duyệt" value={tx.approved_by} />}
+        {tx.approved_by && <InfoRow label={t("Người duyệt")} value={tx.approved_by} />}
 
         {tx.bank_name && (
           <div
@@ -1321,7 +1326,7 @@ function DetailModal({ tx, onClose }) {
                 fontWeight: 600,
               }}
             >
-              THÔNG TIN NGÂN HÀNG
+              {t("THÔNG TIN NGÂN HÀNG")}
             </div>
             <div
               style={{
@@ -1371,7 +1376,7 @@ function DetailModal({ tx, onClose }) {
                 fontWeight: 600,
               }}
             >
-              GHI CHÚ CỦA KHÁCH
+              {t("GHI CHÚ CỦA KHÁCH")}
             </div>
             <div
               style={{
@@ -1402,7 +1407,7 @@ function DetailModal({ tx, onClose }) {
                 fontWeight: 600,
               }}
             >
-              GHI CHÚ CỦA ADMIN
+              {t("GHI CHÚ CỦA ADMIN")}
             </div>
             <div style={{ fontSize: 13, color: "#92400e" }}>
               {tx.admin_note}
@@ -1415,17 +1420,16 @@ function DetailModal({ tx, onClose }) {
         onClick={onClose}
         style={{ ...btnPrimaryStyle, marginTop: 16, width: "100%" }}
       >
-        Đóng
+        {t("Đóng")}
       </button>
     </Modal>
   );
 }
-
 // ============================================================
 // SUB-COMPONENT: RejectModal
 // ============================================================
 
-function RejectModal({ tx, onClose, onConfirm }) {
+function RejectModal({ tx, onClose, onConfirm, t }) {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -1438,13 +1442,13 @@ function RejectModal({ tx, onClose, onConfirm }) {
     <Modal onClose={() => !submitting && onClose()} maxWidth={480}>
       <div style={modalHeaderStyle}>
         <h3 style={modalTitleStyle}>
-          <Ban size={20} style={{ color: "#ef4444" }} /> Từ chối giao dịch
+          <Ban size={20} style={{ color: "#ef4444" }} /> {t("Từ chối giao dịch")}
         </h3>
         <button
           onClick={onClose}
           disabled={submitting}
           style={modalCloseStyle}
-          aria-label="Đóng"
+          aria-label={t("Đóng")}
         >
           <X size={20} />
         </button>
@@ -1460,20 +1464,26 @@ function RejectModal({ tx, onClose, onConfirm }) {
         }}
       >
         <div style={{ marginBottom: 4 }}>
-          <b>{tx.user_name || "Khách"}</b> · {money(tx.amount)}
+          <b>{tx.user_name || t("Khách")}</b> · {money(tx.amount)}
         </div>
-        <div style={{ fontSize: 11, color: "var(--text-light, #94a3b8)", fontFamily: "monospace" }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--text-light, #94a3b8)",
+            fontFamily: "monospace",
+          }}
+        >
           {tx.code}
         </div>
       </div>
 
       <label style={labelStyle}>
-        Lý do từ chối (tùy chọn, sẽ hiển thị cho khách)
+        {t("Lý do từ chối (tùy chọn, sẽ hiển thị cho khách)")}
       </label>
       <textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder="VD: Số tài khoản không hợp lệ, vui lòng liên hệ hỗ trợ..."
+        placeholder={t("VD: Số tài khoản không hợp lệ, vui lòng liên hệ hỗ trợ...")}
         rows={3}
         autoFocus
         disabled={submitting}
@@ -1486,7 +1496,7 @@ function RejectModal({ tx, onClose, onConfirm }) {
           disabled={submitting}
           style={{ ...btnCancelStyle, flex: 1 }}
         >
-          Hủy
+          {t("Hủy")}
         </button>
         <button
           onClick={submit}
@@ -1500,11 +1510,11 @@ function RejectModal({ tx, onClose, onConfirm }) {
           {submitting ? (
             <>
               <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
-              Đang từ chối...
+              {t("Đang từ chối...")}
             </>
           ) : (
             <>
-              <Ban size={14} /> Từ chối
+              <Ban size={14} /> {t("Từ chối")}
             </>
           )}
         </button>

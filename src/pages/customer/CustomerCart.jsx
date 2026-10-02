@@ -1,5 +1,8 @@
-﻿// ============================================================
+// ============================================================
 // CUSTOMERCART.JSX — Giỏ hàng khách hàng
+// ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+//    Không còn key cũ kiểu "cart.xxx" / "common.xxx"
 // ============================================================
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -10,7 +13,7 @@ import {
 } from "lucide-react";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 import FoodDetailModal from "../../components/FoodDetailModal";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
@@ -47,7 +50,7 @@ function readSavedSelection(cartKeys) {
 // ============================================================
 
 export default function CustomerCart({ cart, setCart }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const navigate = useNavigate();
 
   const lines = useMemo(
@@ -76,14 +79,12 @@ export default function CustomerCart({ cart, setCart }) {
     } catch {}
   }, [selectedKeys]);
 
-  // ✅ FIX: Sync selectedKeys khi cart đổi, bao gồm cả khi cart rỗng hoàn toàn
-  // (ví dụ: sau khi đặt hàng, cart bị xóa sạch bởi checkout)
+  // Sync selectedKeys khi cart đổi
   useEffect(() => {
     const prevKeys = prevKeysRef.current;
     const newKeys = cartKeys.filter((k) => !prevKeys.includes(k));
     const removedSet = new Set(prevKeys.filter((k) => !cartKeys.includes(k)));
 
-    // Nếu cart rỗng hoàn toàn → clear selection
     if (cartKeys.length === 0) {
       setSelectedKeys([]);
       prevKeysRef.current = cartKeys;
@@ -146,7 +147,7 @@ export default function CustomerCart({ cart, setCart }) {
 
     if (delta > 0 && currentQty >= maxQty) {
       toast(
-        `${t("cart.onlyLeftPrefix")} ${maxQty} ${t("cart.onlyLeftSuffix")}`,
+        t("Chỉ còn {n} phần trong kho").replace("{n}", maxQty),
         "error"
       );
       return;
@@ -218,10 +219,10 @@ export default function CustomerCart({ cart, setCart }) {
             fontSize: 22,
           }}
         >
-          {t("cart.empty")}
+          {t("Giỏ hàng đang trống")}
         </h2>
         <p style={{ color: "var(--text-muted, #8993a3)", marginBottom: 24 }}>
-          {t("cart.emptyDesc")}
+          {t("Hãy chọn món ăn bạn yêu thích.")}
         </p>
         <Link
           to="/customer/menu"
@@ -238,7 +239,7 @@ export default function CustomerCart({ cart, setCart }) {
             fontSize: 14,
           }}
         >
-          <Store size={16} /> {t("cart.exploreMenu")}
+          <Store size={16} /> {t("Khám phá thực đơn")}
         </Link>
       </div>
     );
@@ -282,7 +283,7 @@ export default function CustomerCart({ cart, setCart }) {
               <span
                 role="checkbox"
                 aria-checked={allSelected}
-                aria-label={t("cart.selectAllAria")}
+                aria-label={t("Chọn tất cả món")}
                 tabIndex={0}
                 onClick={toggleAll}
                 onKeyDown={(e) =>
@@ -307,12 +308,12 @@ export default function CustomerCart({ cart, setCart }) {
               <b
                 style={{ fontSize: 14, color: "var(--text-primary, #172033)" }}
               >
-                {t("cart.selectAll")} ({lines.length} {t("cart.items")})
+                {t("Chọn tất cả")} ({lines.length} {t("món")})
               </b>
             </label>
 
             <span style={{ fontSize: 13, color: "var(--text-muted, #64748b)" }}>
-              {t("cart.selectedCount")}{" "}
+              {t("Đã chọn")}{" "}
               <b style={{ color: "#2634d5" }}>{selectedLines.length}</b>/
               {lines.length}
             </span>
@@ -350,7 +351,7 @@ export default function CustomerCart({ cart, setCart }) {
                   <span
                     role="checkbox"
                     aria-checked={checked}
-                    aria-label={`${t("cart.selectItemPrefix")} ${m.name}`}
+                    aria-label={`${t("Chọn")} ${m.name}`}
                     tabIndex={0}
                     onClick={() => toggleItem(m._key)}
                     onKeyDown={(e) =>
@@ -411,12 +412,16 @@ export default function CustomerCart({ cart, setCart }) {
                       }}
                     >
                       <span>
-                        {t("cart.unitPrice")}:{" "}
+                        {t("Đơn giá")}:{" "}
                         <b style={{ color: "#18a967" }}>{money(m.price)}</b>
                       </span>
                       {typeof m.stock === "number" && (
-                        <span style={{ color: m.stock === 0 ? "#ef4444" : undefined }}>
-                          {t("cart.remaining")}: {m.stock}
+                        <span
+                          style={{
+                            color: m.stock === 0 ? "#ef4444" : undefined,
+                          }}
+                        >
+                          {t("Còn")}: {m.stock}
                         </span>
                       )}
                     </div>
@@ -435,7 +440,7 @@ export default function CustomerCart({ cart, setCart }) {
                     <button
                       onClick={() => updateQty(m._key, -1)}
                       disabled={atMin}
-                      aria-label={t("cart.decreaseQty")}
+                      aria-label={t("Giảm số lượng")}
                       style={{
                         width: 28,
                         height: 28,
@@ -467,7 +472,7 @@ export default function CustomerCart({ cart, setCart }) {
                     <button
                       onClick={() => updateQty(m._key, 1)}
                       disabled={atMax}
-                      aria-label={t("cart.increaseQty")}
+                      aria-label={t("Tăng số lượng")}
                       style={{
                         width: 28,
                         height: 28,
@@ -502,8 +507,8 @@ export default function CustomerCart({ cart, setCart }) {
 
                   <button
                     onClick={() => setEditingItem({ key: m._key, item: m })}
-                    title={t("cart.editTitle")}
-                    aria-label={`${t("cart.editItemPrefix")} ${m.name}`}
+                    title={t("Sửa món")}
+                    aria-label={`${t("Sửa")} ${m.name}`}
                     style={{
                       width: 32,
                       height: 32,
@@ -522,8 +527,8 @@ export default function CustomerCart({ cart, setCart }) {
 
                   <button
                     onClick={() => removeItem(m._key)}
-                    title={t("cart.removeTitleBtn")}
-                    aria-label={`${t("cart.removeItemPrefix")} ${m.name} ${t("cart.removeItemSuffix")}`}
+                    title={t("Xoá khỏi giỏ")}
+                    aria-label={`${t("Xoá")} ${m.name} ${t("khỏi giỏ")}`}
                     style={{
                       width: 32,
                       height: 32,
@@ -567,7 +572,7 @@ export default function CustomerCart({ cart, setCart }) {
               borderBottom: "1px solid var(--border-color, #eef2f7)",
             }}
           >
-            🧾 {t("checkout.summary")}
+            🧾 {t("Tóm tắt đơn hàng")}
           </h3>
 
           <div
@@ -589,22 +594,22 @@ export default function CustomerCart({ cart, setCart }) {
                 marginBottom: 4,
               }}
             >
-              {t("cart.selectedLabel")}
+              {t("ĐÃ CHỌN")}
             </div>
             {selectedLines.length === 0 ? (
               <div
                 style={{ fontSize: 13, color: "#ef4444", fontWeight: 600 }}
               >
-                {t("cart.noItemSelected")}
+                {t("Chưa chọn món nào")}
               </div>
             ) : (
               <div
                 style={{ fontSize: 14, color: "var(--text-primary, #172033)" }}
               >
                 <b style={{ color: "#2634d5" }}>{selectedLines.length}</b>{" "}
-                {t("cart.items")} ·{" "}
+                {t("món")} ·{" "}
                 <b style={{ color: "#2634d5" }}>{totalQty}</b>{" "}
-                {t("cart.parts")}
+                {t("phần")}
               </div>
             )}
           </div>
@@ -618,7 +623,7 @@ export default function CustomerCart({ cart, setCart }) {
             }}
           >
             <span style={{ color: "var(--text-muted, #64748b)" }}>
-              {t("cart.subtotal")}
+              {t("Tạm tính")}
             </span>
             <b style={{ color: "var(--text-primary, #172033)" }}>
               {money(total)}
@@ -634,7 +639,7 @@ export default function CustomerCart({ cart, setCart }) {
             }}
           >
             <span style={{ color: "var(--text-muted, #64748b)" }}>
-              {t("cart.serviceFee")}
+              {t("Phí dịch vụ")}
             </span>
             <b style={{ color: "var(--text-primary, #172033)" }}>{money(0)}</b>
           </div>
@@ -656,7 +661,7 @@ export default function CustomerCart({ cart, setCart }) {
                 color: "var(--text-primary, #172033)",
               }}
             >
-              {t("cart.total")}
+              {t("Tổng cộng")}
             </span>
             <strong style={{ color: "#2634d5", fontSize: 24, fontWeight: 800 }}>
               {money(total)}
@@ -690,10 +695,10 @@ export default function CustomerCart({ cart, setCart }) {
           >
             {selectedLines.length ? (
               <>
-                {t("cart.checkout")} <ArrowRight size={16} />
+                {t("Tiến hành đặt hàng")} <ArrowRight size={16} />
               </>
             ) : (
-              t("cart.selectToOrder")
+              t("Chọn món để đặt")
             )}
           </button>
         </div>
@@ -727,14 +732,14 @@ export default function CustomerCart({ cart, setCart }) {
 
       <ConfirmDialog
         open={!!confirmRemove}
-        title={t("cart.removeTitle")}
+        title={t("Xoá món khỏi giỏ hàng?")}
         message={
           confirmRemove
-            ? `"${confirmRemove.name}" ${t("cart.removeMsgSuffix")}`
+            ? `"${confirmRemove.name}" ${t("sẽ bị xoá khỏi giỏ. Bạn có thể thêm lại bất cứ lúc nào.")}`
             : ""
         }
-        confirmText={t("cart.removeConfirm")}
-        cancelText={t("cart.removeCancel")}
+        confirmText={t("Xoá món")}
+        cancelText={t("Giữ lại")}
         danger
         onConfirm={executeRemove}
         onClose={() => setConfirmRemove(null)}

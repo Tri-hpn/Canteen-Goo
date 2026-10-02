@@ -103,14 +103,12 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
   const T = (key, vars) => {
     if (t) {
       const params = vars || {};
-      // Thay placeholder {x} trong kết quả t()
       let out = t(key);
       for (const k of Object.keys(params)) {
         out = out.replace(new RegExp(`\\{${k}\\}`, "g"), params[k]);
       }
       return out;
     }
-    // Fallback
     let out = FALLBACK_TEXT[key] || key;
     if (vars) {
       for (const k of Object.keys(vars)) {
@@ -124,7 +122,7 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
   // INTENT: Chào hỏi
   // ============================================================
   if (/^(chao|hi|hello|hey|xin chao)\s*[!,.]?/.test(tt)) {
-    return { text: T("bot.greeting"), items: [] };
+    return { text: T("Xin chào! 👋 Mình là trợ lý Canteen VWA.\nBạn có thể hỏi mình:\n• \"dưới 30k\" — món rẻ\n• \"chay\" — món chay\n• \"nước\" — đồ uống\n• \"cay\" — món cay\n• \"bán chạy\" — top món hot\n• \"cơm\" — các món cơm\n• \"gợi ý\" — món ngẫu nhiên"), items: [] };
   }
 
   // ============================================================
@@ -132,7 +130,7 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
   // ============================================================
   if (/\b(gio mo|mo cua|dong cua|may gio mo)\b/.test(tt)) {
     return {
-      text: T("bot.openHours", { hours: cfg.openHours }),
+      text: T("🕐 Canteen VWA mở cửa {hours}.").replace("{hours}", cfg.openHours),
       items: [],
     };
   }
@@ -142,7 +140,7 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
   // ============================================================
   if (/\b(dia chi|o dau|duong nao|dia diem)\b/.test(tt)) {
     return {
-      text: T("bot.address", { address: cfg.address }),
+      text: T("📍 Canteen VWA ở {address}.").replace("{address}", cfg.address),
       items: [],
     };
   }
@@ -152,7 +150,7 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
   // ============================================================
   if (/\b(hotline|so dien thoai|sdt|lien he)\b/.test(tt)) {
     return {
-      text: T("bot.hotline", { hotline: cfg.hotline }),
+      text: T("☎️ Hotline Canteen VWA: {hotline}. Gọi khi cần hỗ trợ nhé!").replace("{hotline}", cfg.hotline),
       items: [],
     };
   }
@@ -161,14 +159,20 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
   // INTENT: Đặt món / thanh toán
   // ============================================================
   if (/\b(dat mon|dat hang|order|thanh toan|tra tien)\b/.test(tt)) {
-    return { text: T("bot.order"), items: [] };
+    return {
+      text: T("🛒 Để đặt món:\n1. Vào \"Thực đơn\" chọn món\n2. Thêm vào giỏ\n3. Vào giỏ → \"Đặt hàng\"\nThanh toán: Tiền mặt · VietQR · Ví Canteen."),
+      items: []
+    };
   }
 
   // ============================================================
   // INTENT: Đổi điểm / voucher
   // ============================================================
   if (/\b(doi diem|voucher|khuyen mai|giam gia|uu dai)\b/.test(tt)) {
-    return { text: T("bot.voucher"), items: [] };
+    return {
+      text: T("🎁 Bạn có thể:\n• Xem điểm tích lũy ở trang \"Khuyến mãi\"\n• Đổi 100 điểm → voucher 10.000đ\n• Nhận voucher toàn hệ thống"),
+      items: []
+    };
   }
 
   // ============================================================
@@ -180,8 +184,8 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
       .slice(0, 3);
     return pickWithFallback(
       top,
-      T("bot.bestSeller"),
-      T("bot.bestSellerEmpty")
+      T("🔥 Top 3 món bán chạy nhất tại Canteen:"),
+      T("Hiện chưa có dữ liệu bán chạy. Bạn xem thực đơn nhé!")
     );
   }
 
@@ -192,8 +196,8 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
     const chay = menu.filter((m) => m.category === "Món chay");
     return pickWithFallback(
       chay,
-      T("bot.vegetarian"),
-      T("bot.vegetarianEmpty")
+      T("🥗 Món chay ngon tại Canteen:"),
+      T("Hiện chưa có món chay trong thực đơn. Bạn xem món khác nhé!")
     );
   }
 
@@ -204,8 +208,8 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
     const drinks = menu.filter((m) => m.category === "Đồ uống");
     return pickWithFallback(
       drinks,
-      T("bot.drinks"),
-      T("bot.drinksEmpty")
+      T("🥤 Đồ uống tại Canteen:"),
+      T("Hiện chưa có đồ uống trong thực đơn.")
     );
   }
 
@@ -219,7 +223,7 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
     });
     if (cay.length) {
       return {
-        text: T("bot.spicy"),
+        text: T("🌶️ Món cay bạn có thể thử:"),
         items: cay.slice(0, 3),
       };
     }
@@ -227,8 +231,8 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
     const man = menu.filter((m) => m.category === "Món mặn");
     return pickWithFallback(
       man,
-      T("bot.spicyFallback"),
-      T("bot.spicyEmpty")
+      T("Các món đậm vị tại Canteen:"),
+      T("Hiện chưa có món cay. Bạn xem thực đơn nhé!")
     );
   }
 
@@ -237,7 +241,11 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
   // ============================================================
   if (/\b(com|com rang|com ga|com suon)\b/.test(tt)) {
     const com = menu.filter((m) => m.category === "Cơm");
-    return pickWithFallback(com, T("bot.rice"), T("bot.riceEmpty"));
+    return pickWithFallback(
+      com,
+      T("🍚 Món cơm tại Canteen:"),
+      T("Hiện chưa có món cơm trong thực đơn.")
+    );
   }
 
   // ============================================================
@@ -257,13 +265,13 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
 
     if (!cheap.length) {
       return {
-        text: T("bot.budgetEmpty", { price: priceStr }),
+        text: T("Không có món nào dưới {price}đ. Bạn thử ngân sách khác nhé!").replace("{price}", priceStr),
         items: [],
       };
     }
 
     return {
-      text: T("bot.budget", { price: priceStr }),
+      text: T("💰 Món dưới {price}đ cho bạn đây:").replace("{price}", priceStr),
       items: cheap,
     };
   }
@@ -273,11 +281,11 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
   // ============================================================
   if (/\b(goi y|random|ngau nhien|an gi|mon gi)\b/.test(tt)) {
     if (!menu.length) {
-      return { text: T("bot.randomEmpty"), items: [] };
+      return { text: T("Hiện chưa có thực đơn. Bạn xem sau nhé!"), items: [] };
     }
     const rand = menu[Math.floor(Math.random() * menu.length)];
     return {
-      text: T("bot.random"),
+      text: T("🎲 Mình gợi ý bạn thử món này nhé:"),
       items: [rand],
     };
   }
@@ -285,7 +293,10 @@ export function getBotReply(userText, menuItems = [], settings = null, t = null)
   // ============================================================
   // FALLBACK
   // ============================================================
-  return { text: T("bot.fallback"), items: [] };
+  return {
+    text: T("Mình chưa hiểu câu hỏi này. 🤔\nBạn thử hỏi: \"dưới 30k\", \"chay\", \"nước\", \"cay\", \"bán chạy\", \"cơm\", \"gợi ý\"."),
+    items: []
+  };
 }
 
 export default getBotReply;

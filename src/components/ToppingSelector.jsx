@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // TOPPINGSELECTOR.JSX — Chọn size + topping cho món ăn
 // ============================================================
 
@@ -6,7 +6,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { api } from "../api";
 import { money } from "./UI";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 function normalizeId(id) {
   return id === null || id === undefined ? "" : String(id);
@@ -33,7 +33,7 @@ export default function ToppingSelector({
   initialToppings,
   initialSize,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [toppings, setToppings] = useState([]);
   const [sizes, setSizes] = useState([]);
   const [loading, setLoading] = useState(true);

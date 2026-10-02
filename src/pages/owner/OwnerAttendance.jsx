@@ -6,11 +6,7 @@
 //   - Stats: tổng ngày công, đúng giờ, đi muộn, tổng giờ
 //   - Bảng chi tiết có avatar + badge trạng thái
 //
-// Lưu ý:
-//   - Filter tháng + employee_id gọi API (server-side)
-//   - Filter status + search filter client-side (không cần gọi lại API)
-//   - Dark mode dùng CSS class (.att-badge--xxx + html.dark-mode)
-//     thay vì đọc DOM như trước → tự cập nhật khi toggle theme
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -20,6 +16,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { SkeletonTable, SkeletonStats } from "../../components/Skeleton";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -68,6 +65,8 @@ const tdStyle = {
 // ============================================================
 
 export default function OwnerAttendance() {
+  const { t } = useI18n();
+
   // ---------- State ----------
   const [list, setList] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -92,12 +91,12 @@ export default function OwnerAttendance() {
       const data = await api.attendance.all(params);
       setList(Array.isArray(data) ? data : []);
     } catch (e) {
-      setError(e.message || "Không tải được dữ liệu chấm công");
+      setError(e.message || t("Không tải được dữ liệu chấm công"));
       setList([]);
     } finally {
       setLoading(false);
     }
-  }, [filter.month, filter.employee_id]);
+  }, [filter.month, filter.employee_id, t]);
 
   // Load danh sách nhân viên 1 lần duy nhất
   useEffect(() => {
@@ -173,9 +172,8 @@ export default function OwnerAttendance() {
 
   return (
     <div>
-          {/* ============================================================
+      {/* ============================================================
           STATS CARDS
-          ✅ Batch 6E: Skeleton khi loading
           ============================================================ */}
       {loading ? (
         <div style={{ marginBottom: 20 }}>
@@ -192,25 +190,25 @@ export default function OwnerAttendance() {
         >
           <StatCard
             icon={<Calendar />}
-            label="Tổng ngày công"
+            label={t("Tổng ngày công")}
             value={stats.total}
             color="#2634d5"
           />
           <StatCard
             icon={<TrendingUp />}
-            label="Đúng giờ"
+            label={t("Đúng giờ")}
             value={stats.onTime}
             color="#18a967"
           />
           <StatCard
             icon={<AlertTriangle />}
-            label="Đi muộn"
+            label={t("Đi muộn")}
             value={stats.late}
             color="#f59e0b"
           />
           <StatCard
             icon={<Clock />}
-            label="Tổng giờ làm"
+            label={t("Tổng giờ làm")}
             value={stats.totalHours.toFixed(1) + "h"}
             color="#8b5cf6"
           />
@@ -252,7 +250,7 @@ export default function OwnerAttendance() {
           }
           style={filterSelectStyle}
         >
-          <option value="">Tất cả nhân viên</option>
+          <option value="">{t("Tất cả nhân viên")}</option>
           {employees.map((emp) => (
             <option key={emp.id} value={emp.id}>
               {emp.name}
@@ -266,10 +264,10 @@ export default function OwnerAttendance() {
           onChange={(e) => setFilter((f) => ({ ...f, status: e.target.value }))}
           style={filterSelectStyle}
         >
-          <option value="">Tất cả trạng thái</option>
-          <option>Đúng giờ</option>
-          <option>Đi muộn</option>
-          <option>Về sớm</option>
+          <option value="">{t("Tất cả trạng thái")}</option>
+          <option>{t("Đúng giờ")}</option>
+          <option>{t("Đi muộn")}</option>
+          <option>{t("Về sớm")}</option>
         </select>
 
         {/* Search box */}
@@ -290,7 +288,7 @@ export default function OwnerAttendance() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm theo tên..."
+            placeholder={t("Tìm theo tên...")}
             style={{
               border: 0,
               outline: "none",
@@ -329,7 +327,7 @@ export default function OwnerAttendance() {
               e.currentTarget.style.color = "#ef4444";
             }}
           >
-            <X size={13} /> Xoá lọc
+            <X size={13} /> {t("Xoá lọc")}
           </button>
         )}
       </div>
@@ -361,7 +359,7 @@ export default function OwnerAttendance() {
                 marginBottom: 12,
               }}
             />
-            <div>Đang tải dữ liệu...</div>
+            <div>{t("Đang tải dữ liệu...")}</div>
           </div>
         )}
 
@@ -378,7 +376,7 @@ export default function OwnerAttendance() {
           >
             <AlertTriangle size={28} style={{ marginBottom: 12 }} />
             <div style={{ fontWeight: 600, marginBottom: 4 }}>
-              Không tải được dữ liệu
+              {t("Không tải được dữ liệu")}
             </div>
             <div style={{ fontSize: 13, opacity: 0.85 }}>{error}</div>
             <button
@@ -395,7 +393,7 @@ export default function OwnerAttendance() {
                 fontSize: 13,
               }}
             >
-              Thử lại
+              {t("Thử lại")}
             </button>
           </div>
         )}
@@ -405,12 +403,12 @@ export default function OwnerAttendance() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                <th style={thStyle}>Ngày</th>
-                <th style={thStyle}>Nhân viên</th>
-                <th style={thStyle}>Check-in</th>
-                <th style={thStyle}>Check-out</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Giờ làm</th>
-                <th style={thStyle}>Trạng thái</th>
+                <th style={thStyle}>{t("Ngày")}</th>
+                <th style={thStyle}>{t("Nhân viên")}</th>
+                <th style={thStyle}>{t("Check-in")}</th>
+                <th style={thStyle}>{t("Check-out")}</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>{t("Giờ làm")}</th>
+                <th style={thStyle}>{t("Trạng thái")}</th>
               </tr>
             </thead>
             <tbody>
@@ -434,13 +432,20 @@ export default function OwnerAttendance() {
 
                     {/* Nhân viên + avatar */}
                     <td style={tdStyle}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
                         <div
                           style={{
                             width: 32,
                             height: 32,
                             borderRadius: "50%",
-                            background: "linear-gradient(135deg,#2634d5,#20c779)",
+                            background:
+                              "linear-gradient(135deg,#2634d5,#20c779)",
                             color: "#fff",
                             display: "grid",
                             placeItems: "center",
@@ -473,10 +478,8 @@ export default function OwnerAttendance() {
 
                     {/* Status badge */}
                     <td style={tdStyle}>
-                      <span
-                        className={`att-badge att-badge--${statusKey}`}
-                      >
-                        {a.status}
+                      <span className={`att-badge att-badge--${statusKey}`}>
+                        {t(a.status)}
                       </span>
                     </td>
                   </tr>
@@ -500,8 +503,8 @@ export default function OwnerAttendance() {
                     />
                     <div>
                       {list.length === 0
-                        ? "Không có dữ liệu chấm công trong tháng này"
-                        : "Không có bản ghi khớp bộ lọc"}
+                        ? t("Không có dữ liệu chấm công trong tháng này")
+                        : t("Không có bản ghi khớp bộ lọc")}
                     </div>
                   </td>
                 </tr>

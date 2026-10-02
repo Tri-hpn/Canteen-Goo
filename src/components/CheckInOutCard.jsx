@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { toast } from "./Effects";
+import { useI18n } from "../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -44,7 +45,6 @@ const SHIFTS = [
   },
 ];
 
-// Ngưỡng cảnh báo: nếu còn dưới X phút đến ca → highlight
 const WARN_BEFORE_MIN = 30;
 
 // ============================================================
@@ -94,15 +94,15 @@ function statusColor(s) {
   return "#ef4444";
 }
 
-function fmtCountdown(ms) {
-  if (ms <= 0) return "0 phút";
+function fmtCountdown(ms, t) {
+  if (ms <= 0) return t("0 phút");
   const totalMin = Math.round(ms / 60000);
-  if (totalMin < 60) return `${totalMin} phút`;
+  if (totalMin < 60) return `${totalMin} ${t("phút")}`;
 
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  if (m === 0) return `${h} giờ`;
-  return `${h} giờ ${m} phút`;
+  if (m === 0) return `${h} ${t("giờ")}`;
+  return `${h} ${t("giờ")} ${m} ${t("phút")}`;
 }
 
 // ============================================================
@@ -110,13 +110,13 @@ function fmtCountdown(ms) {
 // ============================================================
 
 export default function CheckInOutCard() {
-  // ---------- Data ----------
+  const { t } = useI18n();
+
   const [attendances, setAttendances] = useState([]);
   const [myShifts, setMyShifts] = useState([]);
-  const [approvedShifts, setApprovedShifts] = useState([]); // ✅ MỚI
-  const [approvedLoading, setApprovedLoading] = useState(true); // ✅ MỚI
+  const [approvedShifts, setApprovedShifts] = useState([]);
+  const [approvedLoading, setApprovedLoading] = useState(true);
 
-  // ---------- State ----------
   const [now, setNow] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -126,11 +126,8 @@ export default function CheckInOutCard() {
     typeof document === "undefined" || !document.hidden
   );
 
-  // ---------- Refs ----------
   const reqIdRef = useRef(0);
   const inFlightRef = useRef(false);
-
-  // ---------- Load data (race-safe) ----------
 
   const loadData = useCallback(async (silent = false) => {
     if (inFlightRef.current) return;
@@ -144,17 +141,17 @@ export default function CheckInOutCard() {
       const [atts, shifts, approved] = await Promise.all([
         api.attendance.me().catch(() => []),
         api.shifts.mine().catch(() => []),
-        api.shifts.approvedToday().catch(() => []), // ✅ MỚI
+        api.shifts.approvedToday().catch(() => []),
       ]);
 
       if (myReqId !== reqIdRef.current) return;
 
       setAttendances(Array.isArray(atts) ? atts : []);
       setMyShifts(Array.isArray(shifts) ? shifts : []);
-      setApprovedShifts(Array.isArray(approved) ? approved : []); // ✅ MỚI
+      setApprovedShifts(Array.isArray(approved) ? approved : []);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || "Không tải được dữ liệu chấm công");
+        setError(e.message || t("Không tải được dữ liệu chấm công"));
       }
     } finally {
       if (myReqId === reqIdRef.current) {
@@ -164,13 +161,11 @@ export default function CheckInOutCard() {
       }
       inFlightRef.current = false;
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadData(false);
   }, [loadData]);
-
-  // ---------- Clock (pause khi tab ẩn) ----------
 
   useEffect(() => {
     if (!tabVisible) return;
@@ -183,8 +178,6 @@ export default function CheckInOutCard() {
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
   }, []);
-
-  // ---------- Derived (memo) ----------
 
   const todayStr = useMemo(() => getLocalDateStr(now), [now]);
 
@@ -204,7 +197,6 @@ export default function CheckInOutCard() {
     [currentShift, todayAtts]
   );
 
-  // ✅ FIX: Check ca approved
   const currentShiftApproved = useMemo(
     () => currentShift
       ? approvedShifts.some((s) => s.shift === currentShift.id)
@@ -221,7 +213,6 @@ export default function CheckInOutCard() {
 
   const hasAnyApproved = approvedShifts.length > 0;
 
-  // ✅ FIX: Chỉ check-in khi ca approved
   const canCheckIn = !!(
     currentShift &&
     currentShiftApproved &&
@@ -235,8 +226,6 @@ export default function CheckInOutCard() {
     nextShiftApproved &&
     !todayAtts.find((a) => a.shift === nextShift.id)?.checkIn
   );
-
-  // ---------- Countdown đến ca tiếp theo ----------
 
   const nextShiftInfo = useMemo(() => {
     if (!nextShift) return null;
@@ -257,20 +246,20 @@ export default function CheckInOutCard() {
       diffMin,
       isImminent: diffMin <= WARN_BEFORE_MIN,
       isTomorrow: target.getDate() !== now.getDate(),
-      label: fmtCountdown(diffMs),
+      label: fmtCountdown(diffMs, t),
     };
-  }, [nextShift, now]);
-
-  // ---------- Actions ----------
+  }, [nextShift, now, t]);
 
   const action = useCallback(
     async (type, shiftId) => {
       if (!shiftId || actionLoadingId) return;
 
-      // ✅ FIX: Chặn nếu ca không được duyệt
       const isApproved = approvedShifts.some((s) => s.shift === shiftId);
       if (!isApproved) {
-        toast(`Bạn chưa được duyệt ${shiftId} hôm nay`, "error");
+        toast(
+          t("Bạn chưa được duyệt {shift} hôm nay").replace("{shift}", shiftId),
+          "error"
+        );
         return;
       }
 
@@ -281,21 +270,19 @@ export default function CheckInOutCard() {
         await fn({ shift: shiftId });
         toast(
           type === "in"
-            ? `Check-in ${shiftId} thành công!`
-            : `Check-out ${shiftId} thành công!`,
+            ? t("Check-in {shift} thành công!").replace("{shift}", shiftId)
+            : t("Check-out {shift} thành công!").replace("{shift}", shiftId),
           "success"
         );
         await loadData(true);
       } catch (e) {
-        toast(e.message || "Lỗi chấm công", "error");
+        toast(e.message || t("Lỗi chấm công"), "error");
       } finally {
         setActionLoadingId(null);
       }
     },
-    [actionLoadingId, approvedShifts, loadData]
+    [actionLoadingId, approvedShifts, loadData, t]
   );
-
-  // ---------- Render time strings ----------
 
   const time = now.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
@@ -308,10 +295,6 @@ export default function CheckInOutCard() {
     month: "2-digit",
     year: "numeric",
   });
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <div style={cardStyle}>
@@ -353,8 +336,8 @@ export default function CheckInOutCard() {
         <button
           onClick={() => loadData(false)}
           disabled={refreshing}
-          title="Làm mới"
-          aria-label="Làm mới"
+          title={t("Làm mới")}
+          aria-label={t("Làm mới")}
           type="button"
           style={{
             padding: 6,
@@ -408,7 +391,7 @@ export default function CheckInOutCard() {
               fontSize: 11,
             }}
           >
-            Thử lại
+            {t("Thử lại")}
           </button>
         </div>
       )}
@@ -427,11 +410,11 @@ export default function CheckInOutCard() {
             size={22}
             style={{ animation: "spin 1s linear infinite", marginBottom: 6 }}
           />
-          <div>Đang tải...</div>
+          <div>{t("Đang tải...")}</div>
         </div>
       )}
 
-      {/* ============ ✅ EMPTY STATE: CHƯA CÓ CA APPROVED ============ */}
+      {/* ============ EMPTY STATE: CHƯA CÓ CA APPROVED ============ */}
       {!loading &&
         !error &&
         !hasAnyApproved &&
@@ -454,10 +437,10 @@ export default function CheckInOutCard() {
               style={{ marginBottom: 6, opacity: 0.8 }}
             />
             <div style={{ fontWeight: 700, marginBottom: 4 }}>
-              Chưa có ca được duyệt hôm nay
+              {t("Chưa có ca được duyệt hôm nay")}
             </div>
             <div style={{ fontSize: 12, opacity: 0.85 }}>
-              Vui lòng liên hệ admin để được phân ca trước khi check-in.
+              {t("Vui lòng liên hệ admin để được phân ca trước khi check-in.")}
             </div>
           </div>
         )}
@@ -517,8 +500,8 @@ export default function CheckInOutCard() {
                 }}
               >
                 {nextShiftInfo.isTomorrow
-                  ? "Ca tiếp theo (ngày mai)"
-                  : "Ca tiếp theo"}
+                  ? t("Ca tiếp theo (ngày mai)")
+                  : t("Ca tiếp theo")}
               </div>
               <div
                 style={{
@@ -527,7 +510,7 @@ export default function CheckInOutCard() {
                   fontWeight: 600,
                 }}
               >
-                {nextShift.id} — còn{" "}
+                {nextShift.id} — {t("còn")}{" "}
                 <span
                   style={{
                     color: nextShiftInfo.isImminent
@@ -572,7 +555,7 @@ export default function CheckInOutCard() {
                 letterSpacing: 0.5,
               }}
             >
-              Ca hiện tại
+              {t("Ca hiện tại")}
             </span>
           </div>
           <b
@@ -597,17 +580,17 @@ export default function CheckInOutCard() {
               }}
             >
               {currentAtt.checkIn && (
-                <span>Check-in: {fmt(currentAtt.checkIn)}</span>
+                <span>{t("Check-in:")} {fmt(currentAtt.checkIn)}</span>
               )}
               {currentAtt.checkOut && (
-                <span>· Check-out: {fmt(currentAtt.checkOut)}</span>
+                <span>· {t("Check-out:")} {fmt(currentAtt.checkOut)}</span>
               )}
             </div>
           )}
         </div>
       )}
 
-      {/* ============ DANH SÁCH CA HÔM NAY (chỉ approved) ============ */}
+      {/* ============ DANH SÁCH CA HÔM NAY ============ */}
       {!loading && !error && approvedShifts.length > 0 && (
         <div style={{ marginTop: 16 }}>
           <div
@@ -620,7 +603,7 @@ export default function CheckInOutCard() {
               marginBottom: 8,
             }}
           >
-            Chấm công hôm nay
+            {t("Chấm công hôm nay")}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {approvedShifts.map((approved) => {
@@ -714,7 +697,7 @@ export default function CheckInOutCard() {
                         flexShrink: 0,
                       }}
                     >
-                      Chưa chấm công
+                      {t("Chưa chấm công")}
                     </span>
                   )}
                 </div>
@@ -754,16 +737,19 @@ export default function CheckInOutCard() {
                   size={16}
                   style={{ animation: "spin 1s linear infinite" }}
                 />
-                Đang xử lý...
+                {t("Đang xử lý...")}
               </>
             ) : (
               <>
                 <LogIn size={16} />{" "}
                 {canCheckIn
-                  ? "Check-in " + currentShift.id.replace("Ca ", "")
+                  ? t("Check-in {shift}").replace(
+                      "{shift}",
+                      currentShift.id.replace("Ca ", "")
+                    )
                   : currentAtt?.checkIn
-                  ? "Đã check-in"
-                  : "Không có ca"}
+                  ? t("Đã check-in")
+                  : t("Không có ca")}
               </>
             )}
           </button>
@@ -795,12 +781,12 @@ export default function CheckInOutCard() {
                   size={16}
                   style={{ animation: "spin 1s linear infinite" }}
                 />
-                Đang xử lý...
+                {t("Đang xử lý...")}
               </>
             ) : (
               <>
                 <LogOut size={16} />{" "}
-                {canCheckOut ? "Check-out" : "Đã check-out"}
+                {canCheckOut ? t("Check-out") : t("Đã check-out")}
               </>
             )}
           </button>
@@ -839,11 +825,14 @@ export default function CheckInOutCard() {
                 size={15}
                 style={{ animation: "spin 1s linear infinite" }}
               />
-              Đang xử lý...
+              {t("Đang xử lý...")}
             </>
           ) : (
             <>
-              <LogIn size={15} /> Check-in sớm {nextShift.id} ({nextShift.time})
+              <LogIn size={15} />{" "}
+              {t("Check-in sớm {shift} ({time})")
+                .replace("{shift}", nextShift.id)
+                .replace("{time}", nextShift.time)}
             </>
           )}
         </button>
@@ -859,7 +848,7 @@ export default function CheckInOutCard() {
           textAlign: "center",
         }}
       >
-        Chỉ check-in được ca admin đã duyệt. Đi muộn sau 15 phút.
+        {t("Chỉ check-in được ca admin đã duyệt. Đi muộn sau 15 phút.")}
       </p>
 
       <style>{`

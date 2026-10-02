@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // NOTIFICATIONBELL.JSX — Chuông thông báo trên topbar
 // ============================================================
 
@@ -9,7 +9,7 @@ import {
   MessageCircle, Info, Loader2,
 } from "lucide-react";
 import { api } from "../api";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const MODAL_Z = 2147483600;
 const POLL_MS = 30000;
@@ -65,7 +65,7 @@ function normalizeData(res) {
 }
 
 export default function NotificationBell() {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState({ list: [], unread: 0 });
   const [loading, setLoading] = useState(true);

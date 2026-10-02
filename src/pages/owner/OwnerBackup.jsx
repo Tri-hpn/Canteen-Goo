@@ -1,16 +1,7 @@
 ﻿// ============================================================
 // OWNERBACKUP.JSX — Sao lưu / Phục hồi / Reset database
 // ============================================================
-// 3 hành động chính:
-//   1. Export   — Tải file JSON toàn bộ dữ liệu
-//   2. Import   — Khôi phục từ file JSON (auto-backup trước khi ghi)
-//   3. Reset    — Xoá hết và tạo lại dữ liệu mẫu (nguy hiểm!)
-//
-// Lưu ý:
-//   - Loading state riêng cho từng action (không block toàn bộ)
-//   - Reset yêu cầu gõ "RESET" để xác nhận
-//   - Modal có z-index cao để không bị che bởi modals khác
-//   - Escape key đóng modal
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
@@ -20,48 +11,27 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 import { SkeletonStats } from "../../components/Skeleton";
+
 // ============================================================
 // CONSTANTS
 // ============================================================
 
-// Nhãn tiếng Việt cho các trường trong thống kê database
-const STAT_LABELS = {
-  users:              "Người dùng",
-  customers:          "Khách hàng",
-  employees:          "Nhân viên",
-  menu_items:         "Món ăn",
-  orders:             "Đơn hàng",
-  inventory:          "Kho hàng",
-  toppings:           "Topping",
-  sizes:              "Kích cỡ",
-  reviews:            "Đánh giá",
-  vouchers:           "Voucher",
-  notifications:      "Thông báo",
-  messages:           "Tin nhắn",
-  attendances:        "Chấm công",
-  imports:            "Nhập kho",
-  price_history:      "Lịch sử giá",
-  categories:         "Danh mục",
-  wallets:            "Ví",
-  wallet_transactions:"Giao dịch ví",
-  shifts:             "Ca làm",
-};
-
 // Các trường quan trọng hiển thị to trên grid 4 cột
 const PRIMARY_STATS = [
-  { key: "users",      color: "#2634d5" },
-  { key: "menu_items", color: "#18a967" },
-  { key: "orders",     color: "#f59e0b" },
-  { key: "inventory",  color: "#8b5cf6" },
-  { key: "toppings",   color: "#ec4899" },
-  { key: "reviews",    color: "#14b8a6" },
-  { key: "vouchers",   color: "#f97316" },
-  { key: "attendances",color: "#06b6d4" },
-  { key: "imports",    color: "#84cc16" },
+  { key: "users",       color: "#2634d5" },
+  { key: "menu_items",  color: "#18a967" },
+  { key: "orders",      color: "#f59e0b" },
+  { key: "inventory",   color: "#8b5cf6" },
+  { key: "toppings",    color: "#ec4899" },
+  { key: "reviews",     color: "#14b8a6" },
+  { key: "vouchers",    color: "#f97316" },
+  { key: "attendances", color: "#06b6d4" },
+  { key: "imports",     color: "#84cc16" },
   { key: "price_history", color: "#a855f7" },
   { key: "notifications", color: "#ef4444" },
-  { key: "messages",   color: "#3b82f6" },
+  { key: "messages",    color: "#3b82f6" },
 ];
 
 const CONFIRM_PHRASE = "RESET";   // Phải gõ đúng để reset
@@ -72,6 +42,34 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;   // 10MB
 // ============================================================
 
 export default function OwnerBackup() {
+  const { t } = useI18n();
+
+  // Labels dịch — useMemo vì phụ thuộc t
+  const STAT_LABELS = useMemo(
+    () => ({
+      users:               t("Người dùng"),
+      customers:           t("Khách hàng"),
+      employees:           t("Nhân viên"),
+      menu_items:          t("Món ăn"),
+      orders:              t("Đơn hàng"),
+      inventory:           t("Kho hàng"),
+      toppings:            t("Topping"),
+      sizes:               t("Kích cỡ"),
+      reviews:             t("Đánh giá"),
+      vouchers:            t("Voucher"),
+      notifications:       t("Thông báo"),
+      messages:            t("Tin nhắn"),
+      attendances:         t("Chấm công"),
+      imports:             t("Nhập kho"),
+      price_history:       t("Lịch sử giá"),
+      categories:          t("Danh mục"),
+      wallets:             t("Ví"),
+      wallet_transactions: t("Giao dịch ví"),
+      shifts:              t("Ca làm"),
+    }),
+    [t]
+  );
+
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
@@ -108,7 +106,7 @@ export default function OwnerBackup() {
     loadStats();
   }, []);
 
-  // Đóng reset modal bằng ESC + reset input khi đóng
+  // Đóng reset modal bằng ESC
   useEffect(() => {
     if (!resetModal) return;
     const handler = (e) => {
@@ -126,7 +124,7 @@ export default function OwnerBackup() {
   };
 
   // ============================================================
-  // EXPORT — Tải file JSON
+  // EXPORT
   // ============================================================
 
   const handleExport = async () => {
@@ -145,30 +143,29 @@ export default function OwnerBackup() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast("Đã xuất file backup", "success");
+      toast(t("Đã xuất file backup"), "success");
     } catch (e) {
-      toast(e.message || "Không xuất được file", "error");
+      toast(e.message || t("Không xuất được file"), "error");
     } finally {
       setExporting(false);
     }
   };
 
   // ============================================================
-  // IMPORT — Chọn file → validate → preview → confirm → import
+  // IMPORT
   // ============================================================
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate extension + size
     if (!file.name.endsWith(".json")) {
-      toast("Chỉ chấp nhận file .json", "error");
+      toast(t("Chỉ chấp nhận file .json"), "error");
       e.target.value = "";
       return;
     }
     if (file.size > MAX_FILE_SIZE) {
-      toast("File quá lớn (tối đa 10MB)", "error");
+      toast(t("File quá lớn (tối đa 10MB)"), "error");
       e.target.value = "";
       return;
     }
@@ -177,22 +174,18 @@ export default function OwnerBackup() {
     reader.onload = (ev) => {
       try {
         const parsed = JSON.parse(ev.target.result);
-
-        // Hỗ trợ 2 format: { data: {...} } hoặc raw {...}
         const data = parsed.data || parsed;
 
-        // Validate cấu trúc tối thiểu
         if (!data || typeof data !== "object") {
-          throw new Error("File không phải JSON hợp lệ");
+          throw new Error(t("File không phải JSON hợp lệ"));
         }
         if (!data.users || !Array.isArray(data.users)) {
-          throw new Error("File thiếu trường 'users'");
+          throw new Error(t("File thiếu trường 'users'"));
         }
         if (!data.menu_items || !Array.isArray(data.menu_items)) {
-          throw new Error("File thiếu trường 'menu_items'");
+          throw new Error(t("File thiếu trường 'menu_items'"));
         }
 
-        // Lưu preview để hiện xác nhận
         setImportPreview({
           data,
           fileName: file.name,
@@ -205,7 +198,7 @@ export default function OwnerBackup() {
           },
         });
       } catch (err) {
-        toast("File không hợp lệ: " + err.message, "error");
+        toast(`${t("File không hợp lệ:")} ${err.message}`, "error");
       } finally {
         if (fileRef.current) fileRef.current.value = "";
       }
@@ -222,22 +215,22 @@ export default function OwnerBackup() {
       });
       setImportStats(res.stats || importPreview.counts);
       setImportPreview(null);
-      toast("Import thành công! Dữ liệu đã được khôi phục.", "success");
+      toast(t("Import thành công! Dữ liệu đã được khôi phục."), "success");
       loadStats();
     } catch (e) {
-      toast(e.message || "Import thất bại", "error");
+      toast(e.message || t("Import thất bại"), "error");
     } finally {
       setImporting(false);
     }
   };
 
   // ============================================================
-  // RESET — Yêu cầu gõ "RESET" để xác nhận
+  // RESET
   // ============================================================
 
   const handleReset = async () => {
     if (resetInput.trim().toUpperCase() !== CONFIRM_PHRASE) {
-      toast(`Vui lòng gõ "${CONFIRM_PHRASE}" để xác nhận`, "error");
+      toast(`${t("Vui lòng gõ")} "${CONFIRM_PHRASE}" ${t("để xác nhận")}`, "error");
       return;
     }
     if (resetting) return;
@@ -245,12 +238,12 @@ export default function OwnerBackup() {
     setResetting(true);
     try {
       await api.backup.reset(CONFIRM_PHRASE);
-      toast("Đã reset database về dữ liệu mẫu", "success");
+      toast(t("Đã reset database về dữ liệu mẫu"), "success");
       closeResetModal();
       setImportStats(null);
       loadStats();
     } catch (e) {
-      toast(e.message || "Reset thất bại", "error");
+      toast(e.message || t("Reset thất bại"), "error");
     } finally {
       setResetting(false);
     }
@@ -271,9 +264,7 @@ export default function OwnerBackup() {
 
   return (
     <div>
-      {/* ============================================================
-          CẢNH BÁO AN TOÀN
-          ============================================================ */}
+      {/* CẢNH BÁO AN TOÀN */}
       <div
         style={{
           display: "flex",
@@ -290,19 +281,16 @@ export default function OwnerBackup() {
         <AlertTriangle size={22} style={{ flexShrink: 0, marginTop: 2 }} />
         <div>
           <b style={{ fontSize: 14, display: "block", marginBottom: 4 }}>
-            ⚠️ Lưu ý về backup
+            ⚠️ {t("Lưu ý về backup")}
           </b>
           <div style={{ fontSize: 12.5, lineHeight: 1.6, opacity: 0.95 }}>
-            File backup chứa <b>toàn bộ dữ liệu</b>: users (có mật khẩu đã hash),
-            thực đơn, đơn hàng, kho, tin nhắn... Chỉ dùng để <b>khôi phục trên
-            server của bạn</b> — không chia sẻ công khai.
+            {t("File backup chứa")} <b>{t("toàn bộ dữ liệu")}</b>: {t("users (có mật khẩu đã hash), thực đơn, đơn hàng, kho, tin nhắn... Chỉ dùng để")}{" "}
+            <b>{t("khôi phục trên server của bạn")}</b> — {t("không chia sẻ công khai.")}
           </div>
         </div>
       </div>
 
-      {/* ============================================================
-          3 ACTION CARDS
-          ============================================================ */}
+      {/* 3 ACTION CARDS */}
       <div
         style={{
           display: "grid",
@@ -313,31 +301,34 @@ export default function OwnerBackup() {
       >
         <ActionCard
           icon={<Download size={28} />}
-          title="Xuất backup"
-          desc="Tải file JSON toàn bộ dữ liệu về máy"
+          title={t("Xuất backup")}
+          desc={t("Tải file JSON toàn bộ dữ liệu về máy")}
           color="#18a967"
           onClick={handleExport}
           loading={exporting}
-          buttonText="Tải xuống"
+          buttonText={t("Tải xuống")}
+          t={t}
         />
         <ActionCard
           icon={<Upload size={28} />}
-          title="Import backup"
-          desc="Khôi phục dữ liệu từ file JSON có sẵn"
+          title={t("Import backup")}
+          desc={t("Khôi phục dữ liệu từ file JSON có sẵn")}
           color="#2634d5"
           onClick={() => fileRef.current?.click()}
           loading={importing}
-          buttonText="Chọn file"
+          buttonText={t("Chọn file")}
+          t={t}
         />
         <ActionCard
           icon={<RefreshCw size={28} />}
-          title="Reset database"
-          desc="Xoá hết và tạo lại dữ liệu mẫu ban đầu"
+          title={t("Reset database")}
+          desc={t("Xoá hết và tạo lại dữ liệu mẫu ban đầu")}
           color="#ef4444"
           onClick={() => setResetModal(true)}
           loading={resetting}
-          buttonText="Reset"
+          buttonText={t("Reset")}
           danger
+          t={t}
         />
       </div>
 
@@ -350,9 +341,7 @@ export default function OwnerBackup() {
         style={{ display: "none" }}
       />
 
-      {/* ============================================================
-          DATABASE STATS
-          ============================================================ */}
+      {/* DATABASE STATS */}
       <div
         style={{
           background: "var(--card-bg, #fff)",
@@ -378,7 +367,7 @@ export default function OwnerBackup() {
               gap: 8,
             }}
           >
-            <Database size={20} /> Dung lượng database
+            <Database size={20} /> {t("Dung lượng database")}
           </h3>
           <button
             onClick={loadStats}
@@ -403,16 +392,16 @@ export default function OwnerBackup() {
                 animation: statsLoading ? "spin 1s linear infinite" : "none",
               }}
             />
-            {statsLoading ? "Đang tải..." : "Làm mới"}
+            {statsLoading ? t("Đang tải...") : t("Làm mới")}
           </button>
         </div>
 
-        {/* ✅ Batch 6E: Skeleton khi loading */}
+        {/* Skeleton khi loading */}
         {statsLoading && !stats && (
           <SkeletonStats count={4} columns="repeat(auto-fit, minmax(140px, 1fr))" />
         )}
 
-        {/* Empty state khi chưa có stats */}
+        {/* Empty state */}
         {!stats && !statsLoading && (
           <div
             style={{
@@ -422,13 +411,13 @@ export default function OwnerBackup() {
               fontSize: 13,
             }}
           >
-            Không tải được thông tin database
+            {t("Không tải được thông tin database")}
           </div>
         )}
 
         {stats && (
           <>
-            {/* Hero card — tổng dung lượng */}
+            {/* Hero card */}
             <div
               style={{
                 background: "linear-gradient(135deg, #2634d5, #20c779)",
@@ -443,7 +432,7 @@ export default function OwnerBackup() {
             >
               <div>
                 <span style={{ fontSize: 13, opacity: 0.9 }}>
-                  Tổng dung lượng
+                  {t("Tổng dung lượng")}
                 </span>
                 <div style={{ fontSize: 32, fontWeight: 800, margin: "6px 0" }}>
                   {fmtSize(stats.db_size_bytes)}
@@ -467,7 +456,7 @@ export default function OwnerBackup() {
                   value={stats[key] ?? 0}
                   sub={
                     key === "users" && stats.customers !== undefined
-                      ? `${stats.customers} KH · ${stats.employees} NV`
+                      ? `${stats.customers} ${t("KH")} · ${stats.employees} ${t("NV")}`
                       : null
                   }
                   color={color}
@@ -478,9 +467,7 @@ export default function OwnerBackup() {
         )}
       </div>
 
-      {/* ============================================================
-          IMPORT RESULT
-          ============================================================ */}
+      {/* IMPORT RESULT */}
       {importStats && (
         <div
           style={{
@@ -501,7 +488,7 @@ export default function OwnerBackup() {
               fontSize: 15,
             }}
           >
-            <CheckCircle2 size={20} /> Import thành công
+            <CheckCircle2 size={20} /> {t("Import thành công")}
           </h3>
           <div
             style={{
@@ -547,31 +534,29 @@ export default function OwnerBackup() {
               textDecoration: "underline",
             }}
           >
-            Ẩn kết quả
+            {t("Ẩn kết quả")}
           </button>
         </div>
       )}
 
-      {/* ============================================================
-          IMPORT PREVIEW MODAL
-          ============================================================ */}
+      {/* IMPORT PREVIEW MODAL */}
       {importPreview && (
         <div
           onClick={() => !importing && setImportPreview(null)}
           role="dialog"
           aria-modal="true"
-          aria-label="Xác nhận import"
+          aria-label={t("Xác nhận import")}
           style={modalOverlayStyle}
         >
           <div onClick={(e) => e.stopPropagation()} style={modalBoxStyle}>
             <div style={modalHeaderStyle}>
               <h3 style={modalTitleStyle}>
-                <Upload size={20} /> Xác nhận import
+                <Upload size={20} /> {t("Xác nhận import")}
               </h3>
               <button
                 onClick={() => !importing && setImportPreview(null)}
                 style={modalCloseStyle}
-                aria-label="Đóng"
+                aria-label={t("Đóng")}
               >
                 <X size={20} />
               </button>
@@ -587,10 +572,10 @@ export default function OwnerBackup() {
               }}
             >
               <div style={{ marginBottom: 4 }}>
-                <b>File:</b> {importPreview.fileName}
+                <b>{t("File:")}</b> {importPreview.fileName}
               </div>
               <div style={{ color: "var(--text-muted, #64748b)" }}>
-                Kích thước: {fmtSize(importPreview.fileSize)}
+                {t("Kích thước:")} {fmtSize(importPreview.fileSize)}
               </div>
             </div>
 
@@ -604,7 +589,7 @@ export default function OwnerBackup() {
                 letterSpacing: 0.5,
               }}
             >
-              Dữ liệu trong file
+              {t("Dữ liệu trong file")}
             </div>
             <div
               style={{
@@ -648,7 +633,7 @@ export default function OwnerBackup() {
                 marginBottom: 16,
               }}
             >
-              ⚠️ Dữ liệu hiện tại sẽ được <b>backup tự động</b> trước khi thay thế.
+              ⚠️ {t("Dữ liệu hiện tại sẽ được")} <b>{t("backup tự động")}</b> {t("trước khi thay thế.")}
             </div>
 
             <div style={{ display: "flex", gap: 10 }}>
@@ -657,7 +642,7 @@ export default function OwnerBackup() {
                 disabled={importing}
                 style={btnCancelStyle}
               >
-                Hủy
+                {t("Hủy")}
               </button>
               <button
                 onClick={confirmImport}
@@ -670,11 +655,11 @@ export default function OwnerBackup() {
                       size={14}
                       style={{ animation: "spin 1s linear infinite" }}
                     />
-                    Đang import...
+                    {t("Đang import...")}
                   </>
                 ) : (
                   <>
-                    <Upload size={14} /> Xác nhận import
+                    <Upload size={14} /> {t("Xác nhận import")}
                   </>
                 )}
               </button>
@@ -683,15 +668,13 @@ export default function OwnerBackup() {
         </div>
       )}
 
-      {/* ============================================================
-          RESET MODAL
-          ============================================================ */}
+      {/* RESET MODAL */}
       {resetModal && (
         <div
           onClick={() => !resetting && closeResetModal()}
           role="dialog"
           aria-modal="true"
-          aria-label="Xác nhận reset"
+          aria-label={t("Xác nhận reset")}
           style={modalOverlayStyle}
         >
           <div onClick={(e) => e.stopPropagation()} style={modalBoxStyle}>
@@ -718,7 +701,7 @@ export default function OwnerBackup() {
                 color: "var(--text-primary, #172033)",
               }}
             >
-              Xác nhận Reset Database
+              {t("Xác nhận Reset Database")}
             </h3>
 
             <p
@@ -730,8 +713,8 @@ export default function OwnerBackup() {
                 marginBottom: 16,
               }}
             >
-              Tất cả dữ liệu sẽ bị <b style={{ color: "#ef4444" }}>XÓA VĨNH VIỄN</b>
-              {" "}và thay thế bằng dữ liệu mẫu ban đầu.
+              {t("Tất cả dữ liệu sẽ bị")} <b style={{ color: "#ef4444" }}>{t("XÓA VĨNH VIỄN")}</b>{" "}
+              {t("và thay thế bằng dữ liệu mẫu ban đầu.")}
             </p>
 
             <div
@@ -744,10 +727,9 @@ export default function OwnerBackup() {
                 color: "var(--text-muted, #64748b)",
               }}
             >
-              💡 File backup tự động sẽ được lưu trước khi reset.
+              💡 {t("File backup tự động sẽ được lưu trước khi reset.")}
             </div>
 
-            {/* Yêu cầu gõ RESET để xác nhận */}
             <label
               style={{
                 display: "block",
@@ -757,7 +739,7 @@ export default function OwnerBackup() {
                 marginBottom: 6,
               }}
             >
-              Gõ <b style={{ color: "#ef4444" }}>{CONFIRM_PHRASE}</b> để xác nhận
+              {t("Gõ")} <b style={{ color: "#ef4444" }}>{CONFIRM_PHRASE}</b> {t("để xác nhận")}
             </label>
             <input
               value={resetInput}
@@ -798,7 +780,7 @@ export default function OwnerBackup() {
                 disabled={resetting}
                 style={btnCancelStyle}
               >
-                Hủy
+                {t("Hủy")}
               </button>
               <button
                 onClick={handleReset}
@@ -820,11 +802,11 @@ export default function OwnerBackup() {
                       size={14}
                       style={{ animation: "spin 1s linear infinite" }}
                     />
-                    Đang reset...
+                    {t("Đang reset...")}
                   </>
                 ) : (
                   <>
-                    <AlertTriangle size={14} /> Reset ngay
+                    <AlertTriangle size={14} /> {t("Reset ngay")}
                   </>
                 )}
               </button>
@@ -833,7 +815,6 @@ export default function OwnerBackup() {
         </div>
       )}
 
-      {/* Spinner animation */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -850,7 +831,7 @@ export default function OwnerBackup() {
 
 function ActionCard({
   icon, title, desc, color, onClick,
-  loading, buttonText, danger = false,
+  loading, buttonText, danger = false, t,
 }) {
   return (
     <div
@@ -923,7 +904,7 @@ function ActionCard({
               size={14}
               style={{ animation: "spin 1s linear infinite" }}
             />
-            Đang xử lý...
+            {t("Đang xử lý...")}
           </>
         ) : danger ? (
           <>
@@ -988,7 +969,6 @@ function StatItem({ label, value, sub, color }) {
 // SHARED STYLES
 // ============================================================
 
-// Modal dùng z-index cao để không bị che
 const modalOverlayStyle = {
   position: "fixed",
   inset: 0,
@@ -997,7 +977,7 @@ const modalOverlayStyle = {
   WebkitBackdropFilter: "blur(4px)",
   display: "grid",
   placeItems: "center",
-  zIndex: 2147483600,   // cao hơn modal khác
+  zIndex: 2147483600,
   padding: 20,
   overflowY: "auto",
 };

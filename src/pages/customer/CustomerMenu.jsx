@@ -1,14 +1,9 @@
-﻿// ====
+// ============================================================
 // CUSTOMERMENU.JSX — Thực đơn khách hàng (GrabFood style)
-// ====
-
-
-// FIX v7:
-//   - Áp dụng i18n cho tất cả text hardcode
-//   - Chip "Tất cả" hiển thị bản dịch (nhưng id vẫn giữ "Tất cả")
-//   - Category name từ DB không dịch (chỉ hiển thị nguyên bản)
-
-
+// ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+//    Không còn key cũ
+// ============================================================
 
 import { SkeletonCard } from "../../components/Skeleton";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -18,16 +13,16 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 import FoodDetailModal from "../../components/FoodDetailModal";
 import ChatBotWidget from "../../components/ChatBotWidget";
 
-// ====
+// ============================================================
 // CONSTANTS
-// ====
+// ============================================================
 
 // ID "Tất cả" giữ nguyên tiếng Việt — dùng làm key filter và URL param.
-// Chỉ LABEL hiển thị mới dịch qua t("common.all").
+// Chỉ LABEL hiển thị mới dịch qua t().
 const ALL_CATEGORY = "Tất cả";
 
 const FALLBACK_IMG =
@@ -39,34 +34,35 @@ const FALLBACK_IMG =
     </svg>`
   );
 
-/**
- * Map tên danh mục (tiếng Việt, từ DB) → i18n key.
- * Dùng để dịch label hiển thị mà vẫn giữ id gốc để filter.
- */
-const CATEGORY_LABEL_KEYS = {
-  "Tất cả":      "cat.all",
-  "Cơm":         "cat.rice",
-  "Món mặn":     "cat.savory",
-  "Món chay":    "cat.vegetarian",
-  "Món phụ":     "cat.side",
-  "Đồ ăn nhanh": "cat.fastfood",
-  "Đồ uống":     "cat.drinks",
-  "Combo":       "cat.combo",
+// ✅ SOURCE-TEXT: Map tên danh mục (tiếng Việt) → câu dịch tương ứng
+// Chỉ cần thêm entry khi muốn dịch category name.
+// Nếu không có entry → giữ nguyên tên gốc (nguồn từ DB).
+const CATEGORY_LABEL_TRANSLATIONS = {
+  "Tất cả":      "Tất cả",
+  "Cơm":         "Cơm",
+  "Món mặn":     "Món mặn",
+  "Món chay":    "Món chay",
+  "Món phụ":     "Món phụ",
+  "Đồ ăn nhanh": "Đồ ăn nhanh",
+  "Đồ uống":     "Đồ uống",
+  "Combo":       "Combo",
 };
 
-/** Dịch tên danh mục. Nếu không có key → giữ nguyên tên gốc. */
+/**
+ * Dịch tên danh mục.
+ * Nếu có entry → t(entry), không thì giữ nguyên name gốc từ DB.
+ */
 function translateCategory(name, t) {
-  const key = CATEGORY_LABEL_KEYS[name];
-  return key ? t(key) : name;
+  const source = CATEGORY_LABEL_TRANSLATIONS[name];
+  return source ? t(source) : name;
 }
 
-// ====
+// ============================================================
 // MAIN COMPONENT
-// ====
+// ============================================================
 
 export default function CustomerMenu({ cart, setCart, user }) {
-
-  const { t, lang } = useTranslation();
+  const { t } = useI18n();
 
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -77,7 +73,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
   const [selected, setSelected] = useState(null);
   const [mode, setMode] = useState("cart");
   const [searchParams, setSearchParams] = useSearchParams();
-
 
   // ---------- Load menu + categories ----------
   const load = useCallback(
@@ -92,7 +87,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
         setItems(rawList.filter((m) => m.active));
         setCategories(Array.isArray(catRes) ? catRes : []);
       } catch (e) {
-        if (!silent) setError(e.message || t("menu.loadError"));
+        if (!silent) setError(e.message || t("Không tải được thực đơn"));
       } finally {
         setLoading(false);
       }
@@ -100,15 +95,12 @@ export default function CustomerMenu({ cart, setCart, user }) {
     [t]
   );
 
-
   useEffect(() => {
     load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
   // ---------- Sync filter với URL ----------
-
   const searchParamsStr = searchParams.toString();
   useEffect(() => {
     setCategory(searchParams.get("category") || ALL_CATEGORY);
@@ -116,23 +108,18 @@ export default function CustomerMenu({ cart, setCart, user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParamsStr]);
 
-
   // ---------- Global search event ----------
-
   useEffect(() => {
     const handler = (e) => setSearch(e.detail || "");
     window.addEventListener("globalsearch", handler);
     return () => window.removeEventListener("globalsearch", handler);
   }, []);
 
-
   // ---------- Category chips ----------
-  // Chỉ dịch label "Tất cả". Category từ DB giữ nguyên (admin nhập gì hiện nấy).
-
   const categoryChips = useMemo(() => {
     const fromApi = categories.map((cat) => ({
-      id: cat.name,                            // giữ tiếng Việt để filter đúng DB
-      label: translateCategory(cat.name, t),   // label đã dịch
+      id: cat.name,                             // giữ tiếng Việt để filter đúng DB
+      label: translateCategory(cat.name, t),    // label đã dịch
       icon: cat.icon,
     }));
     return [
@@ -141,15 +128,12 @@ export default function CustomerMenu({ cart, setCart, user }) {
     ];
   }, [categories, t]);
 
-
   const validCategoryIds = useMemo(
     () => new Set(categoryChips.map((c) => c.id)),
     [categoryChips]
   );
 
-
   // ---------- Filter logic ----------
-
   const filtered = useMemo(() => {
     let list = items;
 
@@ -168,7 +152,6 @@ export default function CustomerMenu({ cart, setCart, user }) {
 
     return list;
   }, [items, category, search, validCategoryIds]);
-
 
   // ---------- Handlers ----------
   const selectCategory = (id) => {
@@ -192,15 +175,13 @@ export default function CustomerMenu({ cart, setCart, user }) {
 
   const hasFilter = category !== ALL_CATEGORY || search.trim();
 
-  // ====
+  // ============================================================
   // RENDER
-  // ====
+  // ============================================================
 
   return (
     <div>
-
       {/* ===== ERROR ===== */}
-
       {error && (
         <div
           style={{
@@ -234,14 +215,12 @@ export default function CustomerMenu({ cart, setCart, user }) {
               gap: 4,
             }}
           >
-            <RefreshCw size={12} /> {t("common.retry")}
+            <RefreshCw size={12} /> {t("Thử lại")}
           </button>
         </div>
       )}
 
-
       {/* ===== CATEGORY CHIPS — sticky ===== */}
-
       <div
         className="menu-cats-sticky"
         style={{
@@ -285,10 +264,10 @@ export default function CustomerMenu({ cart, setCart, user }) {
         }}
       >
         <span>
-          {filtered.length} {t("menu.dishesCount")}
+          {filtered.length} {t("món")}
           {category !== ALL_CATEGORY &&
-            ` ${t("menu.inCategory")} "${translateCategory(category, t)}"`}
-          {search && ` — ${t("menu.searchFor")} "${search}"`}
+            ` ${t("trong")} "${translateCategory(category, t)}"`}
+          {search && ` — ${t("tìm kiếm")} "${search}"`}
         </span>
         {hasFilter && (
           <button
@@ -307,7 +286,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
               gap: 4,
             }}
           >
-            <X size={11} /> {t("menu.clearFilter")}
+            <X size={11} /> {t("Xoá lọc")}
           </button>
         )}
       </div>
@@ -335,13 +314,10 @@ export default function CustomerMenu({ cart, setCart, user }) {
           <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
             {search
-              ? `${t("menu.emptySearchPrefix")} "${search}"`
+              ? `${t("Không tìm thấy")} "${search}"`
               : category !== ALL_CATEGORY
-              ? `${t("menu.emptyCategoryPrefix")} "${translateCategory(
-                  category,
-                  t
-                )}"`
-              : t("menu.emptyDefault")}
+              ? `${t("Không có món trong")} "${translateCategory(category, t)}"`
+              : t("Chưa có món nào")}
           </div>
           {hasFilter && (
             <button
@@ -358,7 +334,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
                 fontSize: 13,
               }}
             >
-              {t("menu.viewAll")}
+              {t("Xem tất cả")}
             </button>
           )}
         </div>
@@ -393,11 +369,11 @@ export default function CustomerMenu({ cart, setCart, user }) {
 
                   {isOutOfStock ? (
                     <span className="grab-food-card__badge grab-food-card__badge--out">
-                      {t("customer.badgeOutOfStock")}
+                      {t("Hết hàng")}
                     </span>
                   ) : isHot ? (
                     <span className="grab-food-card__badge grab-food-card__badge--hot">
-                      <Flame size={10} /> {t("customer.badgeBestSeller")}
+                      <Flame size={10} /> {t("Bán chạy")}
                     </span>
                   ) : null}
 
@@ -409,7 +385,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
                         e.stopPropagation();
                         openModal(m);
                       }}
-                      aria-label={`${t("customer.addItem")} ${m.name}`}
+                      aria-label={t("Thêm {name}").replace("{name}", m.name)}
                     >
                       <Plus size={20} strokeWidth={3} />
                     </button>

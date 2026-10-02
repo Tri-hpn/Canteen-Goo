@@ -10,7 +10,7 @@ import {
 import { money } from "./UI";
 import { api } from "../api";
 import { toast } from "./Effects";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const MODAL_Z = 2147483600;
 
@@ -37,7 +37,7 @@ export default function PaymentModal({
   onConfirm,
   walletBalance = 0,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [method, setMethod] = useState("Tiền mặt");
   const [confirmed, setConfirmed] = useState(false);
   const [settings, setSettings] = useState(null);

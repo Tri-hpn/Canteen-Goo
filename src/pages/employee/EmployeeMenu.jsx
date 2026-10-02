@@ -3,16 +3,7 @@
 // ============================================================
 // Nhân viên XEM thực đơn + có thể bật/tắt món (ẩn khi hết hàng).
 //
-// Fixes:
-//   - Render nút toggle active
-//   - Thêm cột "Đang bán" với badge trạng thái
-//   - Error state + retry, loading state
-//   - Clear search button
-//   - Overflow-x cho bảng (mobile)
-//   - Image fallback (SVG placeholder khi lỗi)
-//   - Memo filtered
-//   - Auto-refresh 30s (silent)
-//   - ✅ FIX toggle: optimistic update, custom switch trượt mượt
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -22,6 +13,7 @@ import {
 import { api } from "../../api";
 import { money, StatusBadge } from "../../components/UI";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -44,6 +36,8 @@ const FALLBACK_IMG =
 // ============================================================
 
 export default function EmployeeMenu() {
+  const { t } = useI18n();
+
   // ---------- Data ----------
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,12 +60,12 @@ export default function EmployeeMenu() {
       const data = await api.menu.list("", "Tất cả", "popular", true);
       setItems(Array.isArray(data) ? data : []);
     } catch (e) {
-      if (!silent) setError(e.message || "Không tải được thực đơn");
+      if (!silent) setError(e.message || t("Không tải được thực đơn"));
     } finally {
       setLoading(false);
       if (!silent) setRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load(false);
@@ -103,7 +97,7 @@ export default function EmployeeMenu() {
 
     try {
       await api.menu.update(id, { active: newActive });
-      toast(newActive ? "Đã bật món" : "Đã tắt món", "success");
+      toast(newActive ? t("Đã bật món") : t("Đã tắt món"), "success");
       // ❌ KHÔNG gọi load() — giữ animation
     } catch (e) {
       // Revert nếu API fail
@@ -112,7 +106,7 @@ export default function EmployeeMenu() {
           (m._id || m.id) === id ? { ...m, active: oldActive } : m
         )
       );
-      toast(e.message || "Không đổi được trạng thái", "error");
+      toast(e.message || t("Không đổi được trạng thái"), "error");
     } finally {
       setTogglingId(null);
     }
@@ -173,13 +167,13 @@ export default function EmployeeMenu() {
               fontSize: 12,
             }}
           >
-            Thử lại
+            {t("Thử lại")}
           </button>
         </div>
       )}
 
       {/* ============ TOOLBAR ============ */}
-     <div className="emp-menu-toolbar">
+      <div className="emp-menu-toolbar">
         {/* Search */}
         <div
           style={{
@@ -200,7 +194,7 @@ export default function EmployeeMenu() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && setQ("")}
-            placeholder="Tìm món ăn..."
+            placeholder={t("Tìm món ăn...")}
             style={{
               flex: 1,
               border: 0,
@@ -214,7 +208,7 @@ export default function EmployeeMenu() {
           {q && (
             <button
               onClick={() => setQ("")}
-              aria-label="Xoá tìm kiếm"
+              aria-label={t("Xoá tìm kiếm")}
               style={{
                 background: "transparent",
                 border: 0,
@@ -234,8 +228,8 @@ export default function EmployeeMenu() {
         <button
           onClick={() => load(false)}
           disabled={refreshing}
-          title="Làm mới"
-          aria-label="Làm mới"
+          title={t("Làm mới")}
+          aria-label={t("Làm mới")}
           style={{
             padding: "10px 14px",
             background: "var(--card-bg, #fff)",
@@ -255,41 +249,42 @@ export default function EmployeeMenu() {
           ) : (
             <RefreshCw size={14} />
           )}
-          Làm mới
+          {t("Làm mới")}
         </button>
 
         {/* Summary badges */}
-<div className="emp-menu-summary">
-        {summary.inactive > 0 && (
-          <span
-            style={{
-              padding: "6px 12px",
-              borderRadius: 20,
-              background: "#fef3c7",
-              color: "#92400e",
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            {summary.inactive} món đã ẩn
-          </span>
-        )}
-        {summary.outOfStock > 0 && (
-          <span
-            style={{
-              padding: "6px 12px",
-              borderRadius: 20,
-              background: "#fee2e2",
-              color: "#991b1b",
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            {summary.outOfStock} món hết hàng
-          </span>
-        )}
+        <div className="emp-menu-summary">
+          {summary.inactive > 0 && (
+            <span
+              style={{
+                padding: "6px 12px",
+                borderRadius: 20,
+                background: "#fef3c7",
+                color: "#92400e",
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              {summary.inactive} {t("món đã ẩn")}
+            </span>
+          )}
+          {summary.outOfStock > 0 && (
+            <span
+              style={{
+                padding: "6px 12px",
+                borderRadius: 20,
+                background: "#fee2e2",
+                color: "#991b1b",
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              {summary.outOfStock} {t("món hết hàng")}
+            </span>
+          )}
+        </div>
       </div>
-</div>
+
       {/* ============ BẢNG ============ */}
       <div
         style={{
@@ -309,10 +304,10 @@ export default function EmployeeMenu() {
           }}
         >
           <h3 style={{ margin: 0, color: "var(--text-primary, #172033)" }}>
-            Thực đơn Canteen
+            {t("Thực đơn Canteen")}
           </h3>
           <span style={{ color: "var(--text-light, #8993a3)", fontSize: 12 }}>
-            {filtered.length} món
+            {filtered.length} {t("món")}
           </span>
         </div>
 
@@ -329,7 +324,7 @@ export default function EmployeeMenu() {
               size={26}
               style={{ animation: "spin 1s linear infinite", marginBottom: 8 }}
             />
-            <div style={{ fontSize: 13 }}>Đang tải thực đơn...</div>
+            <div style={{ fontSize: 13 }}>{t("Đang tải thực đơn...")}</div>
           </div>
         )}
 
@@ -339,14 +334,14 @@ export default function EmployeeMenu() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                  <th style={thLeft}>Ảnh</th>
-                  <th style={thLeft}>Món ăn</th>
-                  <th style={thLeft}>Danh mục</th>
-                  <th style={thRight}>Giá</th>
-                  <th style={thCenter}>Tồn</th>
-                  <th style={thCenter}>Đã bán</th>
-                  <th style={thLeft}>Trạng thái</th>
-                  <th style={thCenter}>Đang bán</th>
+                  <th style={thLeft}>{t("Ảnh")}</th>
+                  <th style={thLeft}>{t("Món ăn")}</th>
+                  <th style={thLeft}>{t("Danh mục")}</th>
+                  <th style={thRight}>{t("Giá")}</th>
+                  <th style={thCenter}>{t("Tồn")}</th>
+                  <th style={thCenter}>{t("Đã bán")}</th>
+                  <th style={thLeft}>{t("Trạng thái")}</th>
+                  <th style={thCenter}>{t("Đang bán")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -357,10 +352,10 @@ export default function EmployeeMenu() {
 
                   const statusLabel =
                     m.stock === 0
-                      ? "Hết hàng"
+                      ? t("Hết hàng")
                       : m.stock < LOW_STOCK_THRESHOLD
-                      ? "Sắp hết"
-                      : "Còn hàng";
+                      ? t("Sắp hết")
+                      : t("Còn hàng");
 
                   return (
                     <tr
@@ -468,8 +463,8 @@ export default function EmployeeMenu() {
                         <button
                           onClick={() => toggleActive(m)}
                           disabled={isToggling}
-                          title={isActive ? "Tắt món" : "Bật món"}
-                          aria-label={isActive ? "Tắt món" : "Bật món"}
+                          title={isActive ? t("Tắt món") : t("Bật món")}
+                          aria-label={isActive ? t("Tắt món") : t("Bật món")}
                           aria-pressed={isActive}
                           role="switch"
                           style={{
@@ -522,8 +517,8 @@ export default function EmployeeMenu() {
                       }}
                     >
                       {q
-                        ? `Không có món nào khớp "${q}"`
-                        : "Không có món nào"}
+                        ? `${t("Không có món nào khớp")} "${q}"`
+                        : t("Không có món nào")}
                     </td>
                   </tr>
                 )}

@@ -9,52 +9,14 @@
 // Query params:
 //   status — "success" | "failed" | "pending" | "cancel" (mặc định: success)
 //   code   — Mã đơn hàng (tùy chọn)
+//
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { CheckCircle2, XCircle, Clock } from "lucide-react";
-
-// ============================================================
-// CẤU HÌNH CHO TỪNG STATUS
-// ============================================================
-// Mỗi status có: icon, màu, tiêu đề, mô tả, CTA
-// ============================================================
-
-const STATUS_CONFIG = {
-  success: {
-    icon: CheckCircle2,
-    bg: "#d1fae5",
-    color: "#18a967",
-    title: "Thanh toán thành công!",
-    desc: "Cảm ơn bạn đã đặt hàng tại Canteen VWA.",
-    primaryCTA: { label: "Xem đơn hàng", to: "/customer/orders" },
-  },
-  failed: {
-    icon: XCircle,
-    bg: "#fee2e2",
-    color: "#ef4444",
-    title: "Thanh toán thất bại",
-    desc: "Vui lòng thử lại hoặc chọn phương thức thanh toán khác.",
-    primaryCTA: { label: "Thử lại", to: "/customer/checkout" },
-  },
-  cancel: {
-    icon: XCircle,
-    bg: "#fef3c7",
-    color: "#f59e0b",
-    title: "Đã hủy thanh toán",
-    desc: "Bạn đã hủy giao dịch. Đơn hàng chưa được tạo.",
-    primaryCTA: { label: "Quay lại giỏ hàng", to: "/customer/cart" },
-  },
-  pending: {
-    icon: Clock,
-    bg: "#dbeafe",
-    color: "#2634d5",
-    title: "Đang xử lý thanh toán",
-    desc: "Hệ thống đang xác nhận giao dịch. Vui lòng chờ trong giây lát.",
-    primaryCTA: { label: "Xem đơn hàng", to: "/customer/orders" },
-  },
-};
+import { useI18n } from "../hooks/useI18n";
 
 // ============================================================
 // MAIN COMPONENT
@@ -64,6 +26,43 @@ export default function PaymentResult() {
   const [params] = useSearchParams();
   const status = params.get("status") || "success";
   const code = params.get("code") || "";
+  const { t } = useI18n();
+
+  // Cấu hình cho từng status — dùng source-text
+  const STATUS_CONFIG = {
+    success: {
+      icon: CheckCircle2,
+      bg: "#d1fae5",
+      color: "#18a967",
+      title: t("Thanh toán thành công!"),
+      desc: t("Cảm ơn bạn đã đặt hàng tại Canteen VWA."),
+      primaryCTA: { label: t("Xem đơn hàng"), to: "/customer/orders" },
+    },
+    failed: {
+      icon: XCircle,
+      bg: "#fee2e2",
+      color: "#ef4444",
+      title: t("Thanh toán thất bại"),
+      desc: t("Vui lòng thử lại hoặc chọn phương thức thanh toán khác."),
+      primaryCTA: { label: t("Thử lại"), to: "/customer/checkout" },
+    },
+    cancel: {
+      icon: XCircle,
+      bg: "#fef3c7",
+      color: "#f59e0b",
+      title: t("Đã hủy thanh toán"),
+      desc: t("Bạn đã hủy giao dịch. Đơn hàng chưa được tạo."),
+      primaryCTA: { label: t("Quay lại giỏ hàng"), to: "/customer/cart" },
+    },
+    pending: {
+      icon: Clock,
+      bg: "#dbeafe",
+      color: "#2634d5",
+      title: t("Đang xử lý thanh toán"),
+      desc: t("Hệ thống đang xác nhận giao dịch. Vui lòng chờ trong giây lát."),
+      primaryCTA: { label: t("Xem đơn hàng"), to: "/customer/orders" },
+    },
+  };
 
   // Fallback về "success" nếu status không hợp lệ
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.success;
@@ -137,7 +136,8 @@ export default function PaymentResult() {
             fontSize: 13,
           }}
         >
-          Mã đơn: <b style={{ color: "var(--text-primary, #172033)" }}>{code}</b>
+          {t("Mã đơn")}:{" "}
+          <b style={{ color: "var(--text-primary, #172033)" }}>{code}</b>
         </p>
       )}
 
@@ -167,7 +167,7 @@ export default function PaymentResult() {
         </Link>
 
         <Link to="/customer" style={secondaryBtnStyle}>
-          Về trang chủ
+          {t("Về trang chủ")}
         </Link>
       </div>
     </div>

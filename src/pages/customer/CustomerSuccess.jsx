@@ -1,13 +1,16 @@
 // ============================================================
 // CUSTOMERSUCCESS.JSX — Trang đặt hàng thành công
 // ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+//    Không còn key cũ kiểu "success.xxx" / "orders.xxx"
+// ============================================================
 
 import { useLocation, Link } from "react-router-dom";
 import {
   CheckCircle2, ShoppingBag, Package, Clock, Home,
 } from "lucide-react";
 import { money } from "../../components/UI";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // MAIN COMPONENT
@@ -16,9 +19,9 @@ import { useTranslation } from "../../i18n";
 export default function CustomerSuccess() {
   const { state } = useLocation();
   const order = state?.order;
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
-  // Fallback
+  // Fallback khi không có order
   if (!order) {
     return (
       <div
@@ -47,7 +50,7 @@ export default function CustomerSuccess() {
             fontSize: 20,
           }}
         >
-          {t("success.noOrderTitle")}
+          {t("Không tìm thấy đơn hàng")}
         </h2>
         <p
           style={{
@@ -57,7 +60,7 @@ export default function CustomerSuccess() {
             maxWidth: 400,
           }}
         >
-          {t("success.noOrderDesc")}
+          {t("Đơn hàng có thể đã bị xóa hoặc đường dẫn không hợp lệ.")}
         </p>
         <div
           style={{
@@ -69,10 +72,10 @@ export default function CustomerSuccess() {
           }}
         >
           <Link to="/customer/orders" style={primaryBtnStyle}>
-            <Package size={15} /> {t("success.viewOrders")}
+            <Package size={15} /> {t("Xem đơn hàng")}
           </Link>
           <Link to="/customer/menu" style={secondaryBtnStyle}>
-            <ShoppingBag size={15} /> {t("success.orderMore")}
+            <ShoppingBag size={15} /> {t("Đặt món khác")}
           </Link>
         </div>
       </div>
@@ -120,7 +123,7 @@ export default function CustomerSuccess() {
           fontSize: 24,
         }}
       >
-        {t("success.title")}
+        {t("Đặt hàng thành công!")}
       </h2>
 
       <p
@@ -132,7 +135,7 @@ export default function CustomerSuccess() {
           lineHeight: 1.6,
         }}
       >
-        {t("success.desc")}
+        {t("Cảm ơn bạn đã đặt hàng tại Canteen VWA. Chúng tôi sẽ chuẩn bị món trong thời gian sớm nhất.")}
       </p>
 
       {/* Mã đơn */}
@@ -151,7 +154,7 @@ export default function CustomerSuccess() {
         }}
       >
         <span style={{ color: "var(--text-muted, #64748b)" }}>
-          {t("orders.code")}:
+          {t("Mã đơn")}:
         </span>
         <b
           style={{
@@ -182,7 +185,7 @@ export default function CustomerSuccess() {
         }}
       >
         <span style={{ color: "var(--text-muted, #64748b)", fontSize: 13 }}>
-          {t("cart.total")}
+          {t("Tổng cộng")}
         </span>
         <strong style={{ color: "#2634d5", fontSize: 22, fontWeight: 800 }}>
           {money(order.total || 0)}
@@ -198,13 +201,18 @@ export default function CustomerSuccess() {
           fontSize: 13,
           color: "var(--text-muted, #64748b)",
           marginTop: 4,
+          textAlign: "center",
+          justifyContent: "center",
+          flexWrap: "wrap",
         }}
       >
         <Clock size={14} />
         <span>
-          {t("success.prepareHint")}{" "}
-          <b style={{ color: "#18a967" }}>{t("success.prepareTime")}</b>
-          {" "}· {t("success.pickupHint")}
+          {t("Thời gian chuẩn bị khoảng")}{" "}
+          <b style={{ color: "#18a967" }}>
+            {t("5-8 phút")}
+          </b>{" "}
+          · {t("Vui lòng đến quầy nhận món theo giờ đã chọn.")}
         </span>
       </div>
 
@@ -219,10 +227,10 @@ export default function CustomerSuccess() {
         }}
       >
         <Link to="/customer/orders" style={primaryBtnStyle}>
-          <Package size={15} /> {t("success.trackOrder")}
+          <Package size={15} /> {t("Theo dõi đơn hàng")}
         </Link>
         <Link to="/customer/menu" style={secondaryBtnStyle}>
-          <ShoppingBag size={15} /> {t("success.orderMore")}
+          <ShoppingBag size={15} /> {t("Đặt món khác")}
         </Link>
       </div>
     </div>

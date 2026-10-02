@@ -1,6 +1,8 @@
 // ============================================================
 // SIDEBAR.JSX — Sidebar cho ADMIN & EMPLOYEE
 // ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+// ============================================================
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { NavLink, Link } from "react-router-dom";
@@ -10,7 +12,7 @@ import {
   MessageCircle, CalendarCheck, Database, TrendingUp, Shield, Wallet, Ticket,
 } from "lucide-react";
 import { api } from "../api";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const POLL_MS = 30000;
 const BADGE_MAX = 99;
@@ -40,45 +42,47 @@ const ICONS = {
   wallet_admin: CreditCard,
 };
 
+// ✅ SOURCE-TEXT: Label giờ là câu tiếng Việt trực tiếp
+// Định dạng: [iconKey, labelVI, path]
 const MENU_CONFIG = {
   ADMIN: [
-    ["dashboard", "nav.dashboard", "/owner"],
-    ["orders_admin", "nav.orders", "/owner/orders"],
-    ["menu", "nav.menu", "/owner/menu"],
-    ["price", "nav.price", "/owner/price-history"],
-    ["inventory", "nav.inventory", "/owner/inventory"],
-    ["vouchers", "nav.vouchers", "/owner/vouchers"],
-    ["finance", "nav.finance", "/owner/finance"],
-    ["wallet_admin", "nav.wallet_admin", "/owner/wallet"],
-    ["reports", "nav.reports", "/owner/reports"],
-    ["employees", "nav.employees", "/owner/employees"],
-    ["attendance", "nav.shifts", "/owner/shifts"],
-    ["customers", "nav.customers", "/owner/customers"],
-    ["permissions", "nav.permissions", "/owner/permissions"],
-    ["backup", "nav.backup", "/owner/backup"],
+    ["dashboard",     "Tổng quan",           "/owner"],
+    ["orders_admin",  "Đơn hàng",            "/owner/orders"],
+    ["menu",          "Thực đơn",            "/owner/menu"],
+    ["price",         "Lịch sử giá",         "/owner/price-history"],
+    ["inventory",     "Kho hàng",            "/owner/inventory"],
+    ["vouchers",      "Voucher",             "/owner/vouchers"],
+    ["finance",       "Tài chính",           "/owner/finance"],
+    ["wallet_admin",  "Ví Canteen",          "/owner/wallet"],
+    ["reports",       "Báo cáo",             "/owner/reports"],
+    ["employees",     "Nhân viên",           "/owner/employees"],
+    ["attendance",    "Ca làm & chấm công",  "/owner/shifts"],
+    ["customers",     "Khách hàng",          "/owner/customers"],
+    ["permissions",   "Phân quyền",          "/owner/permissions"],
+    ["backup",        "Backup dữ liệu",      "/owner/backup"],
   ],
   EMPLOYEE: [
-    ["dashboard", "nav.dashboard", "/employee"],
-    ["process", "nav.process", "/employee/attendance"],
-    ["orders", "nav.orders", "/employee/orders"],
-    ["menu", "nav.menu", "/employee/menu"],
-    ["chat", "nav.chat_staff", "/employee/chat"],
+    ["dashboard",   "Tổng quan",       "/employee"],
+    ["process",     "Chấm công",       "/employee/attendance"],
+    ["orders",      "Đơn hàng",        "/employee/orders"],
+    ["menu",        "Thực đơn",        "/employee/menu"],
+    ["chat",        "Chat khách",      "/employee/chat"],
   ],
   CUSTOMER: [
-    ["dashboard", "nav.home", "/customer"],
-    ["menu", "nav.menu", "/customer/menu"],
-    ["orders", "nav.orders", "/customer/orders"],
-    ["wallet", "nav.wallet", "/customer/wallet"],
-    ["promotions", "nav.promotions", "/customer/promotions"],
-    ["chat", "nav.chat", "/customer/chat"],
-    ["profile", "nav.profile", "/customer/profile"],
+    ["dashboard",   "Trang chủ",       "/customer"],
+    ["menu",        "Thực đơn",        "/customer/menu"],
+    ["orders",      "Đơn hàng",        "/customer/orders"],
+    ["wallet",      "Ví Canteen",      "/customer/wallet"],
+    ["promotions",  "Khuyến mãi",      "/customer/promotions"],
+    ["chat",        "Chat hỗ trợ",     "/customer/chat"],
+    ["profile",     "Hồ sơ",           "/customer/profile"],
   ],
 };
 
 const PROFILE_CONFIG = {
-  ADMIN:    { to: "/owner/profile",    labelKey: "role.admin" },
-  EMPLOYEE: { to: "/employee/profile", labelKey: "role.employee" },
-  CUSTOMER: { to: "/customer/profile", labelKey: "role.customer" },
+  ADMIN:    { to: "/owner/profile",    label: "Quản trị viên" },
+  EMPLOYEE: { to: "/employee/profile", label: "Nhân viên" },
+  CUSTOMER: { to: "/customer/profile", label: "Khách hàng" },
 };
 
 function getInitials(name) {
@@ -112,7 +116,7 @@ function readLastSeen(key) {
 }
 
 function ProfileLink({ user, role, onNavClick }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const cfg = PROFILE_CONFIG[role];
   if (!cfg || !user) return null;
 
@@ -159,7 +163,7 @@ function ProfileLink({ user, role, onNavClick }) {
         {user.avatar ? (
           <img
             src={user.avatar}
-            alt={user.name || "Avatar"}
+            alt={user.name || t("Avatar")}
             onError={(e) => {
               e.target.onerror = null;
               e.target.style.display = "none";
@@ -183,7 +187,7 @@ function ProfileLink({ user, role, onNavClick }) {
             textOverflow: "ellipsis",
           }}
         >
-          {user.name || t("profile.guest")}
+          {user.name || t("Khách")}
         </b>
         <small
           style={{
@@ -192,7 +196,7 @@ function ProfileLink({ user, role, onNavClick }) {
             color: "var(--sky-ink-500, #64748B)",
           }}
         >
-          {t(cfg.labelKey)}
+          {t(cfg.label)}
         </small>
       </div>
     </Link>
@@ -200,7 +204,7 @@ function ProfileLink({ user, role, onNavClick }) {
 }
 
 export default function Sidebar({ role, onLogout, user }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const [open, setOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
@@ -363,7 +367,7 @@ export default function Sidebar({ role, onLogout, user }) {
 
       <aside
         className={"sidebar " + (open ? "mobile-open" : "")}
-        aria-label={t("nav.sidebarNav")}
+        aria-label={t("Điều hướng chính")}
       >
         <div className="brand">
           <div className="brand-mark">C</div>
@@ -375,20 +379,20 @@ export default function Sidebar({ role, onLogout, user }) {
 
         <div className="role-chip">
           {role === "ADMIN"
-            ? t("role.admin")
+            ? t("Quản trị viên")
             : role === "EMPLOYEE"
-            ? t("role.employee")
-            : t("role.customer")}
+            ? t("Nhân viên")
+            : t("Khách hàng")}
         </div>
 
         <nav>
-          {list.map(([key, labelKey, to]) => {
+          {list.map(([key, label, to]) => {
             const Icon = ICONS[key] || ShoppingBag;
             const badge = getBadge(key);
 
             return (
               <NavLink
-                key={to + labelKey}
+                key={to + label}
                 to={to}
                 className={({ isActive }) =>
                   "nav-link " + (isActive ? "active" : "")
@@ -401,11 +405,12 @@ export default function Sidebar({ role, onLogout, user }) {
                 onClick={closeSidebar}
               >
                 <Icon size={18} />
-                <span>{t(labelKey)}</span>
+                {/* ✅ SOURCE-TEXT: t(label) */}
+                <span>{t(label)}</span>
                 {badge > 0 && (
                   <span
                     className="nav-badge"
-                    aria-label={t("common.newCount").replace("{n}", badge)}
+                    aria-label={`${badge} ${t("mới")}`}
                   >
                     {badge > BADGE_MAX ? `${BADGE_MAX}+` : badge}
                   </span>
@@ -418,7 +423,7 @@ export default function Sidebar({ role, onLogout, user }) {
         <ProfileLink user={user} role={role} onNavClick={closeSidebar} />
 
         <button className="logout-btn" onClick={onLogout} type="button">
-          <LogOut size={18} /> {t("common.logout")}
+          <LogOut size={18} /> {t("Đăng xuất")}
         </button>
       </aside>
     </>

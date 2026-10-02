@@ -5,21 +5,7 @@
 //   - Dashboard: OPERATIONAL (cần xử lý gì hôm nay, trend nhanh)
 //   - Reports: ANALYTICAL (báo cáo chuyên sâu, so sánh kỳ)
 //
-// Hiển thị:
-//   - 4 KPI cards với trend % so hôm qua
-//   - Cần xử lý hôm nay (đơn chờ, kho sắp hết)
-//   - Quick actions (link nhanh các trang)
-//   - Bar chart doanh thu 7 ngày (at-a-glance)
-//   - Đơn hàng gần đây + quick status update
-//
-// Auto-refresh mỗi 30s. Có loading + error + nút refresh thủ công.
-//
-// Batch 4C:
-//   - ✅ Bỏ pie chart (đã có ở Reports) → thay "Cần xử lý hôm nay"
-//   - ✅ Thêm Quick Actions grid
-//   - ✅ KPI cards có trend % so hôm qua
-//   - ✅ Recent orders có quick action "Xác nhận"
-//   - ✅ Skeleton loading
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -37,6 +23,7 @@ import {
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -44,52 +31,6 @@ import { toast } from "../../components/Effects";
 
 const REFRESH_MS = 30000;
 const RECENT_ORDERS_LIMIT = 5;
-
-// Quick action buttons
-const QUICK_ACTIONS = [
-  {
-    key: "orders",
-    label: "Đơn hàng",
-    icon: ClipboardList,
-    to: "/owner/orders",
-    color: "#2634d5",
-  },
-  {
-    key: "menu",
-    label: "Thực đơn",
-    icon: Utensils,
-    to: "/owner/menu",
-    color: "#0EA5E9",
-  },
-  {
-    key: "inventory",
-    label: "Kho hàng",
-    icon: Warehouse,
-    to: "/owner/inventory",
-    color: "#18a967",
-  },
-  {
-    key: "vouchers",
-    label: "Voucher",
-    icon: Ticket,
-    to: "/owner/vouchers",
-    color: "#ec4899",
-  },
-  {
-    key: "finance",
-    label: "Tài chính",
-    icon: Wallet,
-    to: "/owner/finance",
-    color: "#f59e0b",
-  },
-  {
-    key: "reports",
-    label: "Báo cáo",
-    icon: BarChart3,
-    to: "/owner/reports",
-    color: "#8b5cf6",
-  },
-];
 
 // Next status flow
 const NEXT_STATUS = {
@@ -138,6 +79,18 @@ function calcDelta(current, previous) {
 // ============================================================
 
 export default function OwnerDashboard() {
+  const { t } = useI18n();
+
+  // ---------- Quick actions (source-text) ----------
+  const QUICK_ACTIONS = [
+    { key: "orders",    label: t("Đơn hàng"),   icon: ClipboardList, to: "/owner/orders",   color: "#2634d5" },
+    { key: "menu",      label: t("Thực đơn"),   icon: Utensils,      to: "/owner/menu",     color: "#0EA5E9" },
+    { key: "inventory", label: t("Kho hàng"),   icon: Warehouse,     to: "/owner/inventory", color: "#18a967" },
+    { key: "vouchers",  label: t("Voucher"),    icon: Ticket,        to: "/owner/vouchers", color: "#ec4899" },
+    { key: "finance",   label: t("Tài chính"),  icon: Wallet,        to: "/owner/finance",  color: "#f59e0b" },
+    { key: "reports",   label: t("Báo cáo"),    icon: BarChart3,     to: "/owner/reports",  color: "#8b5cf6" },
+  ];
+
   // ---------- State ----------
   const [stats, setStats] = useState(null);
   const [reports, setReports] = useState(null);
@@ -179,7 +132,7 @@ export default function OwnerDashboard() {
       setLastUpdated(new Date());
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || "Không tải được dữ liệu dashboard");
+        setError(e.message || t("Không tải được dữ liệu dashboard"));
       }
     } finally {
       if (myReqId === reqIdRef.current) {
@@ -187,7 +140,7 @@ export default function OwnerDashboard() {
         setRefreshing(false);
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadAll();
@@ -264,7 +217,7 @@ export default function OwnerDashboard() {
       toast(`"${o.code}" → "${next}"`, "success");
       await loadAll(true);
     } catch (e) {
-      toast(e.message || "Không chuyển được trạng thái", "error");
+      toast(e.message || t("Không chuyển được trạng thái"), "error");
     } finally {
       setAdvancingId(null);
     }
@@ -294,7 +247,7 @@ export default function OwnerDashboard() {
       >
         <AlertCircle size={32} style={{ marginBottom: 12 }} />
         <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 15 }}>
-          Không tải được dashboard
+          {t("Không tải được dashboard")}
         </div>
         <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 16 }}>
           {error}
@@ -315,7 +268,7 @@ export default function OwnerDashboard() {
             gap: 6,
           }}
         >
-          <RefreshCw size={14} /> Thử lại
+          <RefreshCw size={14} /> {t("Thử lại")}
         </button>
       </div>
     );
@@ -355,7 +308,7 @@ export default function OwnerDashboard() {
             }}
           />
           <span>
-            Realtime · Cập nhật mỗi {REFRESH_MS / 1000}s
+            {t("Realtime")} · {t("Cập nhật mỗi")} {REFRESH_MS / 1000}s
             {lastUpdated && (
               <span style={{ marginLeft: 8, opacity: 0.7 }}>
                 ({lastUpdated.toLocaleTimeString("vi-VN")})
@@ -387,7 +340,7 @@ export default function OwnerDashboard() {
               animation: refreshing ? "spin 1s linear infinite" : "none",
             }}
           />
-          Làm mới
+          {t("Làm mới")}
         </button>
       </div>
 
@@ -404,32 +357,32 @@ export default function OwnerDashboard() {
       >
         <KPI
           icon={<DollarSign />}
-          label="Doanh thu hôm nay"
+          label={t("Doanh thu hôm nay")}
           value={money(stats?.revenue || 0)}
           trend={revenueTrend}
           color="#18a967"
         />
         <KPI
           icon={<ShoppingBag />}
-          label="Đơn hàng hôm nay"
-          value={(stats?.orderCount || 0) + " đơn"}
+          label={t("Đơn hàng hôm nay")}
+          value={(stats?.orderCount || 0) + " " + t("đơn")}
           trend={orderTrend}
           color="#2634d5"
         />
         <KPI
           icon={<Users />}
-          label="Tổng khách hàng"
-          value={(stats?.customerCount || 0) + " người"}
+          label={t("Tổng khách hàng")}
+          value={(stats?.customerCount || 0) + " " + t("người")}
           color="#f59e0b"
         />
         <KPI
           icon={<AlertTriangle />}
-          label="Sắp hết hàng"
-          value={lowStockCount + " món"}
+          label={t("Sắp hết hàng")}
+          value={lowStockCount + " " + t("món")}
           color="#ef4444"
           badge={
             lowStockCount > 0
-              ? { text: "Cần nhập", color: "#ef4444" }
+              ? { text: t("Cần nhập"), color: "#ef4444" }
               : null
           }
         />
@@ -464,7 +417,7 @@ export default function OwnerDashboard() {
                 color: "var(--text-primary, #172033)",
               }}
             >
-              Cần xử lý hôm nay
+              {t("Cần xử lý hôm nay")}
             </b>
           </div>
 
@@ -478,7 +431,7 @@ export default function OwnerDashboard() {
             {pendingCount > 0 && (
               <ActionCard
                 icon={<ClipboardList size={18} />}
-                label="Đơn chờ xác nhận"
+                label={t("Đơn chờ xác nhận")}
                 value={pendingCount}
                 color="#f59e0b"
                 to="/owner/orders"
@@ -487,7 +440,7 @@ export default function OwnerDashboard() {
             {needAction.length > pendingCount && (
               <ActionCard
                 icon={<Utensils size={18} />}
-                label="Đơn đang xử lý"
+                label={t("Đơn đang xử lý")}
                 value={needAction.length - pendingCount}
                 color="#2634d5"
                 to="/owner/orders"
@@ -496,7 +449,7 @@ export default function OwnerDashboard() {
             {lowStockCount > 0 && (
               <ActionCard
                 icon={<Package size={18} />}
-                label="Nguyên liệu sắp hết"
+                label={t("Nguyên liệu sắp hết")}
                 value={lowStockCount}
                 color="#ef4444"
                 to="/owner/inventory"
@@ -511,10 +464,10 @@ export default function OwnerDashboard() {
           ============================================================ */}
       <div style={cardStyle}>
         <h3 style={{ ...cardTitleStyle, marginBottom: 14 }}>
-          Truy cập nhanh
+          {t("Truy cập nhanh")}
         </h3>
 
-              <div
+        <div
           className="dashboard-quick-actions"
           style={{
             display: "grid",
@@ -525,11 +478,12 @@ export default function OwnerDashboard() {
           {QUICK_ACTIONS.map((a) => {
             const Icon = a.icon;
             // Badge cho orders nếu có pending
-            const badge = a.key === "orders" && pendingCount > 0
-              ? pendingCount
-              : a.key === "inventory" && lowStockCount > 0
-              ? lowStockCount
-              : null;
+            const badge =
+              a.key === "orders" && pendingCount > 0
+                ? pendingCount
+                : a.key === "inventory" && lowStockCount > 0
+                ? lowStockCount
+                : null;
 
             return (
               <Link
@@ -628,8 +582,8 @@ export default function OwnerDashboard() {
           }}
         >
           <div>
-            <h3 style={cardTitleStyle}>Doanh thu 7 ngày</h3>
-            <span style={cardSubtitleStyle}>Đơn vị: triệu đồng</span>
+            <h3 style={cardTitleStyle}>{t("Doanh thu 7 ngày")}</h3>
+            <span style={cardSubtitleStyle}>{t("Đơn vị: VNĐ")}</span>
           </div>
           <Link
             to="/owner/reports"
@@ -643,12 +597,12 @@ export default function OwnerDashboard() {
               gap: 4,
             }}
           >
-            Báo cáo chi tiết <ArrowRight size={12} />
+            {t("Báo cáo chi tiết")} <ArrowRight size={12} />
           </Link>
         </div>
 
         {revenueData.length === 0 ? (
-          <EmptyChart message="Chưa có dữ liệu doanh thu" />
+          <EmptyChart message={t("Chưa có dữ liệu doanh thu")} />
         ) : (
           <div style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -681,7 +635,7 @@ export default function OwnerDashboard() {
                   }
                 />
                 <Tooltip
-                  formatter={(v) => [money(v), "Doanh thu"]}
+                  formatter={(v) => [money(v), t("Doanh thu")]}
                   contentStyle={{
                     background: "var(--card-bg, #fff)",
                     border: "1px solid var(--border-color, #e5e9ef)",
@@ -710,7 +664,7 @@ export default function OwnerDashboard() {
             gap: 10,
           }}
         >
-          <h3 style={{ ...cardTitleStyle, margin: 0 }}>Đơn hàng mới nhất</h3>
+          <h3 style={{ ...cardTitleStyle, margin: 0 }}>{t("Đơn hàng mới nhất")}</h3>
           <Link
             to="/owner/orders"
             style={{
@@ -720,7 +674,7 @@ export default function OwnerDashboard() {
               textDecoration: "none",
             }}
           >
-            Xem tất cả →
+            {t("Xem tất cả")} →
           </Link>
         </div>
 
@@ -737,22 +691,22 @@ export default function OwnerDashboard() {
               size={36}
               style={{ opacity: 0.35, marginBottom: 10 }}
             />
-            <div>Chưa có đơn hàng nào</div>
+            <div>{t("Chưa có đơn hàng nào")}</div>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-                        <table
+            <table
               className="dashboard-recent-table"
               style={{ width: "100%", borderCollapse: "collapse" }}
             >
               <thead>
                 <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                  <th style={thStyle}>Mã đơn</th>
-                  <th style={thStyle}>Khách</th>
-                  <th className="col-time" style={thStyle}>Giờ</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Tổng tiền</th>
-                  <th style={thStyle}>Trạng thái</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
+                  <th style={thStyle}>{t("Mã đơn")}</th>
+                  <th style={thStyle}>{t("Khách")}</th>
+                  <th className="col-time" style={thStyle}>{t("Giờ")}</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>{t("Tổng tiền")}</th>
+                  <th style={thStyle}>{t("Trạng thái")}</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>{t("Thao tác")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -835,11 +789,11 @@ export default function OwnerDashboard() {
                                     animation: "spin 1s linear infinite",
                                   }}
                                 />
-                                Đang xử lý
+                                {t("Đang xử lý")}
                               </>
                             ) : (
                               <>
-                                <Check size={12} /> Xác nhận
+                                <Check size={12} /> {t("Xác nhận")}
                               </>
                             )}
                           </button>
@@ -855,7 +809,7 @@ export default function OwnerDashboard() {
                               gap: 2,
                             }}
                           >
-                            Xem <ChevronRight size={12} />
+                            {t("Xem")} <ChevronRight size={12} />
                           </Link>
                         )}
                       </td>
@@ -925,21 +879,21 @@ function KPI({ icon, label, value, trend, color, badge }) {
         >
           {label}
         </span>
-                <div
-  style={{
-    margin: "4px 0",
-    fontSize: 18,
-    fontWeight: 700,
-    lineHeight: 1.3,
-    fontFamily: "var(--font-sans, inherit)",
-    color: "var(--text-primary, #172033)",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  }}
->
-  {value}
-</div>
+        <div
+          style={{
+            margin: "4px 0",
+            fontSize: 18,
+            fontWeight: 700,
+            lineHeight: 1.3,
+            fontFamily: "var(--font-sans, inherit)",
+            color: "var(--text-primary, #172033)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {value}
+        </div>
 
         {trend && (
           <small
@@ -954,7 +908,7 @@ function KPI({ icon, label, value, trend, color, badge }) {
           >
             {trend.isUp ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
             {trend.isUp ? "+" : "-"}
-            {trend.pct.toFixed(1)}% so hôm qua
+            {trend.pct.toFixed(1)}% {t("so hôm qua")}
           </small>
         )}
 
@@ -1051,7 +1005,7 @@ function OrderStatusBadge({ status }) {
   const c = STATUS_COLORS[status] || { bg: "#e2e8f0", fg: "#475569" };
 
   return (
-        <span
+    <span
       style={{
         display: "inline-flex",
         padding: "4px 10px",

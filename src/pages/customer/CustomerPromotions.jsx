@@ -1,5 +1,8 @@
-﻿// ============================================================
+// ============================================================
 // CUSTOMERPROMOTIONS.JSX — Khuyến mãi & Voucher
+// ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+//    Không còn key cũ
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -11,7 +14,7 @@ import {
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -70,7 +73,7 @@ function fmtDate(iso) {
 
 export default function CustomerPromotions() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const [vouchers, setVouchers] = useState([]);
   const [publicVouchers, setPublicVouchers] = useState([]);
@@ -116,7 +119,7 @@ export default function CustomerPromotions() {
       setPoints(Number(pointsRes?.points) || 0);
       setWalletBalance(Number(walletRes?.balance) || 0);
     } catch (e) {
-      if (!silent) setError(e.message || t("promo.loadError"));
+      if (!silent) setError(e.message || t("Không tải được dữ liệu khuyến mãi"));
     } finally {
       setLoading(false);
       if (!silent) setRefreshing(false);
@@ -156,13 +159,13 @@ export default function CustomerPromotions() {
 
     if (redeemPoints < MIN_REDEEM) {
       toast(
-        t("promo.redeemNeedMin").replace("{value}", MIN_REDEEM),
+        t("Cần ít nhất {value} điểm để đổi").replace("{value}", MIN_REDEEM),
         "error"
       );
       return;
     }
     if (redeemPoints > points) {
-      toast(t("promo.notEnoughPoints"), "error");
+      toast(t("Không đủ điểm"), "error");
       return;
     }
 
@@ -170,14 +173,14 @@ export default function CustomerPromotions() {
     try {
       const voucher = await api.points.redeem({ points: redeemPoints });
       toast(
-        `${t("promo.redeemSuccess")} ${voucher.code} — ${money(voucher.value)}`,
+        `${t("Đổi thành công!")} ${voucher.code} — ${money(voucher.value)}`,
         "success"
       );
       setRedeemPoints(MIN_REDEEM);
       await loadAll(true);
       setTab("active");
     } catch (e) {
-      toast(e.message || t("promo.redeemError"), "error");
+      toast(e.message || t("Không đổi được voucher"), "error");
     } finally {
       setRedeemLoading(false);
     }
@@ -187,12 +190,12 @@ export default function CustomerPromotions() {
     try {
       navigator.clipboard.writeText(v.code);
     } catch {
-      toast(t("promo.copyError"), "error");
+      toast(t("Không sao chép được"), "error");
       return;
     }
 
     setCopiedId(v.id);
-    toast(t("promo.copySuccess").replace("{code}", v.code), "success");
+    toast(t("Đã sao chép mã"), "success");
 
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
     copyTimerRef.current = setTimeout(() => {
@@ -208,13 +211,13 @@ export default function CustomerPromotions() {
     try {
       await api.vouchers.claim(v.id);
       toast(
-        `${t("promo.claimSuccess")} — ${money(v.value)}!`,
+        `${t("Đã nhận voucher!")} — ${money(v.value)}!`,
         "success"
       );
       await loadAll(true);
       setTab("active");
     } catch (e) {
-      toast(e.message || t("promo.claimError"), "error");
+      toast(e.message || t("Không nhận được voucher"), "error");
     } finally {
       setClaimingIds((s) => {
         const n = new Set(s);
@@ -273,7 +276,7 @@ export default function CustomerPromotions() {
               gap: 4,
             }}
           >
-            <RefreshCw size={12} /> {t("common.retry")}
+            <RefreshCw size={12} /> {t("Thử lại")}
           </button>
         </div>
       )}
@@ -316,31 +319,31 @@ export default function CustomerPromotions() {
               textTransform: "uppercase",
             }}
           >
-            <Sparkles size={14} /> {t("promo.heroLabel")}
+            <Sparkles size={14} /> {t("Ưu đãi Canteen VWA")}
           </div>
           <h1 style={{ margin: "0 0 6px", fontSize: 28, fontWeight: 800 }}>
-            {t("promo.heroTitle")}
+            {t("Khuyến mãi & Voucher")}
           </h1>
           <p style={{ margin: "0 0 18px", fontSize: 14, opacity: 0.95 }}>
-            {t("promo.heroSubtitle")}
+            {t("Nhận ưu đãi hấp dẫn, đổi điểm lấy voucher và nhiều hơn nữa!")}
           </p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <HeroButton
               icon={<Ticket size={16} />}
-              label={t("promo.stat.offers")}
+              label={t("Ưu đãi")}
               value={publicVouchers.length}
               onClick={() => scrollToSection("section-public-vouchers")}
               disabled={publicVouchers.length === 0}
             />
             <HeroButton
               icon={<Wallet size={16} />}
-              label={t("nav.wallet")}
+              label={t("Ví Canteen")}
               value={money(walletBalance)}
               onClick={() => navigate("/customer/wallet")}
             />
             <HeroButton
               icon={<Flame size={16} />}
-              label={t("promo.stat.promos")}
+              label={t("Khuyến mãi")}
               value={promotions.length}
               onClick={() => scrollToSection("section-promotions")}
               disabled={promotions.length === 0}
@@ -393,7 +396,7 @@ export default function CustomerPromotions() {
                 marginBottom: 6,
               }}
             >
-              💎 {t("promo.pointsLabel")}
+              💎 {t("Điểm tích lũy của bạn")}
             </div>
             <div
               style={{
@@ -407,11 +410,11 @@ export default function CustomerPromotions() {
                 {points}
               </div>
               <div style={{ fontSize: 14, opacity: 0.9 }}>
-                {t("promo.pointsUnit")}
+                {t("điểm")}
               </div>
             </div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
-              {t("promo.pointsRate")}
+              {t("1 điểm = 100đ khi đổi voucher")}
             </div>
           </div>
 
@@ -433,7 +436,7 @@ export default function CustomerPromotions() {
                 letterSpacing: 0.5,
               }}
             >
-              🎁 {t("promo.redeemTitle")}
+              🎁 {t("Đổi điểm lấy voucher")}
             </div>
             <div
               style={{
@@ -477,7 +480,7 @@ export default function CustomerPromotions() {
                 alignItems: "center",
               }}
             >
-              <span style={{ opacity: 0.9 }}>{t("promo.getVoucher")}:</span>
+              <span style={{ opacity: 0.9 }}>{t("Nhận voucher")}:</span>
               <b style={{ fontSize: 18 }}>
                 {money(redeemPoints * POINT_TO_VND)}
               </b>
@@ -507,11 +510,11 @@ export default function CustomerPromotions() {
                     size={14}
                     style={{ animation: "spin 1s linear infinite" }}
                   />
-                  {t("promo.redeeming")}
+                  {t("Đang đổi...")}
                 </>
               ) : (
                 <>
-                  <Gift size={15} /> {t("promo.redeemNow")}
+                  <Gift size={15} /> {t("Đổi ngay")}
                 </>
               )}
             </button>
@@ -527,8 +530,8 @@ export default function CustomerPromotions() {
         >
           <SectionHeader
             color="#f59e0b"
-            title={t("promo.promosTitle")}
-            badge={`${promotions.length} ${t("promo.items")}`}
+            title={t("Món đang giảm giá")}
+            badge={`${promotions.length} ${t("món")}`}
           />
 
           <div
@@ -656,7 +659,7 @@ export default function CustomerPromotions() {
                       gap: 5,
                     }}
                   >
-                    <ShoppingBag size={13} /> {t("promo.orderNow")}
+                    <ShoppingBag size={13} /> {t("Đặt ngay")}
                   </button>
                 </div>
               </div>
@@ -673,8 +676,8 @@ export default function CustomerPromotions() {
         >
           <SectionHeader
             color="#ec4899"
-            title={t("promo.publicTitle")}
-            badge={`${publicVouchers.length} ${t("promo.vouchers")}`}
+            title={t("Ưu đãi toàn hệ thống")}
+            badge={`${publicVouchers.length} ${t("voucher")}`}
           />
           <p
             style={{
@@ -683,7 +686,7 @@ export default function CustomerPromotions() {
               color: "var(--text-muted, #64748b)",
             }}
           >
-            {t("promo.publicDesc")}
+            {t("Nhấn \"Nhận ngay\" để lưu voucher vào ví của bạn.")}
           </p>
 
           <div
@@ -751,7 +754,7 @@ export default function CustomerPromotions() {
                             textTransform: "uppercase",
                           }}
                         >
-                          {t("promo.saveNow")}
+                          {t("Tiết kiệm ngay")}
                         </div>
                         <div
                           style={{
@@ -816,11 +819,11 @@ export default function CustomerPromotions() {
                             size={14}
                             style={{ animation: "spin 1s linear infinite" }}
                           />
-                          {t("promo.claiming")}
+                          {t("Đang nhận...")}
                         </>
                       ) : (
                         <>
-                          <Plus size={15} /> {t("promo.claimNow")}
+                          <Plus size={15} /> {t("Nhận ngay")}
                         </>
                       )}
                     </button>
@@ -837,7 +840,7 @@ export default function CustomerPromotions() {
         id="section-my-vouchers"
         style={{ marginBottom: 24, scrollMarginTop: 130 }}
       >
-        <SectionHeader color="#2634d5" title={t("promo.myVouchers")} />
+        <SectionHeader color="#2634d5" title={t("Ví voucher của tôi")} />
 
         {/* Tabs */}
         <div
@@ -854,13 +857,13 @@ export default function CustomerPromotions() {
           {[
             {
               id: "active",
-              label: t("promo.tab.active"),
+              label: t("Khả dụng"),
               count: active.length,
               icon: Sparkles,
             },
             {
               id: "used",
-              label: t("promo.tab.used"),
+              label: t("Đã dùng"),
               count: used.length,
               icon: Clock,
             },
@@ -924,7 +927,7 @@ export default function CustomerPromotions() {
               size={24}
               style={{ animation: "spin 1s linear infinite", marginBottom: 8 }}
             />
-            <div style={{ fontSize: 13 }}>{t("promo.loadingVouchers")}</div>
+            <div style={{ fontSize: 13 }}>{t("Đang tải voucher...")}</div>
           </div>
         )}
 
@@ -948,8 +951,8 @@ export default function CustomerPromotions() {
               }}
             >
               {tab === "active"
-                ? t("promo.emptyActive")
-                : t("promo.emptyUsed")}
+                ? t("Chưa có voucher khả dụng")
+                : t("Chưa có voucher nào đã dùng")}
             </h3>
             <p
               style={{
@@ -959,8 +962,8 @@ export default function CustomerPromotions() {
               }}
             >
               {tab === "active"
-                ? t("promo.emptyActiveDesc")
-                : t("promo.emptyUsedDesc")}
+                ? t("Đổi điểm hoặc nhận voucher từ mục \"Ưu đãi toàn hệ thống\".")
+                : t("Các voucher đã sử dụng sẽ xuất hiện ở đây.")}
             </p>
             {tab === "active" && (
               <button
@@ -981,7 +984,7 @@ export default function CustomerPromotions() {
                   fontSize: 13,
                 }}
               >
-                <Gift size={15} /> {t("promo.redeemByPoints")}
+                <Gift size={15} /> {t("Đổi điểm lấy voucher")}
               </button>
             )}
           </div>
@@ -1173,7 +1176,7 @@ function VoucherGroupCard({ group: g, copiedId, onCopy, onOpenGroup, onUse, t })
               textTransform: "uppercase",
             }}
           >
-            {isUsed ? t("promo.usedLabel") : t("promo.discountLabel")}
+            {isUsed ? t("Đã dùng") : t("Giảm giá")}
           </div>
           <div
             style={{
@@ -1220,10 +1223,10 @@ function VoucherGroupCard({ group: g, copiedId, onCopy, onOpenGroup, onUse, t })
                 marginBottom: 6,
               }}
             >
-              {g.available} {t("promo.available")}
+              {g.available} {t("Khả dụng")}
               {g.used > 0 && (
                 <span style={{ color: "#ef4444", fontWeight: 600 }}>
-                  {" "}· {g.used} {t("promo.usedLabel").toLowerCase()}
+                  {" "}· {g.used} {t("Đã dùng").toLowerCase()}
                 </span>
               )}
             </div>
@@ -1256,7 +1259,7 @@ function VoucherGroupCard({ group: g, copiedId, onCopy, onOpenGroup, onUse, t })
                       fontSize: 10,
                     }}
                   >
-                    {v.used ? t("promo.used") : t("promo.available")}
+                    {v.used ? t("Đã dùng") : t("Khả dụng")}
                   </span>
                 </div>
               ))}
@@ -1306,8 +1309,8 @@ function VoucherGroupCard({ group: g, copiedId, onCopy, onOpenGroup, onUse, t })
               {!isUsed && firstVoucher && (
                 <button
                   onClick={() => onCopy(firstVoucher)}
-                  title={t("promo.copyCode")}
-                  aria-label={t("promo.copyCode")}
+                  title={t("Sao chép mã")}
+                  aria-label={t("Sao chép mã")}
                   style={{
                     width: 32,
                     height: 32,
@@ -1334,17 +1337,17 @@ function VoucherGroupCard({ group: g, copiedId, onCopy, onOpenGroup, onUse, t })
               }}
             >
               {firstVoucher?.claimed_from && (
-                <div>• {t("promo.sourceGlobal")}</div>
+                <div>• {t("Nhận từ ƯĐ toàn hệ thống")}</div>
               )}
               {firstVoucher?.points_used > 0 && (
                 <div>
-                  • {t("promo.sourcePoints")}{" "}
+                  • {t("Đổi từ điểm:")}{" "}
                   <b>{firstVoucher.points_used}</b>
                 </div>
               )}
               {firstVoucher?.used_at && (
                 <div>
-                  • {t("promo.usedOn")} {fmtDate(firstVoucher.used_at)}
+                  • {t("Đã dùng ngày")} {fmtDate(firstVoucher.used_at)}
                 </div>
               )}
             </div>
@@ -1372,7 +1375,7 @@ function VoucherGroupCard({ group: g, copiedId, onCopy, onOpenGroup, onUse, t })
                 gap: 5,
               }}
             >
-              {t("promo.viewNVouchers").replace("{n}", g.available)}{" "}
+              {t("Xem {n} voucher").replace("{n}", g.available)}{" "}
               <ArrowRight size={14} />
             </button>
           ) : (
@@ -1395,7 +1398,7 @@ function VoucherGroupCard({ group: g, copiedId, onCopy, onOpenGroup, onUse, t })
                 gap: 5,
               }}
             >
-              {t("promo.useNow")} <ArrowRight size={14} />
+              {t("Dùng ngay")} <ArrowRight size={14} />
             </button>
           )
         ) : (
@@ -1411,7 +1414,7 @@ function VoucherGroupCard({ group: g, copiedId, onCopy, onOpenGroup, onUse, t })
               fontWeight: 600,
             }}
           >
-            {t("promo.expiredLabel")}
+            {t("Hết hiệu lực")}
           </div>
         )}
       </div>
@@ -1425,7 +1428,7 @@ function GroupModal({ group: g, copiedId, onCopy, onClose, onUse, t }) {
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={t("promo.chooseVoucher")}
+      aria-label={t("Chọn voucher")}
       style={{
         position: "fixed",
         inset: 0,
@@ -1458,11 +1461,11 @@ function GroupModal({ group: g, copiedId, onCopy, onClose, onUse, t }) {
           }}
         >
           <h3 style={{ margin: 0, color: "var(--text-primary, #172033)" }}>
-            {t("promo.chooseVoucherValue").replace("{value}", money(g.value))}
+            {t("Chọn voucher {value}").replace("{value}", money(g.value))}
           </h3>
           <button
             onClick={onClose}
-            aria-label={t("common.close")}
+            aria-label={t("Đóng")}
             style={{
               background: "transparent",
               border: 0,
@@ -1484,7 +1487,7 @@ function GroupModal({ group: g, copiedId, onCopy, onClose, onUse, t }) {
             marginBottom: 14,
           }}
         >
-          {t("promo.chooseDesc")
+          {t("Bạn có {available} voucher khả dụng cho mệnh giá này. Chọn 1 để sử dụng.")
             .replace("{available}", g.available)}
         </div>
 
@@ -1539,9 +1542,9 @@ function GroupModal({ group: g, copiedId, onCopy, onClose, onUse, t }) {
                     }}
                   >
                     {v.used_at
-                      ? `${t("promo.usedOn")} ${fmtDate(v.used_at)}`
+                      ? `${t("Đã dùng ngày")} ${fmtDate(v.used_at)}`
                       : v.created_at
-                      ? `${t("promo.receivedOn")} ${fmtDate(v.created_at)}`
+                      ? `${t("Nhận ngày")} ${fmtDate(v.created_at)}`
                       : ""}
                   </div>
                 </div>
@@ -1550,7 +1553,7 @@ function GroupModal({ group: g, copiedId, onCopy, onClose, onUse, t }) {
                   <>
                     <button
                       onClick={() => onCopy(v)}
-                      aria-label={t("promo.copyCode")}
+                      aria-label={t("Sao chép mã")}
                       style={{
                         padding: 8,
                         border: "1px solid var(--border-color, #e5e9ef)",
@@ -1580,7 +1583,7 @@ function GroupModal({ group: g, copiedId, onCopy, onClose, onUse, t }) {
                         flexShrink: 0,
                       }}
                     >
-                      {t("promo.use")}
+                      {t("Dùng")}
                     </button>
                   </>
                 )}
@@ -1597,7 +1600,7 @@ function GroupModal({ group: g, copiedId, onCopy, onClose, onUse, t }) {
                       flexShrink: 0,
                     }}
                   >
-                    {t("promo.used")}
+                    {t("Đã dùng")}
                   </span>
                 )}
               </div>
@@ -1620,7 +1623,7 @@ function GroupModal({ group: g, copiedId, onCopy, onClose, onUse, t }) {
             fontSize: 13,
           }}
         >
-          {t("common.close")}
+          {t("Đóng")}
         </button>
       </div>
     </div>

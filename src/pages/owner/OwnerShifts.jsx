@@ -7,17 +7,9 @@
 //   3. Phân ca   — danh sách ca (CẢ pending + approved), có nút Duyệt/Từ chối
 //   4. Lịch sử   — chấm công theo tháng
 //
-// Fixes (v2 — workflow đăng ký ca):
-//   - 🔴 load() fetch include_pending=1 → thấy được ca chờ duyệt
-//   - 🔴 Tab "Hôm nay" + bảng tuần CHỈ hiển thị ca approved
-//   - 🔴 Thêm UI Duyệt / Từ chối ca pending trong tab "Phân ca"
-//   - 🔴 Badge status (Chờ duyệt / Đã duyệt) cho mỗi ca
-//   - 🔴 AssignModal dùng full employees list (không filter theo search)
-//   - 🟡 Auto-refresh 30s khi tab visible
-//   - 🟡 Bỏ dead code openNew({date, shift})
-//   - 🟡 Fix bug timezone: dùng local date thay vì toISOString()
-//   - 🟡 ESC đóng modal, disable khi save
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
+
 import { Skeleton, SkeletonStats } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
@@ -29,6 +21,7 @@ import {
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // HELPERS
@@ -36,7 +29,6 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 
 /**
  * Bỏ dấu tiếng Việt + lowercase để search chính xác.
- * "Trần Văn Trí" → "tran van tri"
  */
 function normalize(s) {
   return String(s || "")
@@ -80,10 +72,6 @@ const REFRESH_MS = 30000;
 // HELPERS (date)
 // ============================================================
 
-/**
- * Lấy ngày hôm nay theo LOCAL time (tránh bug UTC của toISOString).
- * Dùng getFullYear/getMonth/getDate → chắc chắn là ngày user thấy.
- */
 function getToday() {
   const d = new Date();
   const y = d.getFullYear();
@@ -126,6 +114,8 @@ function shiftCode(shiftId) {
 // ============================================================
 
 export default function OwnerShifts() {
+  const { t } = useI18n();
+
   const [tab, setTab] = useState("today");
 
   // ---------- Data ----------
@@ -142,10 +132,10 @@ export default function OwnerShifts() {
   const [search, setSearch] = useState("");
   const [historyFilter, setHistoryFilter] = useState("nextWeek");
 
-  // ✅ Processing per-shift (approve/reject)
+  // Processing per-shift (approve/reject)
   const [processingId, setProcessingId] = useState(null);
 
-  // ✅ Confirm dialog
+  // Confirm dialog
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -175,7 +165,7 @@ export default function OwnerShifts() {
       const [empsRes, attsRes, shiftsRes] = await Promise.all([
         api.users.list("EMPLOYEE").catch(() => []),
         api.attendance.all({ month: historyMonth }).catch(() => []),
-        // ✅ FIX #3: Lấy CẢ ca pending để admin duyệt
+        // Lấy CẢ ca pending để admin duyệt
         api.shifts.all({ include_pending: 1 }).catch(() => []),
       ]);
 
@@ -186,18 +176,18 @@ export default function OwnerShifts() {
       setShifts(Array.isArray(shiftsRes) ? shiftsRes : []);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || "Không tải được dữ liệu ca làm");
+        setError(e.message || t("Không tải được dữ liệu ca làm"));
       }
     } finally {
       if (myReqId === reqIdRef.current) setLoading(false);
     }
-  }, [historyMonth]);
+  }, [historyMonth, t]);
 
   useEffect(() => {
     load(false);
   }, [load]);
 
-  // ✅ Auto-refresh 30s khi tab visible
+  // Auto-refresh 30s khi tab visible
   useEffect(() => {
     if (!tabVisible) return;
     const timer = setInterval(() => load(true), REFRESH_MS);
@@ -217,7 +207,7 @@ export default function OwnerShifts() {
     };
   }, [employees, attendances]);
 
-  // ✅ FIX #1: Chỉ hiển thị ca APPROVED trong tab "Hôm nay"
+  // Chỉ hiển thị ca APPROVED trong tab "Hôm nay"
   const todayShifts = useMemo(() => {
     const today = getToday();
     return SHIFTS.map((s) => ({
@@ -226,7 +216,7 @@ export default function OwnerShifts() {
         (x) =>
           x.date === today &&
           x.shift === s.id &&
-          isApproved(x) // ✅ CHỈ ca approved
+          isApproved(x)
       ),
     }));
   }, [shifts]);
@@ -360,12 +350,6 @@ export default function OwnerShifts() {
     [filteredShifts]
   );
 
-  const filteredEmployees = useMemo(() => {
-    if (!search.trim()) return employees;
-    const q = normalize(search);
-    return employees.filter((e) => normalize(e.name).includes(q));
-  }, [employees, search]);
-
   // ---------- Actions ----------
 
   const changeWeek = (delta) => {
@@ -379,7 +363,7 @@ export default function OwnerShifts() {
 
   const goToThisWeek = () => setWeekDate(getToday());
 
-  // ✅ NEW: Approve ca pending
+  // Approve ca pending
   const approveShift = useCallback(
     async (shift) => {
       if (processingId !== null) return;
@@ -388,48 +372,48 @@ export default function OwnerShifts() {
       try {
         await api.shifts.approve(shift.id);
         toast(
-          `Đã duyệt ${shift.shift} của ${shift.employee_name}`,
+          `${t("Đã duyệt")} ${shift.shift} ${t("của")} ${shift.employee_name}`,
           "success"
         );
         await load(true);
       } catch (e) {
-        toast(e.message || "Không duyệt được", "error");
+        toast(e.message || t("Không duyệt được"), "error");
       } finally {
         setProcessingId(null);
       }
     },
-    [load, processingId]
+    [load, processingId, t]
   );
 
-  // ✅ NEW: Reject ca pending (mở ConfirmDialog)
+  // Reject ca pending (mở ConfirmDialog)
   const rejectShift = useCallback(
     (shift) => {
       if (processingId !== null) return;
 
       setConfirm({
-        title: `Từ chối ${shift.shift} của "${shift.employee_name}"?`,
+        title: `${t("Từ chối")} ${shift.shift} ${t("của")} "${shift.employee_name}"?`,
         message:
-          `Ca ngày ${fmtDate(shift.date)} sẽ bị xóa khỏi lịch của nhân viên. ` +
-          "Hành động này không thể hoàn tác.",
-        confirmText: "Từ chối",
-        cancelText: "Giữ lại",
+          `${t("Ca ngày")} ${fmtDate(shift.date)} ${t("sẽ bị xóa khỏi lịch của nhân viên.")} ` +
+          t("Hành động này không thể hoàn tác."),
+        confirmText: t("Từ chối"),
+        cancelText: t("Giữ lại"),
         danger: true,
         onConfirm: async () => {
           setProcessingId(shift.id);
           try {
             await api.shifts.reject(shift.id);
-            toast("Đã từ chối ca", "success");
+            toast(t("Đã từ chối ca"), "success");
             setConfirm(null);
             await load(true);
           } catch (e) {
-            toast(e.message || "Không từ chối được", "error");
+            toast(e.message || t("Không từ chối được"), "error");
           } finally {
             setProcessingId(null);
           }
         },
       });
     },
-    [load, processingId]
+    [load, processingId, t]
   );
 
   const saveAssignment = async (formData, isEdit) => {
@@ -440,7 +424,7 @@ export default function OwnerShifts() {
           shift: formData.shift,
           note: formData.note,
         });
-        toast("Đã cập nhật ca làm việc", "success");
+        toast(t("Đã cập nhật ca làm việc"), "success");
       } else {
         const { employeeId, dateShifts, note } = formData;
         let totalCreated = 0;
@@ -459,35 +443,38 @@ export default function OwnerShifts() {
         }
 
         toast(
-          `Đã phân ${totalCreated} ca` +
-            (totalSkipped ? ` (bỏ qua ${totalSkipped} ca trùng)` : ""),
+          `${t("Đã phân")} ${totalCreated} ${t("ca")}` +
+            (totalSkipped
+              ? ` (${t("bỏ qua")} ${totalSkipped} ${t("ca trùng")})`
+              : ""),
           "success"
         );
       }
       setAssignModal(null);
       load(false);
     } catch (e) {
-      toast(e.message || "Không lưu được", "error");
+      toast(e.message || t("Không lưu được"), "error");
     }
   };
 
   const removeAssignment = (id) => {
     setConfirm({
-      title: "Xóa phân ca này?",
+      title: t("Xóa phân ca này?"),
       message:
-        "Ca làm việc sẽ bị xoá khỏi lịch của nhân viên. " +
-        "Bạn có thể phân ca lại bất cứ lúc nào.",
-      confirmText: "Xóa phân ca",
-      cancelText: "Giữ lại",
+        t("Ca làm việc sẽ bị xoá khỏi lịch của nhân viên.") +
+        " " +
+        t("Bạn có thể phân ca lại bất cứ lúc nào."),
+      confirmText: t("Xóa phân ca"),
+      cancelText: t("Giữ lại"),
       danger: true,
       onConfirm: async () => {
         try {
           await api.shifts.remove(id);
-          toast("Đã xóa", "success");
+          toast(t("Đã xóa"), "success");
           setConfirm(null);
           load(false);
         } catch (e) {
-          toast(e.message || "Không xóa được", "error");
+          toast(e.message || t("Không xóa được"), "error");
         }
       },
     });
@@ -509,8 +496,6 @@ export default function OwnerShifts() {
   };
 
   const openEdit = (s) => setAssignModal({ ...s, _isEdit: true });
-
-  // ✅ FIX: Bỏ dead code date/shift (AssignModal không dùng)
   const openNew = () => setAssignModal({ _isNew: true });
 
   // ============================================================
@@ -565,8 +550,8 @@ export default function OwnerShifts() {
               }}
             >
               {sundayReminder === "urgent"
-                ? "⚠️ Hạn chót xếp ca tuần sau: 15:00 hôm nay!"
-                : "📅 Nhắc nhở xếp ca tuần sau"}
+                ? t("⚠️ Hạn chót xếp ca tuần sau: 15:00 hôm nay!")
+                : t("📅 Nhắc nhở xếp ca tuần sau")}
             </b>
             <span
               style={{
@@ -575,8 +560,8 @@ export default function OwnerShifts() {
               }}
             >
               {sundayReminder === "urgent"
-                ? "Vui lòng phân ca cho nhân viên TRƯỚC 15:00 Chủ nhật."
-                : "Vui lòng xếp ca cho nhân viên trước 15:00 Chủ nhật hàng tuần."}
+                ? t("Vui lòng phân ca cho nhân viên TRƯỚC 15:00 Chủ nhật.")
+                : t("Vui lòng xếp ca cho nhân viên trước 15:00 Chủ nhật hàng tuần.")}
             </span>
           </div>
           <button
@@ -593,13 +578,13 @@ export default function OwnerShifts() {
               whiteSpace: "nowrap",
             }}
           >
-            Xếp ca ngay
+            {t("Xếp ca ngay")}
           </button>
         </div>
       )}
 
       {/* ============================================================
-          ✅ CẢNH BÁO CA PENDING HÔM NAY
+          CẢNH BÁO CA PENDING HÔM NAY
           ============================================================ */}
       {pendingTodayCount > 0 && !loading && (
         <div
@@ -640,10 +625,13 @@ export default function OwnerShifts() {
                 marginBottom: 2,
               }}
             >
-              🔔 Có {pendingTodayCount} ca chờ duyệt hôm nay
+              🔔 {t("Có {n} ca chờ duyệt hôm nay").replace(
+                "{n}",
+                pendingTodayCount
+              )}
             </b>
             <span style={{ color: "#78350f", fontSize: 13 }}>
-              Vào tab "Phân ca" để duyệt hoặc từ chối.
+              {t("Vào tab \"Phân ca\" để duyệt hoặc từ chối.")}
             </span>
           </div>
           <button
@@ -660,7 +648,7 @@ export default function OwnerShifts() {
               whiteSpace: "nowrap",
             }}
           >
-            Xử lý ngay
+            {t("Xử lý ngay")}
           </button>
         </div>
       )}
@@ -677,10 +665,30 @@ export default function OwnerShifts() {
           marginBottom: 20,
         }}
       >
-        <Stat icon={<Users size={18} />} label="Tổng nhân viên" value={stats.total} color="#2634d5" />
-        <Stat icon={<CheckCircle2 size={18} />} label="Đang làm việc" value={stats.working} color="#18a967" />
-        <Stat icon={<AlertTriangle size={18} />} label="Đi muộn" value={stats.late} color="#f59e0b" />
-        <Stat icon={<UserX size={18} />} label="Vắng mặt" value={stats.absent} color="#ef4444" />
+        <Stat
+          icon={<Users size={18} />}
+          label={t("Tổng nhân viên")}
+          value={stats.total}
+          color="#2634d5"
+        />
+        <Stat
+          icon={<CheckCircle2 size={18} />}
+          label={t("Đang làm việc")}
+          value={stats.working}
+          color="#18a967"
+        />
+        <Stat
+          icon={<AlertTriangle size={18} />}
+          label={t("Đi muộn")}
+          value={stats.late}
+          color="#f59e0b"
+        />
+        <Stat
+          icon={<UserX size={18} />}
+          label={t("Vắng mặt")}
+          value={stats.absent}
+          color="#ef4444"
+        />
       </div>
 
       {/* ============================================================
@@ -699,22 +707,22 @@ export default function OwnerShifts() {
           flexWrap: "wrap",
         }}
       >
-        {TABS.map((t) => (
+        {TABS.map((tabItem) => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={tabItem.id}
+            onClick={() => setTab(tabItem.id)}
             style={{
               padding: "10px 18px",
-              background: tab === t.id ? "#2634d5" : "transparent",
-              color: tab === t.id ? "#fff" : "var(--text-muted, #475569)",
+              background: tab === tabItem.id ? "#2634d5" : "transparent",
+              color: tab === tabItem.id ? "#fff" : "var(--text-muted, #475569)",
               border: 0,
               borderRadius: 8,
               cursor: "pointer",
               fontSize: 13,
-              fontWeight: tab === t.id ? 700 : 500,
+              fontWeight: tab === tabItem.id ? 700 : 500,
             }}
           >
-            {t.label}
+            {t(tabItem.label)}
           </button>
         ))}
       </div>
@@ -796,7 +804,7 @@ export default function OwnerShifts() {
         >
           <AlertCircle size={26} style={{ marginBottom: 10 }} />
           <div style={{ fontWeight: 600, marginBottom: 4 }}>
-            Không tải được dữ liệu
+            {t("Không tải được dữ liệu")}
           </div>
           <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 12 }}>
             {error}
@@ -814,7 +822,7 @@ export default function OwnerShifts() {
               fontSize: 13,
             }}
           >
-            Thử lại
+            {t("Thử lại")}
           </button>
         </div>
       )}
@@ -859,10 +867,20 @@ export default function OwnerShifts() {
                     <Icon size={20} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <b style={{ color: "var(--text-primary, #172033)", fontSize: 14 }}>
-                      {s.label}
+                    <b
+                      style={{
+                        color: "var(--text-primary, #172033)",
+                        fontSize: 14,
+                      }}
+                    >
+                      {t(s.label)}
                     </b>
-                    <div style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text-light, #8993a3)",
+                      }}
+                    >
                       {s.time}
                     </div>
                   </div>
@@ -890,10 +908,12 @@ export default function OwnerShifts() {
                       fontSize: 12,
                     }}
                   >
-                    Chưa phân ca
+                    {t("Chưa phân ca")}
                   </div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                  >
                     {s.employees.map((emp) => {
                       const today = getToday();
                       const att = attendances.find(
@@ -947,27 +967,27 @@ export default function OwnerShifts() {
                               }}
                             >
                               {att
-                                ? "Vào " +
+                                ? `${t("Vào")} ` +
                                   fmtTime(att.checkIn) +
                                   (att.checkOut
-                                    ? " · Ra " + fmtTime(att.checkOut)
+                                    ? ` · ${t("Ra")} ` + fmtTime(att.checkOut)
                                     : "")
-                                : "Chưa chấm công"}
+                                : t("Chưa chấm công")}
                             </span>
                           </div>
-                          {att && <AttendanceBadge status={att.status} />}
+                          {att && <AttendanceBadge status={att.status} t={t} />}
                           <button
                             onClick={() => openEdit(emp)}
-                            title="Sửa ca"
-                            aria-label="Sửa ca"
+                            title={t("Sửa ca")}
+                            aria-label={t("Sửa ca")}
                             style={iconBtnSmall}
                           >
                             <Edit size={14} />
                           </button>
                           <button
                             onClick={() => removeAssignment(emp.id)}
-                            title="Xóa ca"
-                            aria-label="Xóa ca"
+                            title={t("Xóa ca")}
+                            aria-label={t("Xóa ca")}
                             style={{ ...iconBtnSmall, color: "#ef4444" }}
                           >
                             <Trash2 size={14} />
@@ -1000,21 +1020,46 @@ export default function OwnerShifts() {
             }}
           >
             <div>
-              <h3 style={{ margin: "0 0 4px", color: "var(--text-primary, #172033)", fontSize: 15 }}>
-                Lịch phân ca tuần
+              <h3
+                style={{
+                  margin: "0 0 4px",
+                  color: "var(--text-primary, #172033)",
+                  fontSize: 15,
+                }}
+              >
+                {t("Lịch phân ca tuần")}
               </h3>
-              <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>
+              <span
+                style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}
+              >
                 📅 {weekLabel}
               </span>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <button onClick={() => changeWeek(-1)} title="Tuần trước" aria-label="Tuần trước" style={navBtn}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                onClick={() => changeWeek(-1)}
+                title={t("Tuần trước")}
+                aria-label={t("Tuần trước")}
+                style={navBtn}
+              >
                 <ChevronLeft size={18} />
               </button>
               <button onClick={goToThisWeek} style={navBtnWide}>
-                <CalendarDays size={14} /> Tuần này
+                <CalendarDays size={14} /> {t("Tuần này")}
               </button>
-              <button onClick={() => changeWeek(1)} title="Tuần sau" aria-label="Tuần sau" style={navBtn}>
+              <button
+                onClick={() => changeWeek(1)}
+                title={t("Tuần sau")}
+                aria-label={t("Tuần sau")}
+                style={navBtn}
+              >
                 <ChevronRight size={18} />
               </button>
               <button
@@ -1033,17 +1078,25 @@ export default function OwnerShifts() {
                   gap: 6,
                 }}
               >
-                <Plus size={14} /> Phân ca
+                <Plus size={14} /> {t("Phân ca")}
               </button>
             </div>
           </div>
 
           {/* Bảng tuần */}
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                minWidth: 700,
+              }}
+            >
               <thead>
                 <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                  <th style={{ ...thStyle, minWidth: 150 }}>Nhân viên</th>
+                  <th style={{ ...thStyle, minWidth: 150 }}>
+                    {t("Nhân viên")}
+                  </th>
                   {weekDays.map((d) => {
                     const dayObj = new Date(d + "T00:00:00");
                     return (
@@ -1058,7 +1111,9 @@ export default function OwnerShifts() {
                         }}
                       >
                         <div style={{ fontWeight: 700 }}>
-                          {dayObj.toLocaleDateString("vi-VN", { weekday: "short" })}
+                          {dayObj.toLocaleDateString("vi-VN", {
+                            weekday: "short",
+                          })}
                         </div>
                         <div style={{ fontSize: 10, opacity: 0.7 }}>
                           {d.slice(8)}/{d.slice(5, 7)}
@@ -1072,13 +1127,15 @@ export default function OwnerShifts() {
                 {employees.map((emp) => (
                   <tr
                     key={emp.id}
-                    style={{ borderBottom: "1px solid var(--border-color, #eef2f7)" }}
+                    style={{
+                      borderBottom: "1px solid var(--border-color, #eef2f7)",
+                    }}
                   >
                     <td style={tdStyle}>
                       <b>{emp.name}</b>
                     </td>
                     {weekDays.map((d) => {
-                      // ✅ FIX #2: Chỉ hiển thị ca APPROVED
+                      // Chỉ hiển thị ca APPROVED
                       const empShifts = shifts.filter(
                         (s) =>
                           String(s.employee_id) === String(emp.id) &&
@@ -1109,8 +1166,8 @@ export default function OwnerShifts() {
                                 <button
                                   key={s.id}
                                   onClick={() => openEdit(s)}
-                                  title={`${s.shift} — Bấm để sửa`}
-                                  aria-label={`Sửa ca ${s.shift}`}
+                                  title={`${s.shift} — ${t("Bấm để sửa")}`}
+                                  aria-label={`${t("Sửa ca")} ${s.shift}`}
                                   style={{
                                     width: 24,
                                     height: 24,
@@ -1139,9 +1196,13 @@ export default function OwnerShifts() {
                   <tr>
                     <td
                       colSpan={weekDays.length + 1}
-                      style={{ textAlign: "center", padding: 40, color: "var(--text-light, #8993a3)" }}
+                      style={{
+                        textAlign: "center",
+                        padding: 40,
+                        color: "var(--text-light, #8993a3)",
+                      }}
                     >
-                      Chưa có nhân viên nào
+                      {t("Chưa có nhân viên nào")}
                     </td>
                   </tr>
                 )}
@@ -1160,7 +1221,10 @@ export default function OwnerShifts() {
             }}
           >
             {SHIFTS.map((s) => (
-              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div
+                key={s.id}
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
+              >
                 <span
                   style={{
                     width: 20,
@@ -1176,7 +1240,9 @@ export default function OwnerShifts() {
                 >
                   {shiftCode(s.id)}
                 </span>
-                <span style={{ color: "var(--text-muted, #64748b)" }}>{s.label}</span>
+                <span style={{ color: "var(--text-muted, #64748b)" }}>
+                  {t(s.label)}
+                </span>
               </div>
             ))}
             <span
@@ -1186,7 +1252,7 @@ export default function OwnerShifts() {
                 fontStyle: "italic",
               }}
             >
-              💡 Bấm vào ô để sửa ca
+              💡 {t("Bấm vào ô để sửa ca")}
             </span>
           </div>
         </div>
@@ -1221,11 +1287,14 @@ export default function OwnerShifts() {
                 maxWidth: 400,
               }}
             >
-              <Search size={16} style={{ color: "var(--text-light, #8993a3)" }} />
+              <Search
+                size={16}
+                style={{ color: "var(--text-light, #8993a3)" }}
+              />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm nhân viên..."
+                placeholder={t("Tìm nhân viên...")}
                 style={{
                   flex: 1,
                   border: 0,
@@ -1245,7 +1314,7 @@ export default function OwnerShifts() {
                     color: "var(--text-light, #8993a3)",
                     padding: 2,
                   }}
-                  aria-label="Xoá tìm kiếm"
+                  aria-label={t("Xoá tìm kiếm")}
                 >
                   <X size={14} />
                 </button>
@@ -1263,9 +1332,9 @@ export default function OwnerShifts() {
               }}
             >
               {[
-                { id: "week", label: "Tuần này" },
-                { id: "nextWeek", label: "Tuần sau" },
-                { id: "all", label: "Tất cả" },
+                { id: "week", label: t("Tuần này") },
+                { id: "nextWeek", label: t("Tuần sau") },
+                { id: "all", label: t("Tất cả") },
               ].map((f) => (
                 <button
                   key={f.id}
@@ -1273,8 +1342,12 @@ export default function OwnerShifts() {
                   type="button"
                   style={{
                     padding: "6px 14px",
-                    background: historyFilter === f.id ? "#2634d5" : "transparent",
-                    color: historyFilter === f.id ? "#fff" : "var(--text-muted, #475569)",
+                    background:
+                      historyFilter === f.id ? "#2634d5" : "transparent",
+                    color:
+                      historyFilter === f.id
+                        ? "#fff"
+                        : "var(--text-muted, #475569)",
                     border: 0,
                     borderRadius: 6,
                     cursor: "pointer",
@@ -1304,7 +1377,7 @@ export default function OwnerShifts() {
                 fontSize: 13,
               }}
             >
-              <Plus size={16} /> Phân ca
+              <Plus size={16} /> {t("Phân ca")}
             </button>
           </div>
 
@@ -1317,14 +1390,26 @@ export default function OwnerShifts() {
               marginBottom: 14,
             }}
           >
-            <SummaryCard label="Tổng ca" value={filteredShifts.length} color="#2634d5" />
             <SummaryCard
-              label="Chờ duyệt"
+              label={t("Tổng ca")}
+              value={filteredShifts.length}
+              color="#2634d5"
+            />
+            <SummaryCard
+              label={t("Chờ duyệt")}
               value={filteredShifts.filter(isPending).length}
               color="#f59e0b"
             />
-            <SummaryCard label="Số ngày" value={groupedShifts.length} color="#18a967" />
-            <SummaryCard label="Nhân viên" value={uniqueEmployees} color="#8b5cf6" />
+            <SummaryCard
+              label={t("Số ngày")}
+              value={groupedShifts.length}
+              color="#18a967"
+            />
+            <SummaryCard
+              label={t("Nhân viên")}
+              value={uniqueEmployees}
+              color="#8b5cf6"
+            />
           </div>
 
           {/* Danh sách ca */}
@@ -1332,18 +1417,25 @@ export default function OwnerShifts() {
             <div style={{ ...cardStyle, textAlign: "center", padding: 40 }}>
               <CalendarDays
                 size={36}
-                style={{ opacity: 0.35, marginBottom: 10, color: "var(--text-light, #8993a3)" }}
+                style={{
+                  opacity: 0.35,
+                  marginBottom: 10,
+                  color: "var(--text-light, #8993a3)",
+                }}
               />
               <div style={{ color: "var(--text-light, #8993a3)", fontSize: 13 }}>
                 {search || historyFilter !== "all"
-                  ? "Không có ca nào khớp bộ lọc"
-                  : "Chưa có phân ca nào"}
+                  ? t("Không có ca nào khớp bộ lọc")
+                  : t("Chưa có phân ca nào")}
               </div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {groupedShifts.map((group) => (
-                <div key={group.date} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+                <div
+                  key={group.date}
+                  style={{ ...cardStyle, padding: 0, overflow: "hidden" }}
+                >
                   {/* Header ngày */}
                   <div
                     style={{
@@ -1357,13 +1449,16 @@ export default function OwnerShifts() {
                       gap: 10,
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 12 }}
+                    >
                       <div
                         style={{
                           width: 44,
                           height: 44,
                           borderRadius: 12,
-                          background: "linear-gradient(135deg, #2634d5, #20c779)",
+                          background:
+                            "linear-gradient(135deg, #2634d5, #20c779)",
                           color: "#fff",
                           display: "grid",
                           placeItems: "center",
@@ -1377,7 +1472,13 @@ export default function OwnerShifts() {
                             gap: 1,
                           }}
                         >
-                          <span style={{ fontSize: 9, fontWeight: 600, opacity: 0.9 }}>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 600,
+                              opacity: 0.9,
+                            }}
+                          >
                             {group.weekdayShort}
                           </span>
                           <span style={{ fontSize: 15, fontWeight: 800 }}>
@@ -1395,8 +1496,13 @@ export default function OwnerShifts() {
                         >
                           {group.label}
                         </b>
-                        <span style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}>
-                          {group.shifts.length} ca
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-light, #8993a3)",
+                          }}
+                        >
+                          {group.shifts.length} {t("ca")}
                         </span>
                       </div>
                     </div>
@@ -1413,7 +1519,7 @@ export default function OwnerShifts() {
                             color: shiftColor(s),
                           }}
                         >
-                          {s}
+                          {t(s)}
                         </span>
                       ))}
                     </div>
@@ -1469,7 +1575,9 @@ export default function OwnerShifts() {
                                 flexShrink: 0,
                               }}
                             >
-                              {(s.employee_name || "?").slice(0, 2).toUpperCase()}
+                              {(s.employee_name || "?")
+                                .slice(0, 2)
+                                .toUpperCase()}
                             </div>
                             <div style={{ minWidth: 0 }}>
                               <div
@@ -1489,7 +1597,7 @@ export default function OwnerShifts() {
                                   {s.employee_name}
                                 </b>
 
-                                {/* ✅ Badge status */}
+                                {/* Badge status */}
                                 <span
                                   style={{
                                     padding: "2px 8px",
@@ -1505,7 +1613,9 @@ export default function OwnerShifts() {
                                     whiteSpace: "nowrap",
                                   }}
                                 >
-                                  {isPendingShift ? "Chờ duyệt" : "Đã duyệt"}
+                                  {isPendingShift
+                                    ? t("Chờ duyệt")
+                                    : t("Đã duyệt")}
                                 </span>
 
                                 {/* Badge shift */}
@@ -1520,7 +1630,7 @@ export default function OwnerShifts() {
                                     whiteSpace: "nowrap",
                                   }}
                                 >
-                                  {s.shift}
+                                  {t(s.shift)}
                                 </span>
                               </div>
 
@@ -1540,15 +1650,17 @@ export default function OwnerShifts() {
                           </div>
 
                           {/* Actions */}
-                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                            {/* ✅ Nút DUYỆT cho ca pending */}
+                          <div
+                            style={{ display: "flex", gap: 6, flexShrink: 0 }}
+                          >
+                            {/* Nút DUYỆT cho ca pending */}
                             {isPendingShift && (
                               <>
                                 <button
                                   onClick={() => approveShift(s)}
                                   disabled={processingId !== null}
-                                  title="Duyệt ca"
-                                  aria-label="Duyệt ca"
+                                  title={t("Duyệt ca")}
+                                  aria-label={t("Duyệt ca")}
                                   type="button"
                                   style={{
                                     padding: "7px 12px",
@@ -1580,11 +1692,11 @@ export default function OwnerShifts() {
                                             "spin 1s linear infinite",
                                         }}
                                       />
-                                      Đang xử lý...
+                                      {t("Đang xử lý...")}
                                     </>
                                   ) : (
                                     <>
-                                      <Check size={12} /> Duyệt
+                                      <Check size={12} /> {t("Duyệt")}
                                     </>
                                   )}
                                 </button>
@@ -1592,8 +1704,8 @@ export default function OwnerShifts() {
                                 <button
                                   onClick={() => rejectShift(s)}
                                   disabled={processingId !== null}
-                                  title="Từ chối"
-                                  aria-label="Từ chối"
+                                  title={t("Từ chối")}
+                                  aria-label={t("Từ chối")}
                                   type="button"
                                   style={{
                                     padding: "7px 12px",
@@ -1615,16 +1727,16 @@ export default function OwnerShifts() {
                                     whiteSpace: "nowrap",
                                   }}
                                 >
-                                  <X size={12} /> Từ chối
+                                  <X size={12} /> {t("Từ chối")}
                                 </button>
                               </>
                             )}
 
-                            {/* Nút Sửa / Xóa (chỉ cho approved hoặc pending đều được) */}
+                            {/* Nút Sửa / Xóa */}
                             <button
                               onClick={() => openEdit(s)}
-                              title="Sửa"
-                              aria-label="Sửa"
+                              title={t("Sửa")}
+                              aria-label={t("Sửa")}
                               type="button"
                               style={iconBtnSmall}
                             >
@@ -1632,8 +1744,8 @@ export default function OwnerShifts() {
                             </button>
                             <button
                               onClick={() => removeAssignment(s.id)}
-                              title="Xóa"
-                              aria-label="Xóa"
+                              title={t("Xóa")}
+                              aria-label={t("Xóa")}
                               type="button"
                               style={{ ...iconBtnSmall, color: "#ef4444" }}
                             >
@@ -1666,8 +1778,14 @@ export default function OwnerShifts() {
               gap: 12,
             }}
           >
-            <h3 style={{ margin: 0, color: "var(--text-primary, #172033)", fontSize: 15 }}>
-              Lịch sử chấm công
+            <h3
+              style={{
+                margin: 0,
+                color: "var(--text-primary, #172033)",
+                fontSize: 15,
+              }}
+            >
+              {t("Lịch sử chấm công")}
             </h3>
             <input
               type="month"
@@ -1689,25 +1807,37 @@ export default function OwnerShifts() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                  <th style={thStyle}>Ngày</th>
-                  <th style={thStyle}>Nhân viên</th>
-                  <th style={thStyle}>Ca</th>
-                  <th style={thStyle}>Check-in</th>
-                  <th style={thStyle}>Check-out</th>
-                  <th style={thStyle}>Giờ làm</th>
-                  <th style={thStyle}>Trạng thái</th>
+                  <th style={thStyle}>{t("Ngày")}</th>
+                  <th style={thStyle}>{t("Nhân viên")}</th>
+                  <th style={thStyle}>{t("Ca")}</th>
+                  <th style={thStyle}>{t("Check-in")}</th>
+                  <th style={thStyle}>{t("Check-out")}</th>
+                  <th style={thStyle}>{t("Giờ làm")}</th>
+                  <th style={thStyle}>{t("Trạng thái")}</th>
                 </tr>
               </thead>
               <tbody>
                 {attendances.length === 0 ? (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: "center", padding: 40, color: "var(--text-light, #8993a3)" }}>
-                      Chưa có dữ liệu chấm công
+                    <td
+                      colSpan="7"
+                      style={{
+                        textAlign: "center",
+                        padding: 40,
+                        color: "var(--text-light, #8993a3)",
+                      }}
+                    >
+                      {t("Chưa có dữ liệu chấm công")}
                     </td>
                   </tr>
                 ) : (
                   attendances.map((a) => (
-                    <tr key={a.id} style={{ borderBottom: "1px solid var(--border-color, #eef2f7)" }}>
+                    <tr
+                      key={a.id}
+                      style={{
+                        borderBottom: "1px solid var(--border-color, #eef2f7)",
+                      }}
+                    >
                       <td style={tdStyle}>
                         <b>{fmtDate(a.date)}</b>
                       </td>
@@ -1724,21 +1854,33 @@ export default function OwnerShifts() {
                               color: shiftColor(a.shift),
                             }}
                           >
-                            {a.shift}
+                            {t(a.shift)}
                           </span>
                         ) : (
-                          <span style={{ color: "var(--text-light, #8993a3)", fontSize: 12 }}>—</span>
+                          <span
+                            style={{
+                              color: "var(--text-light, #8993a3)",
+                              fontSize: 12,
+                            }}
+                          >
+                            —
+                          </span>
                         )}
                       </td>
                       <td style={tdStyle}>{fmtTime(a.checkIn)}</td>
-                      <td style={{ ...tdStyle, color: "var(--text-muted, #64748b)" }}>
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: "var(--text-muted, #64748b)",
+                        }}
+                      >
                         {fmtTime(a.checkOut)}
                       </td>
                       <td style={tdStyle}>
                         <b>{a.hours ? a.hours + "h" : "—"}</b>
                       </td>
                       <td style={tdStyle}>
-                        <AttendanceBadge status={a.status} />
+                        <AttendanceBadge status={a.status} t={t} />
                       </td>
                     </tr>
                   ))
@@ -1755,16 +1897,16 @@ export default function OwnerShifts() {
       {assignModal && (
         <AssignModal
           modal={assignModal}
-          // ✅ FIX #6: dùng FULL employees (không filter theo search)
           employees={employees}
           weekDays={weekDays}
           shifts={shifts}
           onSave={saveAssignment}
           onClose={() => setAssignModal(null)}
+          t={t}
         />
       )}
 
-      {/* ✅ Confirm dialog */}
+      {/* Confirm dialog */}
       {confirm && (
         <ConfirmDialog
           open
@@ -1797,7 +1939,15 @@ export default function OwnerShifts() {
 // SUB-COMPONENT: AssignModal
 // ============================================================
 
-function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose }) {
+function AssignModal({
+  modal,
+  employees,
+  weekDays,
+  shifts = [],
+  onSave,
+  onClose,
+  t,
+}) {
   const isEdit = modal._isEdit === true;
 
   const [saving, setSaving] = useState(false);
@@ -1867,7 +2017,7 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
       return;
     }
     if (!activeDate) {
-      toast("Vui lòng chọn ngày trước", "error");
+      toast(t("Vui lòng chọn ngày trước"), "error");
       return;
     }
     setDateShifts((prev) => {
@@ -1900,13 +2050,13 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
     if (saving) return;
 
     if (!employeeId) {
-      return toast("Vui lòng chọn nhân viên", "error");
+      return toast(t("Vui lòng chọn nhân viên"), "error");
     }
     const dates = Object.keys(dateShifts).filter(
       (d) => dateShifts[d]?.length > 0
     );
     if (!dates.length) {
-      return toast("Vui lòng chọn ít nhất 1 ngày và 1 ca", "error");
+      return toast(t("Vui lòng chọn ít nhất 1 ngày và 1 ca"), "error");
     }
 
     setSaving(true);
@@ -1922,7 +2072,10 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
           true
         );
       } else {
-        await onSave({ employeeId: Number(employeeId), dateShifts, note }, false);
+        await onSave(
+          { employeeId: Number(employeeId), dateShifts, note },
+          false
+        );
       }
     } finally {
       setSaving(false);
@@ -1986,13 +2139,19 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
             marginBottom: 12,
           }}
         >
-          <h3 style={{ margin: 0, color: "var(--text-primary, #172033)", fontSize: 16 }}>
-            {isEdit ? "Sửa ca làm việc" : "Phân ca làm việc"}
+          <h3
+            style={{
+              margin: 0,
+              color: "var(--text-primary, #172033)",
+              fontSize: 16,
+            }}
+          >
+            {isEdit ? t("Sửa ca làm việc") : t("Phân ca làm việc")}
           </h3>
           <button
             onClick={onClose}
             disabled={saving}
-            aria-label="Đóng"
+            aria-label={t("Đóng")}
             style={{
               background: "transparent",
               border: 0,
@@ -2020,7 +2179,7 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
               fontWeight: 600,
             }}
           >
-            Đang phân ca cho tuần sau ({weekLabel})
+            {t("Đang phân ca cho tuần sau")} ({weekLabel})
           </div>
         )}
 
@@ -2037,14 +2196,13 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
               fontWeight: 600,
             }}
           >
-            ✏️ Đang sửa ca ngày {modal.date} — chỉ đổi được ca, không đổi nhân
-            viên
+            ✏️ {t("Đang sửa ca ngày")} {modal.date} — {t("chỉ đổi được ca, không đổi nhân viên")}
           </div>
         )}
 
         <form onSubmit={submit} autoComplete="off">
           {/* Nhân viên */}
-          <label style={labelStyle}>Nhân viên *</label>
+          <label style={labelStyle}>{t("Nhân viên")} *</label>
           <select
             value={employeeId}
             onChange={(e) => setEmployeeId(e.target.value)}
@@ -2052,7 +2210,7 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
             disabled={isEdit || saving}
             style={inputStyle}
           >
-            <option value="">-- Chọn nhân viên --</option>
+            <option value="">-- {t("Chọn nhân viên")} --</option>
             {employees.map((e) => (
               <option key={e.id} value={e.id}>
                 {e.name}
@@ -2073,7 +2231,7 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                 flexWrap: "wrap",
               }}
             >
-              <label style={{ ...labelStyle, margin: 0 }}>Ngày *</label>
+              <label style={{ ...labelStyle, margin: 0 }}>{t("Ngày")} *</label>
               <div style={{ display: "flex", gap: 6 }}>
                 <button
                   type="button"
@@ -2090,7 +2248,7 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                     fontWeight: 600,
                   }}
                 >
-                  Áp dụng cả tuần
+                  {t("Áp dụng cả tuần")}
                 </button>
                 {totalAssignments > 0 && (
                   <button
@@ -2108,13 +2266,13 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                       fontWeight: 600,
                     }}
                   >
-                    Xóa hết
+                    {t("Xóa hết")}
                   </button>
                 )}
               </div>
             </div>
           )}
-          {isEdit && <label style={labelStyle}>Ngày *</label>}
+          {isEdit && <label style={labelStyle}>{t("Ngày")} *</label>}
 
           {/* Grid ngày */}
           <div
@@ -2129,7 +2287,9 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
               const isActive = activeDate === d;
               const isAssigned = isDayAssigned(d);
               const dayObj = new Date(d + "T00:00:00");
-              const dayLabel = dayObj.toLocaleDateString("vi-VN", { weekday: "short" });
+              const dayLabel = dayObj.toLocaleDateString("vi-VN", {
+                weekday: "short",
+              });
 
               let bg = "var(--bg-tertiary, #f5f7fb)";
               let color = "var(--text-primary, #172033)";
@@ -2152,7 +2312,11 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                   type="button"
                   onClick={() => !isEdit && setActiveDate(d)}
                   disabled={saving || isEdit}
-                  title={isAssigned ? "Đã có ca — bấm để chọn thêm ca" : "Bấm để chọn ngày"}
+                  title={
+                    isAssigned
+                      ? t("Đã có ca — bấm để chọn thêm ca")
+                      : t("Bấm để chọn ngày")
+                  }
                   style={{
                     padding: "8px 4px",
                     borderRadius: 8,
@@ -2189,8 +2353,12 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                       ✓
                     </span>
                   )}
-                  <span style={{ fontSize: 10, fontWeight: 600 }}>{dayLabel}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>{d.slice(8)}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600 }}>
+                    {dayLabel}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>
+                    {d.slice(8)}
+                  </span>
                 </button>
               );
             })}
@@ -2198,10 +2366,12 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
 
           {/* Chọn ca */}
           <label style={labelStyle}>
-            Ca làm *{" "}
+            {t("Ca làm")} *{" "}
             {!isEdit && activeDate && (
-              <span style={{ fontWeight: 400, color: "var(--text-light, #94a3b8)" }}>
-                (ngày {activeDate.slice(8)}/{activeDate.slice(5, 7)})
+              <span
+                style={{ fontWeight: 400, color: "var(--text-light, #94a3b8)" }}
+              >
+                ({t("ngày")} {activeDate.slice(8)}/{activeDate.slice(5, 7)})
               </span>
             )}
           </label>
@@ -2225,7 +2395,9 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                   style={{
                     padding: "10px 8px",
                     borderRadius: 10,
-                    background: sel ? s.color + "20" : "var(--card-bg, #fff)",
+                    background: sel
+                      ? s.color + "20"
+                      : "var(--card-bg, #fff)",
                     border: sel
                       ? "2px solid " + s.color
                       : "2px solid var(--border-color, #e5e9ef)",
@@ -2238,7 +2410,9 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                 >
                   <Icon
                     size={18}
-                    style={{ color: sel ? s.color : "var(--text-light, #94a3b8)" }}
+                    style={{
+                      color: sel ? s.color : "var(--text-light, #94a3b8)",
+                    }}
                   />
                   <span
                     style={{
@@ -2247,9 +2421,11 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                       color: sel ? s.color : "var(--text-muted, #475569)",
                     }}
                   >
-                    {s.label}
+                    {t(s.label)}
                   </span>
-                  <span style={{ fontSize: 9, color: "var(--text-light, #94a3b8)" }}>
+                  <span
+                    style={{ fontSize: 9, color: "var(--text-light, #94a3b8)" }}
+                  >
                     {s.time}
                   </span>
                 </button>
@@ -2258,11 +2434,11 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
           </div>
 
           {/* Ghi chú */}
-          <label style={labelStyle}>Ghi chú</label>
+          <label style={labelStyle}>{t("Ghi chú")}</label>
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="VD: Bận việc riêng..."
+            placeholder={t("VD: Bận việc riêng...")}
             disabled={saving}
             style={inputStyle}
           />
@@ -2281,7 +2457,8 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                 fontWeight: 600,
               }}
             >
-              Đã chọn <b>{totalAssignments}</b> ca trên <b>{totalDays}</b> ngày
+              {t("Đã chọn")} <b>{totalAssignments}</b> {t("ca trên")}{" "}
+              <b>{totalDays}</b> {t("ngày")}
             </div>
           )}
 
@@ -2303,7 +2480,7 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
                 fontSize: 13,
               }}
             >
-              Hủy
+              {t("Hủy")}
             </button>
             <button
               type="submit"
@@ -2326,12 +2503,16 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
             >
               {saving ? (
                 <>
-                  <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
-                  Đang lưu...
+                  <Loader2
+                    size={14}
+                    style={{ animation: "spin 1s linear infinite" }}
+                  />
+                  {t("Đang lưu...")}
                 </>
               ) : (
                 <>
-                  <Save size={14} /> {isEdit ? "Lưu thay đổi" : "Phân ca"}
+                  <Save size={14} />{" "}
+                  {isEdit ? t("Lưu thay đổi") : t("Phân ca")}
                 </>
               )}
             </button>
@@ -2346,7 +2527,7 @@ function AssignModal({ modal, employees, weekDays, shifts = [], onSave, onClose 
 // SMALL SUB-COMPONENTS
 // ============================================================
 
-function AttendanceBadge({ status }) {
+function AttendanceBadge({ status, t }) {
   if (!status) return null;
   const map = {
     "Đúng giờ": { bg: "#d1fae5", fg: "#065f46" },
@@ -2367,7 +2548,7 @@ function AttendanceBadge({ status }) {
         whiteSpace: "nowrap",
       }}
     >
-      {status}
+      {t(status)}
     </span>
   );
 }

@@ -1,11 +1,11 @@
-﻿// ============================================================
+// ============================================================
 // IMAGEUPLOADER.JSX — Upload ảnh với drag & drop
 // ============================================================
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Image as ImageIcon, X, Loader2 } from "lucide-react";
 import { toast } from "./Effects";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const MAX_SIZE = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -25,7 +25,7 @@ export default function ImageUploader({
   onChange,
   label,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [preview, setPreview] = useState(value || "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

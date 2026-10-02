@@ -1,6 +1,8 @@
 // ============================================================
 // OWNERREPORTS.JSX — Báo cáo doanh thu chuyên sâu (Admin)
 // ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+// ============================================================
 
 import {
   useEffect, useState, useMemo, useCallback, useRef,
@@ -17,7 +19,7 @@ import {
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -26,13 +28,13 @@ import { useTranslation } from "../../i18n";
 const COLORS = ["#18a967", "#f59e0b", "#2634d5", "#ef4444", "#8b5cf6"];
 
 const QUICK_RANGES = [
-  { id: "today",   label: "Hôm nay",      days: 1 },
-  { id: "7d",      label: "7 ngày",       days: 7 },
-  { id: "30d",     label: "30 ngày",      days: 30 },
-  { id: "90d",     label: "90 ngày",      days: 90 },
-  { id: "month",   label: "Tháng này",    months: 1 },
-  { id: "year",    label: "Năm nay",      years: 1 },
-  { id: "custom",  label: "Tùy chọn",     custom: true },
+  { id: "today",  label: "Hôm nay",     days: 1 },
+  { id: "7d",     label: "7 ngày",      days: 7 },
+  { id: "30d",    label: "30 ngày",     days: 30 },
+  { id: "90d",    label: "90 ngày",     days: 90 },
+  { id: "month",  label: "Tháng này",   months: 1 },
+  { id: "year",   label: "Năm nay",     years: 1 },
+  { id: "custom", label: "Tùy chọn",    custom: true },
 ];
 
 // ============================================================
@@ -99,20 +101,17 @@ function csvCell(v) {
 
 function resolveRange(rangeId, customFrom, customTo) {
   const today = startOfDay(new Date());
-  const todayStr = getLocalDateStr(today);
 
   const r = QUICK_RANGES.find((x) => x.id === rangeId);
   if (!r || r.custom) {
     const f = parseDateOnly(customFrom);
     const t = parseDateOnly(customTo);
 
-    // ✅ FIX: Chỉ accept custom range nếu from <= to VÀ to <= hôm nay
     if (f && t && f <= t) {
       const todayEnd = endOfDay(today);
       const clampedTo = t > todayEnd ? todayEnd : endOfDay(t);
       return { from: startOfDay(f), to: clampedTo };
     }
-    // Fallback 30d
     return { from: addDays(today, -29), to: endOfDay(today) };
   }
 
@@ -152,7 +151,7 @@ function getPreviousRange({ from, to }) {
 // ============================================================
 
 export default function OwnerReports() {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -184,7 +183,7 @@ export default function OwnerReports() {
       setOrders(sorted);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || "Không tải được báo cáo");
+        setError(e.message || t("Không tải được báo cáo"));
       }
     } finally {
       if (myReqId === reqIdRef.current) {
@@ -192,7 +191,7 @@ export default function OwnerReports() {
         if (!silent) setRefreshing(false);
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load(false);
@@ -383,7 +382,7 @@ export default function OwnerReports() {
 
   const handleExport = () => {
     if (!currentOrders.length) {
-      return toast("Không có đơn nào trong khoảng thời gian này", "error");
+      return toast(t("Không có đơn nào trong khoảng thời gian này"), "error");
     }
 
     let url = null;
@@ -401,7 +400,7 @@ export default function OwnerReports() {
           o.code,
           o.customer_name || "",
           fmtDateTime(o.created_at),
-          o.payment || "Tiền mặt",
+          o.payment || t("Tiền mặt"),
           o.status,
           o.total || 0,
         ]),
@@ -424,9 +423,9 @@ export default function OwnerReports() {
       document.body.appendChild(a);
       a.click();
 
-      toast(`Đã xuất ${currentOrders.length} đơn`, "success");
+      toast(`${t("Đã xuất")} ${currentOrders.length} ${t("đơn")}`, "success");
     } catch (e) {
-      toast(e.message || "Không xuất được", "error");
+      toast(e.message || t("Không xuất được"), "error");
     } finally {
       if (a && a.parentNode) a.parentNode.removeChild(a);
       if (url) URL.revokeObjectURL(url);
@@ -479,7 +478,7 @@ export default function OwnerReports() {
                 }}
               >
                 <Icon size={13} />
-                {r.label}
+                {t(r.label)}
               </button>
             );
           })}
@@ -498,7 +497,7 @@ export default function OwnerReports() {
             }}
           >
             <div>
-              <label style={labelStyle}>Từ ngày</label>
+              <label style={labelStyle}>{t("Từ ngày")}</label>
               <input
                 type="date"
                 value={customFrom}
@@ -508,7 +507,7 @@ export default function OwnerReports() {
               />
             </div>
             <div>
-              <label style={labelStyle}>Đến ngày</label>
+              <label style={labelStyle}>{t("Đến ngày")}</label>
               <input
                 type="date"
                 value={customTo}
@@ -554,7 +553,7 @@ export default function OwnerReports() {
               onChange={(e) => setCompare(e.target.checked)}
               style={{ cursor: "pointer", accentColor: "#8b5cf6" }}
             />
-            So sánh kỳ trước
+            {t("So sánh kỳ trước")}
           </label>
 
           <span
@@ -589,7 +588,7 @@ export default function OwnerReports() {
                 opacity: loading || refreshing ? 0.6 : 1,
               }}
             >
-              <Download size={14} /> Xuất CSV
+              <Download size={14} /> {t("Xuất CSV")}
             </button>
             <button
               onClick={() => load(false)}
@@ -613,7 +612,7 @@ export default function OwnerReports() {
               ) : (
                 <RefreshCw size={14} />
               )}
-              Làm mới
+              {t("Làm mới")}
             </button>
           </div>
         </div>
@@ -650,7 +649,7 @@ export default function OwnerReports() {
               fontSize: 12,
             }}
           >
-            Thử lại
+            {t("Thử lại")}
           </button>
         </div>
       )}
@@ -666,28 +665,31 @@ export default function OwnerReports() {
       >
         <KPI
           icon={<DollarSign size={22} />}
-          label="Doanh thu (hoàn thành)"
+          label={t("Doanh thu (hoàn thành)")}
           value={loading ? "..." : money(stats.revenue)}
           color="#18a967"
           delta={compare && prevStats ? calcDelta(stats.revenue, prevStats.revenue) : null}
+          t={t}
         />
         <KPI
           icon={<ShoppingBag size={22} />}
-          label="Tổng đơn trong kỳ"
+          label={t("Tổng đơn trong kỳ")}
           value={loading ? "..." : stats.totalOrders}
           color="#2634d5"
           delta={compare && prevStats ? calcDelta(stats.totalOrders, prevStats.totalOrders) : null}
+          t={t}
         />
         <KPI
           icon={<TrendingUp size={22} />}
-          label="Giá trị TB / đơn"
+          label={t("Giá trị TB / đơn")}
           value={loading ? "..." : money(stats.avgOrder)}
           color="#f59e0b"
           delta={compare && prevStats ? calcDelta(stats.avgOrder, prevStats.avgOrder) : null}
+          t={t}
         />
         <KPI
           icon={<Percent size={22} />}
-          label="Tỷ lệ hoàn thành"
+          label={t("Tỷ lệ hoàn thành")}
           value={
             loading
               ? "..."
@@ -708,6 +710,7 @@ export default function OwnerReports() {
                 )
               : null
           }
+          t={t}
         />
       </div>
 
@@ -723,14 +726,14 @@ export default function OwnerReports() {
       >
         <div style={cardStyle}>
           <h3 style={cardTitleStyle}>
-            Doanh thu theo{" "}
-            {chartData.length > 90 ? "tuần" : "ngày"}
+            {t("Doanh thu theo")}{" "}
+            {chartData.length > 90 ? t("tuần") : t("ngày")}
           </h3>
 
           {loading ? (
             <ChartSkeleton height={280} />
           ) : chartData.length === 0 ? (
-            <EmptyChart message="Chưa có dữ liệu doanh thu" />
+            <EmptyChart message={t("Chưa có dữ liệu doanh thu")} />
           ) : (
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -760,7 +763,7 @@ export default function OwnerReports() {
                     tickFormatter={formatAxis}
                   />
                   <Tooltip
-                    formatter={(v) => [money(v), "Doanh thu"]}
+                    formatter={(v) => [money(v), t("Doanh thu")]}
                     contentStyle={tooltipStyle}
                     labelStyle={{ color: "var(--text-primary, #172033)" }}
                   />
@@ -776,12 +779,12 @@ export default function OwnerReports() {
         </div>
 
         <div style={cardStyle}>
-          <h3 style={cardTitleStyle}>Trạng thái đơn</h3>
+          <h3 style={cardTitleStyle}>{t("Trạng thái đơn")}</h3>
 
           {loading ? (
             <ChartSkeleton height={200} />
           ) : statusData.length === 0 ? (
-            <EmptyChart message="Chưa có đơn hàng" small />
+            <EmptyChart message={t("Chưa có đơn hàng")} small />
           ) : (
             <>
               <div style={{ height: 200 }}>
@@ -833,7 +836,7 @@ export default function OwnerReports() {
                         color: "var(--text-muted, #64748b)",
                       }}
                     >
-                      {s.name}
+                      {t(s.name)}
                     </span>
                     <b style={{ color: "var(--text-primary, #172033)" }}>
                       {s.value}
@@ -860,7 +863,7 @@ export default function OwnerReports() {
         >
           <h3 style={{ ...cardTitleStyle, margin: 0 }}>
             <Clock size={16} style={{ verticalAlign: -3, marginRight: 6 }} />
-            Doanh thu theo giờ
+            {t("Doanh thu theo giờ")}
           </h3>
           {peakHour.orders > 0 && (
             <span
@@ -873,9 +876,9 @@ export default function OwnerReports() {
                 fontWeight: 600,
               }}
             >
-              🔥 Giờ cao điểm: <b style={{ color: "#f59e0b" }}>
+              🔥 {t("Giờ cao điểm")}: <b style={{ color: "#f59e0b" }}>
                 {String(peakHour.hour).padStart(2, "0")}h
-              </b> ({peakHour.orders} đơn)
+              </b> ({peakHour.orders} {t("đơn")})
             </span>
           )}
         </div>
@@ -898,11 +901,11 @@ export default function OwnerReports() {
                 />
                 <Tooltip
                   formatter={(v, name) => [
-                    name === "orders" ? `${v} đơn` : money(v),
-                    name === "orders" ? "Số đơn" : "Doanh thu",
+                    name === "orders" ? `${v} ${t("đơn")}` : money(v),
+                    name === "orders" ? t("Số đơn") : t("Doanh thu"),
                   ]}
                   contentStyle={tooltipStyle}
-                  labelFormatter={(l) => `Giờ ${l}`}
+                  labelFormatter={(l) => `${t("Giờ")} ${l}`}
                 />
                 <Bar
                   dataKey="orders"
@@ -928,7 +931,7 @@ export default function OwnerReports() {
           }}
         >
           <h3 style={{ ...cardTitleStyle, margin: 0, fontSize: 15 }}>
-            🔥 Top 5 món bán chạy (trong kỳ)
+            🔥 {t("Top 5 món bán chạy (trong kỳ)")}
           </h3>
         </div>
 
@@ -937,9 +940,9 @@ export default function OwnerReports() {
             <thead>
               <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
                 <th style={thStyle}>#</th>
-                <th style={thStyle}>Món</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Đã bán</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Doanh thu</th>
+                <th style={thStyle}>{t("Món")}</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>{t("Đã bán")}</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>{t("Doanh thu")}</th>
               </tr>
             </thead>
             <tbody>
@@ -972,7 +975,7 @@ export default function OwnerReports() {
                       size={36}
                       style={{ opacity: 0.35, marginBottom: 10 }}
                     />
-                    <div>Chưa có dữ liệu bán hàng trong kỳ</div>
+                    <div>{t("Chưa có dữ liệu bán hàng trong kỳ")}</div>
                   </td>
                 </tr>
               ) : (
@@ -1020,7 +1023,7 @@ export default function OwnerReports() {
                           color: "var(--text-muted, #64748b)",
                         }}
                       >
-                        {item.sold || 0} suất
+                        {item.sold || 0} {t("suất")}
                       </td>
                       <td style={{ ...tdStyle, textAlign: "right" }}>
                         <b style={{ color: "#18a967" }}>
@@ -1059,7 +1062,7 @@ export default function OwnerReports() {
 // SUB-COMPONENTS
 // ============================================================
 
-function KPI({ icon, label, value, color, delta }) {
+function KPI({ icon, label, value, color, delta, t }) {
   return (
     <div style={cardStyle}>
       <div
@@ -1126,7 +1129,7 @@ function KPI({ icon, label, value, color, delta }) {
                 <TrendingDown size={11} />
               )}
               {delta.isUp ? "+" : "-"}
-              {delta.pct.toFixed(1)}% so kỳ trước
+              {delta.pct.toFixed(1)}% {t("so kỳ trước")}
             </span>
           )}
         </div>

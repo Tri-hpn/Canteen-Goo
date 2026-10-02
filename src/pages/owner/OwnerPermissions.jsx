@@ -1,32 +1,7 @@
 // ============================================================
 // OWNERPERMISSIONS.JSX — Phân quyền chi tiết (Admin)
 // ============================================================
-// Tính năng:
-//   - Chọn user (EMPLOYEE / CUSTOMER) → xem quyền hiện tại
-//   - Sửa: tick/bỏ tick các quyền custom
-//   - Reset: xóa hết custom, về mặc định role
-//   - Save: gửi custom array lên server
-//
-// Lưu ý quan trọng:
-//   - Quyền mặc định theo role KHÔNG THỂ bỏ tick (disabled)
-//   - Chỉ có thể thêm/bỏ quyền CUSTOM
-//   - Khi đổi user → tự thoát chế độ edit + load quyền mới
-//
-// Endpoints:
-//   - api.permissions.all()            → tất cả quyền + role defaults
-//   - api.permissions.ofUser(userId)   → quyền của 1 user
-//   - api.permissions.update(userId, custom[])
-//   - api.users.list()                 → danh sách users (không có ADMIN)
-//
-// Fixes:
-//   - resetCustom: dùng ConfirmDialog custom
-//
-// Batch 5B fixes:
-//   - ✅ #13.1: Gom nhóm permissions theo category (9 nhóm)
-//     thay vì 1 grid flat 23 items
-//   - ✅ #13.2: Font "Mặc định theo role" tăng 10 → 11.5px, đậm hơn
-//   - ✅ #13.3: Badge số lượng được tick / tổng trong mỗi nhóm
-//   - ✅ #13.4: Nút "Chọn tất cả" per group (toggle)
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -38,22 +13,12 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
 // CONSTANTS
 // ============================================================
-
-const ROLE_TABS = [
-  { id: "EMPLOYEE", label: "Nhân viên" },
-  { id: "CUSTOMER", label: "Khách hàng" },
-];
-
-const ROLE_LABEL = {
-  EMPLOYEE: "Nhân viên",
-  CUSTOMER: "Khách hàng",
-  ADMIN: "Quản trị viên",
-};
 
 /**
  * ✅ #13.1: Map prefix → metadata cho từng nhóm quyền.
@@ -76,6 +41,26 @@ const CATEGORY_META = [
 // ============================================================
 
 export default function OwnerPermissions() {
+  const { t } = useI18n();
+
+  // Role tabs (dùng useMemo vì phụ thuộc t)
+  const ROLE_TABS = useMemo(
+    () => [
+      { id: "EMPLOYEE", label: t("Nhân viên") },
+      { id: "CUSTOMER", label: t("Khách hàng") },
+    ],
+    [t]
+  );
+
+  const ROLE_LABEL = useMemo(
+    () => ({
+      EMPLOYEE: t("Nhân viên"),
+      CUSTOMER: t("Khách hàng"),
+      ADMIN: t("Quản trị viên"),
+    }),
+    [t]
+  );
+
   // ---------- Permissions config ----------
   const [allPermissions, setAllPermissions] = useState([]);
   const [roleDefaults, setRoleDefaults] = useState({});
@@ -111,11 +96,11 @@ export default function OwnerPermissions() {
       setAllPermissions(res.all || []);
       setRoleDefaults(res.roles || {});
     } catch (e) {
-      setConfigError(e.message || "Không tải được cấu hình quyền");
+      setConfigError(e.message || t("Không tải được cấu hình quyền"));
     } finally {
       setConfigLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadUsers = useCallback(async () => {
     setUsersLoading(true);
@@ -125,12 +110,12 @@ export default function OwnerPermissions() {
         (allUsers || []).filter((u) => u.role !== "ADMIN")
       );
     } catch (e) {
-      toast(e.message || "Không tải được danh sách user", "error");
+      toast(e.message || t("Không tải được danh sách user"), "error");
       setUsers([]);
     } finally {
       setUsersLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadConfig();
@@ -164,7 +149,7 @@ export default function OwnerPermissions() {
       }
     }
 
-    // Catch-all: permissions không thuộc prefix nào (nếu backend thêm mới)
+    // Catch-all: permissions không thuộc prefix nào
     const knownPrefixes = CATEGORY_META.map((m) => m.prefix);
     const orphans = allPermissions.filter(
       (p) => !knownPrefixes.some((pre) => p.key.startsWith(pre))
@@ -172,7 +157,7 @@ export default function OwnerPermissions() {
     if (orphans.length > 0) {
       groups.push({
         prefix: "__other__",
-        label: "Khác",
+        label: t("Khác"),
         icon: Shield,
         color: "#64748b",
         items: orphans,
@@ -180,7 +165,7 @@ export default function OwnerPermissions() {
     }
 
     return groups;
-  }, [allPermissions]);
+  }, [allPermissions, t]);
 
   // ---------- Confirm helpers ----------
 
@@ -216,7 +201,7 @@ export default function OwnerPermissions() {
       });
     } catch (e) {
       if (!cancelled) {
-        toast(e.message || "Không tải được quyền", "error");
+        toast(e.message || t("Không tải được quyền"), "error");
         setUserPerms({ custom: [], permissions: [] });
       }
     } finally {
@@ -226,18 +211,18 @@ export default function OwnerPermissions() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const togglePerm = (key) => {
     if (!isEditing) {
-      toast("Bấm Sửa để chỉnh quyền", "info");
+      toast(t("Bấm Sửa để chỉnh quyền"), "info");
       return;
     }
     if (!selectedUser) return;
 
     const isDefault = roleDefaults[selectedUser.role]?.includes(key);
     if (isDefault) {
-      toast("Quyền này thuộc role mặc định, không thể bỏ", "info");
+      toast(t("Quyền này thuộc role mặc định, không thể bỏ"), "info");
       return;
     }
 
@@ -256,24 +241,21 @@ export default function OwnerPermissions() {
 
   /**
    * ✅ #13.4: Toggle toàn bộ quyền trong 1 group.
-   * - Nếu đã chọn hết → bỏ hết (chỉ bỏ những cái là custom)
-   * - Nếu chưa chọn hết → chọn hết (thêm tất cả non-default vào custom)
    */
   const toggleGroup = (group) => {
     if (!isEditing) {
-      toast("Bấm Sửa để chỉnh quyền", "info");
+      toast(t("Bấm Sửa để chỉnh quyền"), "info");
       return;
     }
     if (!selectedUser) return;
 
     const defaults = roleDefaults[selectedUser.role] || [];
-    // Chỉ thao tác với non-default keys trong group
     const editableKeys = group.items
       .map((p) => p.key)
       .filter((k) => !defaults.includes(k));
 
     if (editableKeys.length === 0) {
-      toast("Nhóm này chỉ có quyền mặc định", "info");
+      toast(t("Nhóm này chỉ có quyền mặc định"), "info");
       return;
     }
 
@@ -282,10 +264,8 @@ export default function OwnerPermissions() {
       const allSelected = editableKeys.every((k) => customSet.has(k));
 
       if (allSelected) {
-        // Bỏ hết khỏi custom
         editableKeys.forEach((k) => customSet.delete(k));
       } else {
-        // Thêm hết
         editableKeys.forEach((k) => customSet.add(k));
       }
 
@@ -298,7 +278,7 @@ export default function OwnerPermissions() {
 
   const startEdit = () => {
     setIsEditing(true);
-    toast("Đang chỉnh sửa quyền", "info");
+    toast(t("Đang chỉnh sửa quyền"), "info");
   };
 
   const cancelEdit = async () => {
@@ -313,7 +293,7 @@ export default function OwnerPermissions() {
         permissions: res.permissions || [],
       });
     } catch (e) {
-      toast(e.message || "Không tải lại được", "error");
+      toast(e.message || t("Không tải lại được"), "error");
     } finally {
       setIsEditing(false);
     }
@@ -324,7 +304,10 @@ export default function OwnerPermissions() {
     setSaving(true);
     try {
       await api.permissions.update(selectedUser.id, userPerms.custom);
-      toast(`Đã cập nhật quyền cho ${selectedUser.name}`, "success");
+      toast(
+        `${t("Đã cập nhật quyền cho")} ${selectedUser.name}`,
+        "success"
+      );
 
       const res = await api.permissions.ofUser(selectedUser.id);
       setUserPerms({
@@ -333,7 +316,7 @@ export default function OwnerPermissions() {
       });
       setIsEditing(false);
     } catch (e) {
-      toast(e.message || "Không lưu được", "error");
+      toast(e.message || t("Không lưu được"), "error");
     } finally {
       setSaving(false);
     }
@@ -342,16 +325,17 @@ export default function OwnerPermissions() {
   const resetCustom = () => {
     if (!selectedUser) return;
     if (!isEditing) {
-      toast("Bấm Sửa để chỉnh quyền", "info");
+      toast(t("Bấm Sửa để chỉnh quyền"), "info");
       return;
     }
 
     setConfirm({
-      title: `Reset quyền của "${selectedUser.name}"?`,
-      message:
-        "Tất cả quyền custom sẽ bị xóa. User sẽ trở về quyền mặc định theo role.",
-      confirmText: "Reset",
-      cancelText: "Hủy",
+      title: `${t("Reset quyền của")} "${selectedUser.name}"?`,
+      message: t(
+        "Tất cả quyền custom sẽ bị xóa. User sẽ trở về quyền mặc định theo role."
+      ),
+      confirmText: t("Reset"),
+      cancelText: t("Hủy"),
       danger: true,
       onConfirm: async () => {
         setSaving(true);
@@ -362,10 +346,10 @@ export default function OwnerPermissions() {
             custom: res.custom || [],
             permissions: res.permissions || [],
           });
-          toast("Đã reset về quyền mặc định", "success");
+          toast(t("Đã reset về quyền mặc định"), "success");
           setConfirm(null);
         } catch (e) {
-          toast(e.message || "Không reset được", "error");
+          toast(e.message || t("Không reset được"), "error");
         } finally {
           setSaving(false);
         }
@@ -384,7 +368,7 @@ export default function OwnerPermissions() {
           size={28}
           style={{ animation: "spin 1s linear infinite", marginBottom: 10 }}
         />
-        <div>Đang tải cấu hình quyền...</div>
+        <div>{t("Đang tải cấu hình quyền...")}</div>
         <style>{`
           @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         `}</style>
@@ -397,13 +381,13 @@ export default function OwnerPermissions() {
       <div style={errorFullStyle}>
         <AlertCircle size={28} style={{ marginBottom: 10 }} />
         <div style={{ fontWeight: 600, marginBottom: 4 }}>
-          Không tải được cấu hình
+          {t("Không tải được cấu hình")}
         </div>
         <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 12 }}>
           {configError}
         </div>
         <button onClick={loadConfig} style={btnPrimaryStyle}>
-          Thử lại
+          {t("Thử lại")}
         </button>
       </div>
     );
@@ -445,7 +429,7 @@ export default function OwnerPermissions() {
               gap: 6,
             }}
           >
-            <Users size={16} /> Người dùng
+            <Users size={16} /> {t("Người dùng")}
           </h3>
 
           {/* Tabs role */}
@@ -460,13 +444,13 @@ export default function OwnerPermissions() {
               marginBottom: 12,
             }}
           >
-            {ROLE_TABS.map((t) => {
-              const active = activeRole === t.id;
+            {ROLE_TABS.map((tab) => {
+              const active = activeRole === tab.id;
               return (
                 <button
-                  key={t.id}
+                  key={tab.id}
                   onClick={() => {
-                    setActiveRole(t.id);
+                    setActiveRole(tab.id);
                     setSelectedUser(null);
                     setIsEditing(false);
                   }}
@@ -481,7 +465,7 @@ export default function OwnerPermissions() {
                     fontSize: 12,
                   }}
                 >
-                  {t.label}
+                  {tab.label}
                 </button>
               );
             })}
@@ -503,7 +487,7 @@ export default function OwnerPermissions() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm..."
+              placeholder={t("Tìm...")}
               style={{
                 border: 0,
                 outline: "none",
@@ -523,7 +507,7 @@ export default function OwnerPermissions() {
                   color: "var(--text-light, #8993a3)",
                   padding: 2,
                 }}
-                aria-label="Xoá tìm kiếm"
+                aria-label={t("Xoá tìm kiếm")}
               >
                 <X size={12} />
               </button>
@@ -541,10 +525,11 @@ export default function OwnerPermissions() {
             }}
           >
             {usersLoading ? (
-              <div style={loadingSmallStyle}>Đang tải...</div>
+              <div style={loadingSmallStyle}>{t("Đang tải...")}</div>
             ) : !filteredUsers.length ? (
               <div style={emptySmallStyle}>
-                Không có {activeRole === "EMPLOYEE" ? "nhân viên" : "khách hàng"}
+                {t("Không có")}{" "}
+                {activeRole === "EMPLOYEE" ? t("nhân viên") : t("khách hàng")}
               </div>
             ) : (
               filteredUsers.map((u) => {
@@ -641,7 +626,7 @@ export default function OwnerPermissions() {
             >
               <Shield size={60} style={{ opacity: 0.3, marginBottom: 12 }} />
               <p style={{ margin: 0, fontSize: 14 }}>
-                Chọn 1 người dùng để phân quyền
+                {t("Chọn 1 người dùng để phân quyền")}
               </p>
             </div>
           ) : (
@@ -693,9 +678,9 @@ export default function OwnerPermissions() {
                     style={btnToolbarStyle({
                       disabled: saving || !isEditing,
                     })}
-                    title="Xóa hết quyền custom"
+                    title={t("Xóa hết quyền custom")}
                   >
-                    <RotateCcw size={13} /> Reset
+                    <RotateCcw size={13} /> {t("Reset")}
                   </button>
 
                   {!isEditing ? (
@@ -707,7 +692,7 @@ export default function OwnerPermissions() {
                         primary: true,
                       })}
                     >
-                      <Edit size={13} /> Sửa
+                      <Edit size={13} /> {t("Sửa")}
                     </button>
                   ) : (
                     <button
@@ -718,7 +703,7 @@ export default function OwnerPermissions() {
                         danger: true,
                       })}
                     >
-                      <X size={13} /> Hủy
+                      <X size={13} /> {t("Hủy")}
                     </button>
                   )}
 
@@ -733,11 +718,11 @@ export default function OwnerPermissions() {
                           size={13}
                           style={{ animation: "spin 1s linear infinite" }}
                         />
-                        Đang lưu...
+                        {t("Đang lưu...")}
                       </>
                     ) : (
                       <>
-                        <Save size={13} /> Lưu thay đổi
+                        <Save size={13} /> {t("Lưu thay đổi")}
                       </>
                     )}
                   </button>
@@ -758,8 +743,8 @@ export default function OwnerPermissions() {
                     fontWeight: 600,
                   }}
                 >
-                  ✏️ Đang ở chế độ chỉnh sửa — tick/bỏ tick quyền, sau đó bấm
-                  "Lưu thay đổi"
+                  ✏️ {t("Đang ở chế độ chỉnh sửa — tick/bỏ tick quyền, sau đó bấm")}{" "}
+                  "{t("Lưu thay đổi")}"
                 </div>
               )}
 
@@ -773,11 +758,11 @@ export default function OwnerPermissions() {
                       marginBottom: 8,
                     }}
                   />
-                  <div style={{ fontSize: 13 }}>Đang tải quyền...</div>
+                  <div style={{ fontSize: 13 }}>{t("Đang tải quyền...")}</div>
                 </div>
               ) : groupedPermissions.length === 0 ? (
                 <div style={emptySmallStyle}>
-                  Không có quyền nào để phân
+                  {t("Không có quyền nào để phân")}
                 </div>
               ) : (
                 // ✅ #13.1: Render theo group
@@ -792,13 +777,11 @@ export default function OwnerPermissions() {
                     const GroupIcon = group.icon;
                     const defaults = roleDefaults[selectedUser.role] || [];
 
-                    // Đếm
                     const checkedCount = group.items.filter((p) =>
                       userPerms.permissions?.includes(p.key)
                     ).length;
                     const totalCount = group.items.length;
 
-                    // Chỉ tính editable (không phải default) để quyết định toggle
                     const editableKeys = group.items
                       .map((p) => p.key)
                       .filter((k) => !defaults.includes(k));
@@ -896,7 +879,9 @@ export default function OwnerPermissions() {
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {allGroupSelected ? "Bỏ chọn nhóm" : "Chọn cả nhóm"}
+                              {allGroupSelected
+                                ? t("Bỏ chọn nhóm")
+                                : t("Chọn cả nhóm")}
                             </button>
                           )}
                         </div>
@@ -925,9 +910,9 @@ export default function OwnerPermissions() {
                                 disabled={disabled}
                                 title={
                                   isDefault
-                                    ? "Quyền mặc định theo role — không thể bỏ"
+                                    ? t("Quyền mặc định theo role — không thể bỏ")
                                     : !isEditing
-                                    ? "Bấm Sửa để chỉnh"
+                                    ? t("Bấm Sửa để chỉnh")
                                     : ""
                                 }
                                 style={{
@@ -982,7 +967,7 @@ export default function OwnerPermissions() {
                                       color: "var(--text-primary, #172033)",
                                     }}
                                   >
-                                    {p.label}
+                                    {t(p.label)}
                                   </div>
                                   {/* ✅ #13.2: Font đậm rõ hơn */}
                                   {isDefault && (
@@ -998,7 +983,7 @@ export default function OwnerPermissions() {
                                       }}
                                     >
                                       <Shield size={10} />
-                                      Mặc định theo role
+                                      {t("Mặc định theo role")}
                                     </div>
                                   )}
                                 </div>

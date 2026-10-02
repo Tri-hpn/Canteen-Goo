@@ -9,7 +9,7 @@ import {
 import { api } from "../api";
 import { toast } from "./Effects";
 import StarRating from "./StarRating";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const MAX_COMMENT_LENGTH = 500;
 const MAX_REVIEWS_SHOWN = 20;
@@ -47,7 +47,7 @@ export default function ReviewSection({
   currentUser,
   readOnly = false,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [reviews, setReviews] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [loadError, setLoadError] = useState("");

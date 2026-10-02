@@ -1,6 +1,8 @@
 ﻿// ============================================================
 // OWNERINVENTORY.JSX — Quản lý kho nguyên liệu (Admin)
 // ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+// ============================================================
 
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -10,6 +12,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
+import { useI18n } from "../../hooks/useI18n";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
 // ============================================================
@@ -26,6 +29,8 @@ const IMPORT_HISTORY_LIMIT = 30;
 // ============================================================
 
 export default function OwnerInventory() {
+  const { t } = useI18n();
+
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -49,12 +54,12 @@ export default function OwnerInventory() {
       const data = await api.inventory.list();
       setList(Array.isArray(data) ? data : []);
     } catch (e) {
-      setError(e.message || "Không tải được danh sách kho");
+      setError(e.message || t("Không tải được danh sách kho"));
       setList([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadImports = useCallback(async () => {
     try {
@@ -114,15 +119,12 @@ export default function OwnerInventory() {
 
   /**
    * ✅ FIX: Generate mã từ MAX của số đứng sau prefix NL.
-   * VD: NL001, NL002, NL010 → max = 10 → NL011
-   *     NL002-X1 → chỉ lấy số sau "NL" (tức 002), bỏ qua X1
    */
   const generateNextCode = () => {
     if (!list.length) return "NL001";
 
     const maxNum = list.reduce((max, x) => {
       const code = String(x.code || "");
-      // Chỉ match số đứng ngay sau prefix "NL" (không quan tâm phần sau)
       const match = code.match(/^NL(\d+)/i);
       if (!match) return max;
       const n = parseInt(match[1], 10) || 0;
@@ -160,24 +162,24 @@ export default function OwnerInventory() {
       min: Number(f.get("min")),
     };
 
-    if (!data.code) return toast("Vui lòng nhập mã nguyên liệu", "error");
-    if (!data.name) return toast("Vui lòng nhập tên nguyên liệu", "error");
-    if (data.qty < 0) return toast("Số lượng không được âm", "error");
-    if (data.min < 0) return toast("Mức tối thiểu không được âm", "error");
+    if (!data.code) return toast(t("Vui lòng nhập mã nguyên liệu"), "error");
+    if (!data.name) return toast(t("Vui lòng nhập tên nguyên liệu"), "error");
+    if (data.qty < 0) return toast(t("Số lượng không được âm"), "error");
+    if (data.min < 0) return toast(t("Mức tối thiểu không được âm"), "error");
 
     setSaving(true);
     try {
       if (modal.code) {
         await api.inventory.update(modal.code, data);
-        toast("Đã cập nhật nguyên liệu", "success");
+        toast(t("Đã cập nhật nguyên liệu"), "success");
       } else {
         await api.inventory.create(data);
-        toast("Đã thêm nguyên liệu", "success");
+        toast(t("Đã thêm nguyên liệu"), "success");
       }
       setModal(null);
       load();
     } catch (e) {
-      toast(e.message || "Không lưu được", "error");
+      toast(e.message || t("Không lưu được"), "error");
     } finally {
       setSaving(false);
     }
@@ -188,21 +190,21 @@ export default function OwnerInventory() {
     if (!item) return;
 
     setConfirm({
-      title: `Xóa nguyên liệu "${item.name}"?`,
+      title: `${t("Xóa nguyên liệu")} "${item.name}"?`,
       message:
-        `Mã ${item.code} sẽ bị xóa vĩnh viễn khỏi kho. ` +
-        "Hành động này không thể hoàn tác.",
-      confirmText: "Xóa",
-      cancelText: "Hủy",
+        `${t("Mã")} ${item.code} ${t("sẽ bị xóa vĩnh viễn khỏi kho.")} ` +
+        t("Hành động này không thể hoàn tác."),
+      confirmText: t("Xóa"),
+      cancelText: t("Hủy"),
       danger: true,
       onConfirm: async () => {
         try {
           await api.inventory.remove(code);
-          toast("Đã xóa", "success");
+          toast(t("Đã xóa"), "success");
           setConfirm(null);
           load();
         } catch (e) {
-          toast(e.message || "Không xóa được", "error");
+          toast(e.message || t("Không xóa được"), "error");
         }
       },
     });
@@ -216,7 +218,7 @@ export default function OwnerInventory() {
     const qty = Number(f.get("qty"));
 
     if (!qty || qty <= 0) {
-      return toast("Số lượng nhập phải lớn hơn 0", "error");
+      return toast(t("Số lượng nhập phải lớn hơn 0"), "error");
     }
 
     setSaving(true);
@@ -227,14 +229,14 @@ export default function OwnerInventory() {
         note: f.get("note")?.trim(),
       });
       toast(
-        `Đã nhập ${res?.record?.qty ?? qty} ${importItem.unit}`,
+        `${t("Đã nhập")} ${res?.record?.qty ?? qty} ${importItem.unit}`,
         "success"
       );
       setImportModal(null);
       load();
       loadImports();
     } catch (e) {
-      toast(e.message || "Không nhập được", "error");
+      toast(e.message || t("Không nhập được"), "error");
     } finally {
       setSaving(false);
     }
@@ -247,9 +249,9 @@ export default function OwnerInventory() {
   };
 
   const getStatusLabel = (key) => {
-    if (key === "out") return "Hết hàng";
-    if (key === "low") return "Sắp hết";
-    return "Còn hàng";
+    if (key === "out") return t("Hết hàng");
+    if (key === "low") return t("Sắp hết");
+    return t("Còn hàng");
   };
 
   return (
@@ -272,18 +274,18 @@ export default function OwnerInventory() {
             <AlertTriangle size={20} style={{ flexShrink: 0 }} />
             <div>
               <b style={{ fontSize: 13, display: "block", marginBottom: 2 }}>
-                ⚠️ Cảnh báo tồn kho
+                ⚠️ {t("Cảnh báo tồn kho")}
               </b>
               <div style={{ fontSize: 12.5, opacity: 0.9 }}>
                 {stats.outCount > 0 && (
                   <span>
-                    <b>{stats.outCount}</b> nguyên liệu đã hết hàng
+                    <b>{stats.outCount}</b> {t("nguyên liệu đã hết hàng")}
                   </span>
                 )}
                 {stats.outCount > 0 && stats.lowCount > 0 && " · "}
                 {stats.lowCount > 0 && (
                   <span>
-                    <b>{stats.lowCount}</b> nguyên liệu sắp hết
+                    <b>{stats.lowCount}</b> {t("nguyên liệu sắp hết")}
                   </span>
                 )}
                 .
@@ -319,7 +321,7 @@ export default function OwnerInventory() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm nguyên liệu..."
+              placeholder={t("Tìm nguyên liệu...")}
               style={{
                 flex: 1,
                 border: 0,
@@ -339,7 +341,7 @@ export default function OwnerInventory() {
                   color: "var(--text-light, #8993a3)",
                   padding: 2,
                 }}
-                aria-label="Xoá tìm kiếm"
+                aria-label={t("Xoá tìm kiếm")}
               >
                 <X size={14} />
               </button>
@@ -362,7 +364,7 @@ export default function OwnerInventory() {
               fontSize: 13,
             }}
           >
-            <History size={16} /> {showHistory ? "Ẩn lịch sử" : "Lịch sử nhập"}
+            <History size={16} /> {showHistory ? t("Ẩn lịch sử") : t("Lịch sử nhập")}
           </button>
 
           <button
@@ -381,7 +383,7 @@ export default function OwnerInventory() {
               fontSize: 13,
             }}
           >
-            <Plus size={16} /> Thêm nguyên liệu
+            <Plus size={16} /> {t("Thêm nguyên liệu")}
           </button>
         </div>
 
@@ -393,10 +395,10 @@ export default function OwnerInventory() {
             marginBottom: 20,
           }}
         >
-          <StatBox label="Tổng nguyên liệu" value={stats.total} color="#2634d5" icon={<Boxes size={18} />} />
-          <StatBox label="Sắp hết"          value={stats.lowCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-          <StatBox label="Hết hàng"          value={stats.outCount} color="#ef4444" icon={<PackageX size={18} />} />
-          <StatBox label="Đủ hàng"           value={stats.okCount}  color="#18a967" icon={<Package size={18} />} />
+          <StatBox label={t("Tổng nguyên liệu")} value={stats.total} color="#2634d5" icon={<Boxes size={18} />} />
+          <StatBox label={t("Sắp hết")}          value={stats.lowCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+          <StatBox label={t("Hết hàng")}          value={stats.outCount} color="#ef4444" icon={<PackageX size={18} />} />
+          <StatBox label={t("Đủ hàng")}           value={stats.okCount}  color="#18a967" icon={<Package size={18} />} />
         </div>
 
         <div
@@ -411,11 +413,19 @@ export default function OwnerInventory() {
             <SkeletonTable
               columns={7}
               rows={5}
-              headers={["Mã", "Nguyên liệu", "Số lượng", "Đơn vị", "Tối thiểu", "Trạng thái", "Thao tác"]}
+              headers={[
+                t("Mã"),
+                t("Nguyên liệu"),
+                t("Số lượng"),
+                t("Đơn vị"),
+                t("Tối thiểu"),
+                t("Trạng thái"),
+                t("Thao tác"),
+              ]}
             />
           )}
           {!loading && error && (
-            <ErrorBox message={error} onRetry={load} />
+            <ErrorBox message={error} onRetry={load} t={t} />
           )}
 
           {!loading && !error && (
@@ -423,13 +433,13 @@ export default function OwnerInventory() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                    <th style={thStyle}>Mã</th>
-                    <th style={thStyle}>Nguyên liệu</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Số lượng</th>
-                    <th style={thStyle}>Đơn vị</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Tối thiểu</th>
-                    <th style={thStyle}>Trạng thái</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
+                    <th style={thStyle}>{t("Mã")}</th>
+                    <th style={thStyle}>{t("Nguyên liệu")}</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>{t("Số lượng")}</th>
+                    <th style={thStyle}>{t("Đơn vị")}</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>{t("Tối thiểu")}</th>
+                    <th style={thStyle}>{t("Trạng thái")}</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>{t("Thao tác")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -482,7 +492,7 @@ export default function OwnerInventory() {
                           >
                             <IconButton
                               onClick={() => setImportModal(x)}
-                              title="Nhập kho"
+                              title={t("Nhập kho")}
                               color="#ffffff"
                               bg="#18a967"
                             >
@@ -490,13 +500,13 @@ export default function OwnerInventory() {
                             </IconButton>
                             <IconButton
                               onClick={() => setModal(x)}
-                              title="Sửa"
+                              title={t("Sửa")}
                             >
                               <Edit size={15} />
                             </IconButton>
                             <IconButton
                               onClick={() => removeItem(x.code)}
-                              title="Xóa"
+                              title={t("Xóa")}
                               color="#ef4444"
                             >
                               <Trash2 size={15} />
@@ -520,8 +530,8 @@ export default function OwnerInventory() {
                         <PackageX size={36} style={{ opacity: 0.35, marginBottom: 10 }} />
                         <div>
                           {q
-                            ? `Không có nguyên liệu khớp "${q}"`
-                            : "Chưa có nguyên liệu nào"}
+                            ? `${t("Không có nguyên liệu khớp")} "${q}"`
+                            : t("Chưa có nguyên liệu nào")}
                         </div>
                       </td>
                     </tr>
@@ -553,7 +563,7 @@ export default function OwnerInventory() {
               }}
             >
               <History size={18} />
-              Lịch sử nhập kho ({imports.length})
+              {t("Lịch sử nhập kho")} ({imports.length})
             </h3>
 
             {imports.length === 0 ? (
@@ -565,19 +575,19 @@ export default function OwnerInventory() {
                   fontSize: 13,
                 }}
               >
-                Chưa có lịch sử nhập kho
+                {t("Chưa có lịch sử nhập kho")}
               </div>
             ) : (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                      <th style={thStyle}>Thời gian</th>
-                      <th style={thStyle}>Nguyên liệu</th>
-                      <th style={{ ...thStyle, textAlign: "right" }}>SL nhập</th>
-                      <th style={{ ...thStyle, textAlign: "right" }}>Tồn sau</th>
-                      <th style={thStyle}>Người nhập</th>
-                      <th style={thStyle}>Nhà cung cấp</th>
+                      <th style={thStyle}>{t("Thời gian")}</th>
+                      <th style={thStyle}>{t("Nguyên liệu")}</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>{t("SL nhập")}</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>{t("Tồn sau")}</th>
+                      <th style={thStyle}>{t("Người nhập")}</th>
+                      <th style={thStyle}>{t("Nhà cung cấp")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -626,7 +636,7 @@ export default function OwnerInventory() {
                       color: "var(--text-light, #8993a3)",
                     }}
                   >
-                    Hiển thị {IMPORT_HISTORY_LIMIT} / {imports.length} bản ghi gần nhất
+                    {t("Hiển thị")} {IMPORT_HISTORY_LIMIT} / {imports.length} {t("bản ghi gần nhất")}
                   </div>
                 )}
               </div>
@@ -638,19 +648,19 @@ export default function OwnerInventory() {
           <Modal onClose={() => !saving && setModal(null)} maxWidth={480}>
             <div style={modalHeaderStyle}>
               <h3 style={modalTitleStyle}>
-                {modal.code ? "Sửa nguyên liệu" : "Thêm nguyên liệu"}
+                {modal.code ? t("Sửa nguyên liệu") : t("Thêm nguyên liệu")}
               </h3>
               <button
                 onClick={() => !saving && setModal(null)}
                 style={modalCloseStyle}
-                aria-label="Đóng"
+                aria-label={t("Đóng")}
               >
                 <X size={20} />
               </button>
             </div>
 
             <form onSubmit={saveItem} autoComplete="off">
-              <label style={labelStyle}>Mã *</label>
+              <label style={labelStyle}>{t("Mã")} *</label>
               <input
                 name="code"
                 defaultValue={modal.code || generateNextCode()}
@@ -669,7 +679,7 @@ export default function OwnerInventory() {
                 autoFocus={!modal.code}
               />
 
-              <label style={labelStyle}>Tên nguyên liệu *</label>
+              <label style={labelStyle}>{t("Tên nguyên liệu")} *</label>
               <input
                 name="name"
                 defaultValue={modal.name || ""}
@@ -680,7 +690,7 @@ export default function OwnerInventory() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <label style={labelStyle}>Số lượng</label>
+                  <label style={labelStyle}>{t("Số lượng")}</label>
                   <input
                     name="qty"
                     type="number"
@@ -692,7 +702,7 @@ export default function OwnerInventory() {
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>Đơn vị</label>
+                  <label style={labelStyle}>{t("Đơn vị")}</label>
                   <select
                     name="unit"
                     defaultValue={modal.unit || "kg"}
@@ -705,7 +715,7 @@ export default function OwnerInventory() {
                 </div>
               </div>
 
-              <label style={labelStyle}>Mức tối thiểu (cảnh báo khi dưới)</label>
+              <label style={labelStyle}>{t("Mức tối thiểu (cảnh báo khi dưới)")}</label>
               <input
                 name="min"
                 type="number"
@@ -723,7 +733,7 @@ export default function OwnerInventory() {
                   disabled={saving}
                   style={{ ...btnCancelStyle, flex: 1 }}
                 >
-                  Hủy
+                  {t("Hủy")}
                 </button>
                 <button
                   type="submit"
@@ -736,10 +746,10 @@ export default function OwnerInventory() {
                         size={14}
                         style={{ animation: "spin 1s linear infinite" }}
                       />
-                      Đang lưu...
+                      {t("Đang lưu...")}
                     </>
                   ) : (
-                    "Lưu"
+                    t("Lưu")
                   )}
                 </button>
               </div>
@@ -751,12 +761,12 @@ export default function OwnerInventory() {
           <Modal onClose={() => !saving && setImportModal(null)} maxWidth={480}>
             <div style={modalHeaderStyle}>
               <h3 style={modalTitleStyle}>
-                <Package size={20} style={{ color: "#18a967" }} /> Nhập kho
+                <Package size={20} style={{ color: "#18a967" }} /> {t("Nhập kho")}
               </h3>
               <button
                 onClick={() => !saving && setImportModal(null)}
                 style={modalCloseStyle}
-                aria-label="Đóng"
+                aria-label={t("Đóng")}
               >
                 <X size={20} />
               </button>
@@ -778,7 +788,7 @@ export default function OwnerInventory() {
                 </span>
               </div>
               <div style={{ color: "var(--text-muted, #64748b)" }}>
-                Tồn hiện tại:{" "}
+                {t("Tồn hiện tại")}:{" "}
                 <b style={{ color: "var(--text-primary, #172033)" }}>
                   {importItem.qty} {importItem.unit}
                 </b>
@@ -787,7 +797,7 @@ export default function OwnerInventory() {
 
             <form onSubmit={doImport} autoComplete="off">
               <label style={labelStyle}>
-                Số lượng nhập ({importItem.unit}) *
+                {t("Số lượng nhập")} ({importItem.unit}) *
               </label>
               <input
                 name="qty"
@@ -795,23 +805,23 @@ export default function OwnerInventory() {
                 min="0.1"
                 step="0.1"
                 defaultValue=""
-                placeholder="VD: 10"
+                placeholder={t("VD: 10")}
                 required
                 autoFocus
                 style={{ ...inputStyle, fontSize: 14 }}
               />
 
-              <label style={labelStyle}>Nhà cung cấp</label>
+              <label style={labelStyle}>{t("Nhà cung cấp")}</label>
               <input
                 name="supplier"
-                placeholder="VD: Công ty TNHH ABC"
+                placeholder={t("VD: Công ty TNHH ABC")}
                 style={inputStyle}
               />
 
-              <label style={labelStyle}>Ghi chú</label>
+              <label style={labelStyle}>{t("Ghi chú")}</label>
               <textarea
                 name="note"
-                placeholder="VD: Hàng tươi, nhập buổi sáng..."
+                placeholder={t("VD: Hàng tươi, nhập buổi sáng...")}
                 style={{ ...inputStyle, minHeight: 60, resize: "vertical" }}
               />
 
@@ -822,7 +832,7 @@ export default function OwnerInventory() {
                   disabled={saving}
                   style={{ ...btnCancelStyle, flex: 1 }}
                 >
-                  Hủy
+                  {t("Hủy")}
                 </button>
                 <button
                   type="submit"
@@ -840,11 +850,11 @@ export default function OwnerInventory() {
                         size={14}
                         style={{ animation: "spin 1s linear infinite" }}
                       />
-                      Đang nhập...
+                      {t("Đang nhập...")}
                     </>
                   ) : (
                     <>
-                      <Package size={14} /> Nhập kho
+                      <Package size={14} /> {t("Nhập kho")}
                     </>
                   )}
                 </button>
@@ -947,7 +957,7 @@ function IconButton({
   );
 }
 
-function ErrorBox({ message, onRetry }) {
+function ErrorBox({ message, onRetry, t }) {
   return (
     <div
       style={{
@@ -961,7 +971,7 @@ function ErrorBox({ message, onRetry }) {
     >
       <AlertCircle size={26} style={{ marginBottom: 10 }} />
       <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        Không tải được dữ liệu
+        {t("Không tải được dữ liệu")}
       </div>
       <div style={{ fontSize: 13, opacity: 0.85, marginBottom: onRetry ? 12 : 0 }}>
         {message}
@@ -980,7 +990,7 @@ function ErrorBox({ message, onRetry }) {
             fontSize: 13,
           }}
         >
-          Thử lại
+          {t("Thử lại")}
         </button>
       )}
     </div>
@@ -1021,6 +1031,10 @@ function Modal({ children, onClose, maxWidth = 480 }) {
     </div>
   );
 }
+
+// ============================================================
+// STYLE CONSTANTS
+// ============================================================
 
 const thStyle = {
   padding: 11,

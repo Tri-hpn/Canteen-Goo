@@ -1,6 +1,8 @@
 // ============================================================
 // OWNEREMPLOYEES.JSX — Quản lý nhân viên (Admin)
 // ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+// ============================================================
 
 import { SkeletonTable } from "../../components/Skeleton";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -12,6 +14,7 @@ import {
 import { api } from "../../api";
 import { toast } from "../../components/Effects";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -39,6 +42,8 @@ function normalize(s) {
 // ============================================================
 
 export default function OwnerEmployees() {
+  const { t } = useI18n();
+
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -54,7 +59,7 @@ export default function OwnerEmployees() {
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
-  // ✅ FIX: allUsers chỉ load 1 lần, không phụ thuộc `list`
+  // allUsers chỉ load 1 lần, không phụ thuộc `list`
   const [allUsers, setAllUsers] = useState([]);
 
   const load = useCallback(async () => {
@@ -64,14 +69,14 @@ export default function OwnerEmployees() {
       const data = await api.users.list("EMPLOYEE");
       setList(Array.isArray(data) ? data : []);
     } catch (e) {
-      setError(e.message || "Không tải được danh sách nhân viên");
+      setError(e.message || t("Không tải được danh sách nhân viên"));
       setList([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
-  // ✅ FIX: loadAllUsers không phụ thuộc vào `list` → chỉ gọi 1 lần khi mount
+  // loadAllUsers không phụ thuộc vào `list` → chỉ gọi 1 lần khi mount
   const loadAllUsers = useCallback(async () => {
     try {
       const data = await api.users.list(); // không filter → lấy hết
@@ -151,18 +156,18 @@ export default function OwnerEmployees() {
     if (newPwd && newPwd.trim()) data.password = newPwd.trim();
 
     if (!data.name) {
-      toast("Vui lòng nhập họ tên", "error");
+      toast(t("Vui lòng nhập họ tên"), "error");
       return;
     }
     if (newPwd && newPwd.trim().length < 6) {
-      toast("Mật khẩu phải từ 6 ký tự", "error");
+      toast(t("Mật khẩu phải từ 6 ký tự"), "error");
       return;
     }
 
     setSaving(true);
     try {
       await api.users.update(detailModal.employee.id, data);
-      toast("Đã cập nhật nhân viên", "success");
+      toast(t("Đã cập nhật nhân viên"), "success");
 
       const updated = await api.users.list("EMPLOYEE");
       setList(Array.isArray(updated) ? updated : []);
@@ -175,7 +180,7 @@ export default function OwnerEmployees() {
         closeDetail();
       }
     } catch (e) {
-      toast(e.message || "Không lưu được", "error");
+      toast(e.message || t("Không lưu được"), "error");
     } finally {
       setSaving(false);
     }
@@ -191,16 +196,16 @@ export default function OwnerEmployees() {
     const phone = f.get("phone")?.trim();
     const password = f.get("password")?.trim() || DEFAULT_PASSWORD;
 
-    if (!name) return toast("Vui lòng nhập họ tên", "error");
-    if (!email) return toast("Vui lòng nhập email", "error");
+    if (!name) return toast(t("Vui lòng nhập họ tên"), "error");
+    if (!email) return toast(t("Vui lòng nhập email"), "error");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      return toast("Email không hợp lệ", "error");
+      return toast(t("Email không hợp lệ"), "error");
     if (password.length < 6)
-      return toast("Mật khẩu phải từ 6 ký tự", "error");
+      return toast(t("Mật khẩu phải từ 6 ký tự"), "error");
 
     if (existingEmails.has(email)) {
       return toast(
-        `Email "${email}" đã được sử dụng — vui lòng dùng email khác`,
+        `${t("Email")} "${email}" ${t("đã được sử dụng — vui lòng dùng email khác")}`,
         "error"
       );
     }
@@ -215,12 +220,12 @@ export default function OwnerEmployees() {
         status: f.get("status") || "Hoạt động",
         password,
       });
-      toast("Đã thêm nhân viên mới", "success");
+      toast(t("Đã thêm nhân viên mới"), "success");
       setAddModal(false);
       load();
       loadAllUsers(); // Refresh email set
     } catch (e) {
-      toast(e.message || "Không thêm được", "error");
+      toast(e.message || t("Không thêm được"), "error");
     } finally {
       setAdding(false);
     }
@@ -243,16 +248,17 @@ export default function OwnerEmployees() {
 
   const remove = (emp) => {
     setConfirm({
-      title: `Xóa nhân viên "${emp.name}"?`,
+      title: `${t("Xóa nhân viên")} "${emp.name}"?`,
       message:
-        "Hành động này không thể hoàn tác. Tất cả dữ liệu liên quan " +
-        "(chấm công, ca làm, chat...) sẽ bị xoá vĩnh viễn.",
-      confirmText: "Xóa vĩnh viễn",
-      cancelText: "Hủy",
+        t("Hành động này không thể hoàn tác. Tất cả dữ liệu liên quan") +
+        " " +
+        t("(chấm công, ca làm, chat...) sẽ bị xoá vĩnh viễn."),
+      confirmText: t("Xóa vĩnh viễn"),
+      cancelText: t("Hủy"),
       danger: true,
       onConfirm: async () => {
         await api.users.remove(emp.id);
-        toast("Đã xóa nhân viên", "success");
+        toast(t("Đã xóa nhân viên"), "success");
         setConfirm(null);
         closeDetail();
         load();
@@ -263,16 +269,19 @@ export default function OwnerEmployees() {
 
   const resetPassword = (emp) => {
     setConfirm({
-      title: `Reset mật khẩu của "${emp.name}"?`,
+      title: `${t("Reset mật khẩu của")} "${emp.name}"?`,
       message:
-        `Mật khẩu sẽ được đặt lại về "${DEFAULT_PASSWORD}".\n\n` +
-        "Hãy thông báo mật khẩu mới cho nhân viên sau khi reset.",
-      confirmText: "Reset mật khẩu",
-      cancelText: "Hủy",
+        `${t("Mật khẩu sẽ được đặt lại về")} "${DEFAULT_PASSWORD}".\n\n` +
+        t("Hãy thông báo mật khẩu mới cho nhân viên sau khi reset."),
+      confirmText: t("Reset mật khẩu"),
+      cancelText: t("Hủy"),
       danger: false,
       onConfirm: async () => {
         await api.users.update(emp.id, { password: DEFAULT_PASSWORD });
-        toast(`Đã reset mật khẩu về "${DEFAULT_PASSWORD}"`, "success");
+        toast(
+          `${t("Đã reset mật khẩu về")} "${DEFAULT_PASSWORD}"`,
+          "success"
+        );
         setConfirm(null);
         load();
       },
@@ -310,7 +319,7 @@ export default function OwnerEmployees() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm nhân viên..."
+              placeholder={t("Tìm nhân viên...")}
               style={{
                 flex: 1,
                 border: 0,
@@ -330,7 +339,7 @@ export default function OwnerEmployees() {
                   color: "var(--text-light, #8993a3)",
                   padding: 2,
                 }}
-                aria-label="Xoá tìm kiếm"
+                aria-label={t("Xoá tìm kiếm")}
               >
                 <X size={14} />
               </button>
@@ -353,7 +362,7 @@ export default function OwnerEmployees() {
               fontSize: 13,
             }}
           >
-            <Plus size={16} /> Thêm nhân viên
+            <Plus size={16} /> {t("Thêm nhân viên")}
           </button>
         </div>
 
@@ -369,7 +378,14 @@ export default function OwnerEmployees() {
             <SkeletonTable
               columns={6}
               rows={5}
-              headers={["ID", "Họ tên", "Email", "SĐT", "Trạng thái", "Thao tác"]}
+              headers={[
+                t("ID"),
+                t("Họ tên"),
+                t("Email"),
+                t("SĐT"),
+                t("Trạng thái"),
+                t("Thao tác"),
+              ]}
             />
           )}
 
@@ -386,7 +402,7 @@ export default function OwnerEmployees() {
             >
               <AlertCircle size={26} style={{ marginBottom: 10 }} />
               <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                Không tải được dữ liệu
+                {t("Không tải được dữ liệu")}
               </div>
               <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 12 }}>
                 {error}
@@ -404,7 +420,7 @@ export default function OwnerEmployees() {
                   fontSize: 13,
                 }}
               >
-                Thử lại
+                {t("Thử lại")}
               </button>
             </div>
           )}
@@ -414,12 +430,14 @@ export default function OwnerEmployees() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                    <th style={thStyle}>ID</th>
-                    <th style={thStyle}>Họ tên</th>
-                    <th style={thStyle}>Email</th>
-                    <th style={thStyle}>SĐT</th>
-                    <th style={thStyle}>Trạng thái</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Thao tác</th>
+                    <th style={thStyle}>{t("ID")}</th>
+                    <th style={thStyle}>{t("Họ tên")}</th>
+                    <th style={thStyle}>{t("Email")}</th>
+                    <th style={thStyle}>{t("SĐT")}</th>
+                    <th style={thStyle}>{t("Trạng thái")}</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>
+                      {t("Thao tác")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -443,7 +461,13 @@ export default function OwnerEmployees() {
                       </td>
 
                       <td style={tdStyle}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                          }}
+                        >
                           <div
                             style={{
                               width: 34,
@@ -464,15 +488,28 @@ export default function OwnerEmployees() {
                         </div>
                       </td>
 
-                      <td style={{ ...tdStyle, color: "var(--text-muted, #64748b)" }}>
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: "var(--text-muted, #64748b)",
+                        }}
+                      >
                         {emp.email}
                       </td>
-                      <td style={{ ...tdStyle, color: "var(--text-muted, #64748b)" }}>
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: "var(--text-muted, #64748b)",
+                        }}
+                      >
                         {emp.phone || "—"}
                       </td>
 
                       <td style={tdStyle}>
-                        <StatusBadge status={emp.status || "Hoạt động"} />
+                        <StatusBadge
+                          status={emp.status || "Hoạt động"}
+                          t={t}
+                        />
                       </td>
 
                       <td style={{ ...tdStyle, textAlign: "right" }}>
@@ -485,26 +522,26 @@ export default function OwnerEmployees() {
                         >
                           <IconButton
                             onClick={() => openDetail(emp, "view")}
-                            title="Xem chi tiết"
+                            title={t("Xem chi tiết")}
                           >
                             <Eye size={15} />
                           </IconButton>
                           <IconButton
                             onClick={() => openDetail(emp, "edit")}
-                            title="Sửa"
+                            title={t("Sửa")}
                           >
                             <Pencil size={15} />
                           </IconButton>
                           <IconButton
                             onClick={() => resetPassword(emp)}
-                            title="Reset mật khẩu"
+                            title={t("Reset mật khẩu")}
                             color="#f59e0b"
                           >
                             <KeyRound size={15} />
                           </IconButton>
                           <IconButton
                             onClick={() => remove(emp)}
-                            title="Xóa"
+                            title={t("Xóa")}
                             color="#ef4444"
                           >
                             <Trash2 size={15} />
@@ -524,11 +561,14 @@ export default function OwnerEmployees() {
                           color: "var(--text-light, #8993a3)",
                         }}
                       >
-                        <Users size={36} style={{ opacity: 0.35, marginBottom: 10 }} />
+                        <Users
+                          size={36}
+                          style={{ opacity: 0.35, marginBottom: 10 }}
+                        />
                         <div>
                           {q
-                            ? `Không có nhân viên nào khớp "${q}"`
-                            : "Chưa có nhân viên nào"}
+                            ? `${t("Không có nhân viên nào khớp")} "${q}"`
+                            : t("Chưa có nhân viên nào")}
                         </div>
                       </td>
                     </tr>
@@ -545,12 +585,12 @@ export default function OwnerEmployees() {
               <>
                 <div style={modalHeaderStyle}>
                   <h3 style={modalTitleStyle}>
-                    <UserIcon size={20} /> Chi tiết nhân viên
+                    <UserIcon size={20} /> {t("Chi tiết nhân viên")}
                   </h3>
                   <button
                     onClick={closeDetail}
                     style={modalCloseStyle}
-                    aria-label="Đóng"
+                    aria-label={t("Đóng")}
                   >
                     <X size={20} />
                   </button>
@@ -601,7 +641,7 @@ export default function OwnerEmployees() {
                       color: "#2634d5",
                     }}
                   >
-                    <Shield size={12} /> Nhân viên
+                    <Shield size={12} /> {t("Nhân viên")}
                   </div>
                 </div>
 
@@ -615,22 +655,22 @@ export default function OwnerEmployees() {
                 >
                   <InfoRow
                     icon={<UserIcon size={16} />}
-                    label="Mã nhân viên"
+                    label={t("Mã nhân viên")}
                     value={`NV${detailModal.employee.id}`}
                   />
                   <InfoRow
                     icon={<UserIcon size={16} />}
-                    label="Họ và tên"
+                    label={t("Họ và tên")}
                     value={detailModal.employee.name}
                   />
                   <InfoRow
                     icon={<Mail size={16} />}
-                    label="Email"
+                    label={t("Email")}
                     value={detailModal.employee.email}
                   />
                   <InfoRow
                     icon={<Phone size={16} />}
-                    label="Số điện thoại"
+                    label={t("Số điện thoại")}
                     value={detailModal.employee.phone || "—"}
                   />
 
@@ -668,7 +708,7 @@ export default function OwnerEmployees() {
                           marginBottom: 2,
                         }}
                       >
-                        Mật khẩu hiện tại
+                        {t("Mật khẩu hiện tại")}
                       </div>
                       <div
                         style={{
@@ -684,7 +724,7 @@ export default function OwnerEmployees() {
                             : "•".repeat(
                                 detailModal.employee.plainPassword.length || 6
                               )
-                          : "(Chưa có)"}
+                          : t("(Chưa có)")}
                       </div>
                     </div>
                     {detailModal.employee.plainPassword && (
@@ -697,7 +737,9 @@ export default function OwnerEmployees() {
                           color: "var(--text-light, #8993a3)",
                           padding: 4,
                         }}
-                        aria-label={showPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                        aria-label={
+                          showPw ? t("Ẩn mật khẩu") : t("Hiện mật khẩu")
+                        }
                       >
                         {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -706,17 +748,28 @@ export default function OwnerEmployees() {
 
                   <InfoRow
                     icon={<UserIcon size={16} />}
-                    label="Trạng thái"
-                    value={<StatusBadge status={detailModal.employee.status || "Hoạt động"} />}
+                    label={t("Trạng thái")}
+                    value={
+                      <StatusBadge
+                        status={detailModal.employee.status || "Hoạt động"}
+                        t={t}
+                      />
+                    }
                   />
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                  }}
+                >
                   <button onClick={closeDetail} style={btnCancelStyle}>
-                    Đóng
+                    {t("Đóng")}
                   </button>
                   <button onClick={switchToEdit} style={btnPrimaryStyle}>
-                    <Pencil size={14} /> Sửa
+                    <Pencil size={14} /> {t("Sửa")}
                   </button>
                 </div>
               </>
@@ -725,18 +778,18 @@ export default function OwnerEmployees() {
             {detailModal.mode === "edit" && (
               <>
                 <div style={modalHeaderStyle}>
-                  <h3 style={modalTitleStyle}>Sửa nhân viên</h3>
+                  <h3 style={modalTitleStyle}>{t("Sửa nhân viên")}</h3>
                   <button
                     onClick={closeDetail}
                     style={modalCloseStyle}
-                    aria-label="Đóng"
+                    aria-label={t("Đóng")}
                   >
                     <X size={20} />
                   </button>
                 </div>
 
                 <form onSubmit={saveEdit} autoComplete="off">
-                  <label style={labelStyle}>Họ và tên *</label>
+                  <label style={labelStyle}>{t("Họ và tên")} *</label>
                   <input
                     name="name"
                     defaultValue={detailModal.employee.name || ""}
@@ -745,7 +798,9 @@ export default function OwnerEmployees() {
                     autoFocus
                   />
 
-                  <label style={labelStyle}>Email (không sửa được)</label>
+                  <label style={labelStyle}>
+                    {t("Email (không sửa được)")}
+                  </label>
                   <input
                     name="email"
                     type="email"
@@ -759,7 +814,7 @@ export default function OwnerEmployees() {
                     }}
                   />
 
-                  <label style={labelStyle}>Số điện thoại</label>
+                  <label style={labelStyle}>{t("Số điện thoại")}</label>
                   <input
                     name="phone"
                     defaultValue={detailModal.employee.phone || ""}
@@ -767,13 +822,13 @@ export default function OwnerEmployees() {
                   />
 
                   <label style={labelStyle}>
-                    Mật khẩu mới (để trống = giữ nguyên)
+                    {t("Mật khẩu mới (để trống = giữ nguyên)")}
                   </label>
                   <div style={{ position: "relative" }}>
                     <input
                       name="password"
                       type={showPw ? "text" : "password"}
-                      placeholder="Ít nhất 6 ký tự"
+                      placeholder={t("Ít nhất 6 ký tự")}
                       style={inputStyle}
                       autoComplete="new-password"
                     />
@@ -789,20 +844,22 @@ export default function OwnerEmployees() {
                         cursor: "pointer",
                         color: "var(--text-light, #8993a3)",
                       }}
-                      aria-label={showPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                      aria-label={
+                        showPw ? t("Ẩn mật khẩu") : t("Hiện mật khẩu")
+                      }
                     >
                       {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
 
-                  <label style={labelStyle}>Trạng thái</label>
+                  <label style={labelStyle}>{t("Trạng thái")}</label>
                   <select
                     name="status"
                     defaultValue={detailModal.employee.status || "Hoạt động"}
                     style={inputStyle}
                   >
-                    <option>Hoạt động</option>
-                    <option>Bị khóa</option>
+                    <option>{t("Hoạt động")}</option>
+                    <option>{t("Bị khóa")}</option>
                   </select>
 
                   <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
@@ -812,7 +869,7 @@ export default function OwnerEmployees() {
                       disabled={saving}
                       style={{ ...btnCancelStyle, flex: 1 }}
                     >
-                      <X size={14} /> Hủy
+                      <X size={14} /> {t("Hủy")}
                     </button>
                     <button
                       type="submit"
@@ -825,11 +882,11 @@ export default function OwnerEmployees() {
                             size={14}
                             style={{ animation: "spin 1s linear infinite" }}
                           />
-                          Đang lưu...
+                          {t("Đang lưu...")}
                         </>
                       ) : (
                         <>
-                          <Save size={14} /> Lưu
+                          <Save size={14} /> {t("Lưu")}
                         </>
                       )}
                     </button>
@@ -843,28 +900,31 @@ export default function OwnerEmployees() {
         {addModal && (
           <Modal onClose={() => !adding && setAddModal(false)} maxWidth={480}>
             <div style={modalHeaderStyle}>
-              <h3 style={modalTitleStyle}>Thêm nhân viên</h3>
+              <h3 style={modalTitleStyle}>{t("Thêm nhân viên")}</h3>
               <button
                 onClick={() => !adding && setAddModal(false)}
                 style={modalCloseStyle}
-                aria-label="Đóng"
+                aria-label={t("Đóng")}
               >
                 <X size={20} />
               </button>
             </div>
 
             <form onSubmit={saveAdd} autoComplete="off">
-              <label style={labelStyle}>Họ và tên *</label>
+              <label style={labelStyle}>{t("Họ và tên")} *</label>
               <input name="name" required style={inputStyle} autoFocus />
 
-              <label style={labelStyle}>Email *</label>
+              <label style={labelStyle}>{t("Email")} *</label>
               <input name="email" type="email" required style={inputStyle} />
 
-              <label style={labelStyle}>Số điện thoại</label>
+              <label style={labelStyle}>{t("Số điện thoại")}</label>
               <input name="phone" style={inputStyle} />
 
               <label style={labelStyle}>
-                Mật khẩu (để trống = {DEFAULT_PASSWORD})
+                {t("Mật khẩu (để trống = {password})").replace(
+                  "{password}",
+                  DEFAULT_PASSWORD
+                )}
               </label>
               <input
                 name="password"
@@ -873,10 +933,10 @@ export default function OwnerEmployees() {
                 autoComplete="new-password"
               />
 
-              <label style={labelStyle}>Trạng thái</label>
-              <select name="status" defaultValue="Hoạt động" style={inputStyle}>
-                <option>Hoạt động</option>
-                <option>Bị khóa</option>
+              <label style={labelStyle}>{t("Trạng thái")}</label>
+              <select name="status" defaultValue={t("Hoạt động")} style={inputStyle}>
+                <option>{t("Hoạt động")}</option>
+                <option>{t("Bị khóa")}</option>
               </select>
 
               <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
@@ -886,7 +946,7 @@ export default function OwnerEmployees() {
                   disabled={adding}
                   style={{ ...btnCancelStyle, flex: 1 }}
                 >
-                  Hủy
+                  {t("Hủy")}
                 </button>
                 <button
                   type="submit"
@@ -899,11 +959,11 @@ export default function OwnerEmployees() {
                         size={14}
                         style={{ animation: "spin 1s linear infinite" }}
                       />
-                      Đang tạo...
+                      {t("Đang tạo...")}
                     </>
                   ) : (
                     <>
-                      <Save size={14} /> Tạo nhân viên
+                      <Save size={14} /> {t("Tạo nhân viên")}
                     </>
                   )}
                 </button>
@@ -941,7 +1001,7 @@ export default function OwnerEmployees() {
 // SUB-COMPONENTS
 // ============================================================
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, t }) {
   const active = status === "Hoạt động";
   return (
     <span
@@ -958,12 +1018,17 @@ function StatusBadge({ status }) {
         whiteSpace: "nowrap",
       }}
     >
-      {status}
+      {t(status)}
     </span>
   );
 }
 
-function IconButton({ children, onClick, title, color = "var(--text-primary, #172033)" }) {
+function IconButton({
+  children,
+  onClick,
+  title,
+  color = "var(--text-primary, #172033)",
+}) {
   return (
     <button
       onClick={onClick}
@@ -1075,6 +1140,10 @@ function Modal({ children, onClose, maxWidth = 480 }) {
     </div>
   );
 }
+
+// ============================================================
+// STYLE CONSTANTS
+// ============================================================
 
 const thStyle = {
   padding: 11,

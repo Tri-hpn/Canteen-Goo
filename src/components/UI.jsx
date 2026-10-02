@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // UI.JSX — Utility components
 // ============================================================
 
@@ -13,7 +13,7 @@ import {
   CalendarX, Inbox, ShoppingBag, Search, UtensilsCrossed,
   FileQuestion, Gift, Wallet,
 } from "lucide-react";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 // ============================================================
 // MONEY FORMAT
@@ -125,7 +125,7 @@ const FALLBACK = { type: "neutral", Icon: Info };
  * Nếu caller truyền `status` (raw text) thì vẫn hoạt động như cũ.
  */
 export function StatusBadge({ status, statusKey }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const ctxTheme = useTheme();
   const hasProvider = ctxTheme !== null;
 
@@ -205,7 +205,7 @@ export function StatusBadge({ status, statusKey }) {
 const MODAL_Z = 2147483600;
 
 export function Modal({ title, children, onClose, maxWidth = 480 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const overlayRef = useRef(null);
   const mouseDownTargetRef = useRef(null);
 
@@ -359,7 +359,7 @@ export function Empty({
   iconColor,
   style,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const finalTitle = title || text || t("common.emptyDefault");
   const showDescription = !!description;
@@ -517,7 +517,7 @@ export function Empty({
 // ============================================================
 
 export function TableActions({ onView, onEdit, onDelete }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const btnStyle = {
     width: 30,

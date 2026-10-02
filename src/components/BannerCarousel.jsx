@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // BANNERCAROUSEL.JSX — Component carousel banner
 // ============================================================
 
@@ -12,7 +12,7 @@ import {
   bannerSlides,
   DEFAULT_BANNER_OVERLAY,
 } from "../bannerSlides";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const AUTO_INTERVAL = 4000;
 const TRANSITION_MS = 500;
@@ -28,7 +28,7 @@ function renderChipIcon(name, size = 13) {
 }
 
 export default function BannerCarousel({ slides = bannerSlides }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [tabVisible, setTabVisible] = useState(
@@ -87,7 +87,7 @@ export default function BannerCarousel({ slides = bannerSlides }) {
           borderRadius: 16,
         }}
       >
-        {t("banner.empty")}
+        {t("Không có banner")}
       </div>
     );
   }
@@ -96,7 +96,7 @@ export default function BannerCarousel({ slides = bannerSlides }) {
     <div
       className="banner-carousel"
       role="region"
-      aria-label={t("banner.regionLabel")}
+      aria-label={t("Banner khuyến mãi")}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       style={{
@@ -131,7 +131,7 @@ export default function BannerCarousel({ slides = bannerSlides }) {
         <>
           <button
             onClick={prev}
-            aria-label={t("banner.prev")}
+            aria-label={t("Slide trước")}
             className="banner-nav banner-nav-left"
             type="button"
             style={{
@@ -147,7 +147,7 @@ export default function BannerCarousel({ slides = bannerSlides }) {
           </button>
           <button
             onClick={next}
-            aria-label={t("banner.next")}
+            aria-label={t("Slide tiếp theo")}
             className="banner-nav banner-nav-right"
             type="button"
             style={{
@@ -167,7 +167,7 @@ export default function BannerCarousel({ slides = bannerSlides }) {
       {total > 1 && (
         <div
           role="tablist"
-          aria-label={t("banner.selectSlide")}
+          aria-label={t("Chọn slide")}
           className="banner-dots"
           style={{
             position: "absolute", bottom: 16, left: 0, right: 0,
@@ -183,7 +183,7 @@ export default function BannerCarousel({ slides = bannerSlides }) {
                 onClick={() => goTo(i)}
                 role="tab"
                 aria-selected={active}
-                aria-label={t("banner.goToSlide").replace("{n}", i + 1)}
+                aria-label={t("Đi đến slide {n}").replace("{n}", i + 1)}
                 type="button"
                 style={{
                   width: active ? 28 : 10,

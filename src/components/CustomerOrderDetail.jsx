@@ -11,7 +11,7 @@ import { api } from "../api";
 import { money } from "./UI";
 import { toast } from "./Effects";
 import ConfirmDialog from "./ConfirmDialog";
-import { useTranslation } from "../i18n";
+import { useI18n } from "../hooks/useI18n";
 
 const MODAL_Z = 2147483600;
 const POINTS_PER_REVIEW = 10;
@@ -59,7 +59,7 @@ export default function CustomerOrderDetail({
   onClose,
   onUpdate,
 }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [order, setOrder] = useState(initialOrder);
   const [showReview, setShowReview] = useState(false);
   const [showMyReviews, setShowMyReviews] = useState(false);

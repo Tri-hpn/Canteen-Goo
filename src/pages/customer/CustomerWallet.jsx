@@ -1,5 +1,8 @@
-﻿// ============================================================
+// ============================================================
 // CUSTOMERWALLET.JSX — Ví Canteen (khách hàng)
+// ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+//    Không còn key cũ kiểu "wallet.xxx" / "common.xxx"
 // ============================================================
 
 import { Skeleton, SkeletonList, SkeletonStats } from "../../components/Skeleton";
@@ -13,7 +16,7 @@ import {
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -22,17 +25,17 @@ import { useTranslation } from "../../i18n";
 const MODAL_Z = 2147483600;
 
 const BANKS = [
-  { code: "VCB", name: "Vietcombank" },
-  { code: "TCB", name: "Techcombank" },
-  { code: "VIB", name: "VIB" },
-  { code: "MBB", name: "MB Bank" },
-  { code: "ACB", name: "ACB" },
-  { code: "TPB", name: "TPBank" },
-  { code: "VPB", name: "VPBank" },
-  { code: "STB", name: "Sacombank" },
+  { code: "VCB",  name: "Vietcombank" },
+  { code: "TCB",  name: "Techcombank" },
+  { code: "VIB",  name: "VIB" },
+  { code: "MBB",  name: "MB Bank" },
+  { code: "ACB",  name: "ACB" },
+  { code: "TPB",  name: "TPBank" },
+  { code: "VPB",  name: "VPBank" },
+  { code: "STB",  name: "Sacombank" },
   { code: "BIDV", name: "BIDV" },
-  { code: "ICB", name: "Vietinbank" },
-  { code: "AGB", name: "Agribank" },
+  { code: "ICB",  name: "Vietinbank" },
+  { code: "AGB",  name: "Agribank" },
 ];
 
 const MIN_DEPOSIT = 10000;
@@ -67,7 +70,7 @@ function fmtDateTime(iso) {
 // ============================================================
 
 export default function CustomerWallet() {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   const [wallet, setWallet] = useState(EMPTY_WALLET);
   const [transactions, setTransactions] = useState([]);
@@ -86,21 +89,21 @@ export default function CustomerWallet() {
   const reqIdRef = useRef(0);
   const inFlightRef = useRef(false);
 
-  // ---------- TX config ----------
+  // ---------- TX config (source-text) ----------
   const TX_CONFIG = useMemo(
     () => ({
-      deposit:  { icon: ArrowDownCircle, color: "#18a967", bg: "#e8f9f1", label: t("wallet.tx.deposit"),  sign: "+" },
-      withdraw: { icon: ArrowUpCircle,   color: "#f59e0b", bg: "#fef3c7", label: t("wallet.tx.withdraw"), sign: "-" },
-      payment:  { icon: ShoppingBag,     color: "#8b5cf6", bg: "#ede9fe", label: t("wallet.tx.payment"),  sign: "-" },
+      deposit:  { icon: ArrowDownCircle, color: "#18a967", bg: "#e8f9f1", label: t("Nạp tiền"),    sign: "+" },
+      withdraw: { icon: ArrowUpCircle,   color: "#f59e0b", bg: "#fef3c7", label: t("Rút tiền"),    sign: "−" },
+      payment:  { icon: ShoppingBag,     color: "#8b5cf6", bg: "#ede9fe", label: t("Thanh toán"),  sign: "−" },
     }),
     [t]
   );
 
   const STATUS_CONFIG = useMemo(
     () => ({
-      pending:  { label: t("wallet.status.pending"),  color: "#f59e0b", bg: "#fef3c7" },
-      approved: { label: t("wallet.status.approved"), color: "#18a967", bg: "#e8f9f1" },
-      rejected: { label: t("wallet.status.rejected"), color: "#ef4444", bg: "#fee2e2" },
+      pending:  { label: t("Chờ duyệt"), color: "#f59e0b", bg: "#fef3c7" },
+      approved: { label: t("Thành công"), color: "#18a967", bg: "#e8f9f1" },
+      rejected: { label: t("Từ chối"),    color: "#ef4444", bg: "#fee2e2" },
     }),
     [t]
   );
@@ -128,7 +131,7 @@ export default function CustomerWallet() {
       if (st) setSettings(st);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || t("wallet.loadError"));
+        setError(e.message || t("Không tải được dữ liệu ví"));
       }
     } finally {
       if (myReqId === reqIdRef.current) {
@@ -177,12 +180,12 @@ export default function CustomerWallet() {
     await loadAll(true);
   }, [loadAll]);
 
-  // ---------- Tabs config ----------
+  // ---------- Tabs config (source-text) ----------
   const TABS = [
-    { id: "all",      label: t("wallet.tab.all") },
-    { id: "deposit",  label: t("wallet.tab.deposit") },
-    { id: "withdraw", label: t("wallet.tab.withdraw") },
-    { id: "payment",  label: t("wallet.tab.payment") },
+    { id: "all",      label: t("Tất cả") },
+    { id: "deposit",  label: t("Nạp tiền") },
+    { id: "withdraw", label: t("Rút tiền") },
+    { id: "payment",  label: t("Thanh toán") },
   ];
 
   return (
@@ -221,7 +224,7 @@ export default function CustomerWallet() {
               gap: 4,
             }}
           >
-            <RefreshCw size={12} /> {t("common.retry")}
+            <RefreshCw size={12} /> {t("Thử lại")}
           </button>
         </div>
       )}
@@ -262,10 +265,10 @@ export default function CustomerWallet() {
               letterSpacing: 1,
             }}
           >
-            <Wallet size={14} /> {t("wallet.heroLabel")}
+            <Wallet size={14} /> {t("Ví Canteen")}
           </div>
           <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>
-            {t("wallet.balance")}
+            {t("Số dư khả dụng")}
           </div>
           <div
             style={{
@@ -308,7 +311,7 @@ export default function CustomerWallet() {
                 gap: 6,
               }}
             >
-              <Plus size={16} /> {t("wallet.deposit")}
+              <Plus size={16} /> {t("Nạp tiền")}
             </button>
 
             <button
@@ -316,10 +319,10 @@ export default function CustomerWallet() {
               disabled={!canWithdraw}
               title={
                 !isLinked
-                  ? t("wallet.tipLinkFirst")
+                  ? t("Vui lòng liên kết ngân hàng trước")
                   : wallet.balance < MIN_WITHDRAW
-                  ? t("wallet.tipMinWithdraw").replace("{value}", money(MIN_WITHDRAW))
-                  : t("wallet.tipWithdraw")
+                  ? t("Số dư tối thiểu {value} để rút").replace("{value}", money(MIN_WITHDRAW))
+                  : t("Rút tiền về tài khoản đã liên kết")
               }
               style={{
                 padding: "11px 20px",
@@ -337,7 +340,7 @@ export default function CustomerWallet() {
                 gap: 6,
               }}
             >
-              <Minus size={16} /> {t("wallet.withdraw")}
+              <Minus size={16} /> {t("Rút tiền")}
             </button>
 
             <button
@@ -357,7 +360,7 @@ export default function CustomerWallet() {
               }}
             >
               <LinkIcon size={16} />{" "}
-              {isLinked ? t("wallet.changeBank") : t("wallet.linkBank")}
+              {isLinked ? t("Đổi ngân hàng") : t("Liên kết ngân hàng")}
             </button>
           </div>
         </div>
@@ -380,25 +383,25 @@ export default function CustomerWallet() {
         >
           <StatBox
             icon={<ArrowDownCircle size={18} />}
-            label={t("wallet.stat.deposited")}
+            label={t("Đã nạp")}
             value={money(stats.deposited)}
             color="#18a967"
           />
           <StatBox
             icon={<ArrowUpCircle size={18} />}
-            label={t("wallet.stat.withdrawn")}
+            label={t("Đã rút")}
             value={money(stats.withdrawn)}
             color="#f59e0b"
           />
           <StatBox
             icon={<ShoppingBag size={18} />}
-            label={t("wallet.stat.paid")}
+            label={t("Đã thanh toán")}
             value={money(stats.paid)}
             color="#8b5cf6"
           />
           <StatBox
             icon={<Clock size={18} />}
-            label={t("wallet.stat.pending")}
+            label={t("Chờ duyệt")}
             value={stats.pending}
             color="#ef4444"
           />
@@ -445,7 +448,7 @@ export default function CustomerWallet() {
                 textTransform: "uppercase",
               }}
             >
-              {t("wallet.linkedLabel")}
+              {t("Ngân hàng đã liên kết")}
             </div>
             <div
               style={{
@@ -497,7 +500,7 @@ export default function CustomerWallet() {
               gap: 8,
             }}
           >
-            <History size={18} /> {t("wallet.transactions")}
+            <History size={18} /> {t("Lịch sử giao dịch")}
           </h3>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -538,8 +541,8 @@ export default function CustomerWallet() {
             <button
               onClick={() => loadAll(false)}
               disabled={refreshing}
-              title={t("common.refresh")}
-              aria-label={t("common.refresh")}
+              title={t("Làm mới")}
+              aria-label={t("Làm mới")}
               style={{
                 padding: "6px 12px",
                 background: "var(--bg-tertiary, #f5f7fb)",
@@ -587,8 +590,8 @@ export default function CustomerWallet() {
             <Wallet size={40} style={{ opacity: 0.3, marginBottom: 8 }} />
             <p style={{ margin: 0, fontSize: 13 }}>
               {tab === "all"
-                ? t("wallet.noTx")
-                : t("wallet.noTxType").replace(
+                ? t("Chưa có giao dịch nào")
+                : t("Không có giao dịch {type}").replace(
                     "{type}",
                     TABS.find((x) => x.id === tab)?.label || ""
                   )}
@@ -605,10 +608,10 @@ export default function CustomerWallet() {
                 TX_CONFIG={TX_CONFIG}
                 STATUS_CONFIG={STATUS_CONFIG}
                 methodLabels={{
-                  QR: t("wallet.method.qr"),
-                  CASH: t("wallet.method.cash"),
-                  BANK: t("wallet.method.bank"),
-                  WALLET: t("wallet.method.wallet"),
+                  QR: t("VietQR"),
+                  CASH: t("Tiền mặt"),
+                  BANK: t("Chuyển khoản"),
+                  WALLET: t("Ví Canteen"),
                 }}
               />
             ))}
@@ -874,7 +877,7 @@ function Modal({ children, onClose, busy = false, maxWidth = 460, label }) {
 // ============================================================
 
 function DepositModal({ settings, onClose, onSuccess }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [step, setStep] = useState(1);
   const [amount, setAmount] = useState(100000);
   const [method, setMethod] = useState("QR");
@@ -888,7 +891,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
     if (submitting) return;
     if (amount < MIN_DEPOSIT) {
       toast(
-        t("wallet.minDeposit").replace("{value}", money(MIN_DEPOSIT)),
+        t("Số tiền nạp tối thiểu {value}").replace("{value}", money(MIN_DEPOSIT)),
         "error"
       );
       return;
@@ -898,7 +901,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
     try {
       const res = await api.wallet.deposit({ amount, method, note });
       setTx(res.transaction);
-      toast(t("wallet.depositCreated"), "success");
+      toast(t("Đã tạo yêu cầu nạp tiền"), "success");
 
       if (method === "CASH") {
         onSuccess();
@@ -906,7 +909,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
         setStep(2);
       }
     } catch (e) {
-      toast(e.message || t("wallet.depositError"), "error");
+      toast(e.message || t("Không tạo được yêu cầu nạp"), "error");
     } finally {
       setSubmitting(false);
     }
@@ -923,7 +926,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
       : null;
 
     return (
-      <Modal onClose={onClose} busy={busy} label={t("wallet.depositQrTitle")}>
+      <Modal onClose={onClose} busy={busy} label={t("Nạp tiền qua VietQR")}>
         <div style={{ textAlign: "center", marginBottom: 16 }}>
           <div
             style={{
@@ -940,7 +943,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
             <QrCode size={28} />
           </div>
           <h3 style={{ margin: "0 0 6px", color: "var(--text-primary, #172033)" }}>
-            {t("wallet.depositQrTitle")}
+            {t("Nạp tiền qua VietQR")}
           </h3>
           <p
             style={{
@@ -949,7 +952,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
               fontSize: 13,
             }}
           >
-            {t("wallet.depositQrDesc")
+            {t("Quét mã QR để chuyển {amount} cho đơn {code}")
               .replace("{amount}", money(tx.amount))
               .replace("{code}", tx.code)}
           </p>
@@ -985,13 +988,13 @@ function DepositModal({ settings, onClose, onSuccess }) {
                 padding: 20,
               }}
             >
-              {t("wallet.depositQrFail")}
+              {t("Không tải được mã QR")}
               <br />
               <b>
                 {bankCode} · {bankAccount}
               </b>
               <br />
-              {t("wallet.transferContent")}: <b>{tx.code}</b>
+              {t("Nội dung chuyển khoản")}: <b>{tx.code}</b>
             </div>
           </div>
         ) : (
@@ -1007,7 +1010,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
               textAlign: "center",
             }}
           >
-            {t("wallet.noBankInfo")}
+            {t("Chưa cấu hình tài khoản nhận tiền")}
           </div>
         )}
 
@@ -1025,7 +1028,9 @@ function DepositModal({ settings, onClose, onSuccess }) {
           }}
         >
           <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>{t("wallet.depositNotice")}</span>
+          <span>
+            {t("Vui lòng chuyển đúng số tiền và nội dung. Yêu cầu sẽ được admin duyệt trong vài phút.")}
+          </span>
         </div>
 
         <button
@@ -1042,7 +1047,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
             fontSize: 13,
           }}
         >
-          {t("wallet.understood")}
+          {t("Đã hiểu")}
         </button>
       </Modal>
     );
@@ -1050,7 +1055,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
 
   // ---------- STEP 1: form ----------
   return (
-    <Modal onClose={onClose} busy={busy} label={t("wallet.depositTitle")}>
+    <Modal onClose={onClose} busy={busy} label={t("Nạp tiền")}>
       <div
         style={{
           display: "flex",
@@ -1068,19 +1073,19 @@ function DepositModal({ settings, onClose, onSuccess }) {
             gap: 8,
           }}
         >
-          <Plus size={20} style={{ color: "#18a967" }} /> {t("wallet.depositTitle")}
+          <Plus size={20} style={{ color: "#18a967" }} /> {t("Nạp tiền")}
         </h3>
         <button
           onClick={onClose}
           disabled={busy}
-          aria-label={t("common.close")}
+          aria-label={t("Đóng")}
           style={closeBtnStyle(busy)}
         >
           <X size={20} />
         </button>
       </div>
 
-      <label style={labelStyle}>{t("wallet.amount")} *</label>
+      <label style={labelStyle}>{t("Số tiền")} *</label>
       <div style={{ position: "relative", marginBottom: 10 }}>
         <input
           type="number"
@@ -1132,7 +1137,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
         ))}
       </div>
 
-      <label style={labelStyle}>{t("wallet.method")}</label>
+      <label style={labelStyle}>{t("Phương thức")}</label>
       <div
         style={{
           display: "grid",
@@ -1145,15 +1150,15 @@ function DepositModal({ settings, onClose, onSuccess }) {
           {
             id: "QR",
             icon: QrCode,
-            label: t("wallet.method.qr"),
+            label: t("VietQR"),
             desc: "VietQR",
             color: "#2634d5",
           },
           {
             id: "CASH",
             icon: Banknote,
-            label: t("wallet.method.cash"),
-            desc: t("wallet.atCounter"),
+            label: t("Tiền mặt"),
+            desc: t("Nộp tại quầy"),
             color: "#18a967",
           },
         ].map((m) => {
@@ -1202,11 +1207,11 @@ function DepositModal({ settings, onClose, onSuccess }) {
         })}
       </div>
 
-      <label style={labelStyle}>{t("wallet.note")}</label>
+      <label style={labelStyle}>{t("Ghi chú")}</label>
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder={t("wallet.notePlaceholder")}
+        placeholder={t("Ghi chú thêm (không bắt buộc)")}
         maxLength={200}
         disabled={busy}
         style={inputStyle}
@@ -1219,7 +1224,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
           disabled={busy}
           style={btnCancelStyle(busy)}
         >
-          {t("common.cancel")}
+          {t("Hủy")}
         </button>
         <button
           type="button"
@@ -1233,10 +1238,10 @@ function DepositModal({ settings, onClose, onSuccess }) {
                 size={14}
                 style={{ animation: "spin 1s linear infinite" }}
               />
-              {t("common.processing")}
+              {t("Đang xử lý...")}
             </>
           ) : (
-            `${t("wallet.deposit")} ${amount.toLocaleString("vi-VN")}đ`
+            `${t("Nạp tiền")} ${amount.toLocaleString("vi-VN")}đ`
           )}
         </button>
       </div>
@@ -1249,7 +1254,7 @@ function DepositModal({ settings, onClose, onSuccess }) {
 // ============================================================
 
 function WithdrawModal({ balance, bank, onClose, onSuccess }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [amount, setAmount] = useState(50000);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -1261,30 +1266,30 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
 
     if (amount < MIN_WITHDRAW) {
       toast(
-        t("wallet.minWithdraw").replace("{value}", money(MIN_WITHDRAW)),
+        t("Số tiền rút tối thiểu {value}").replace("{value}", money(MIN_WITHDRAW)),
         "error"
       );
       return;
     }
     if (amount > balance) {
-      toast(t("wallet.notEnough"), "error");
+      toast(t("Số dư không đủ"), "error");
       return;
     }
 
     setSubmitting(true);
     try {
       await api.wallet.withdraw({ amount, note });
-      toast(t("wallet.withdrawCreated"), "success");
+      toast(t("Đã gửi yêu cầu rút tiền"), "success");
       onSuccess();
     } catch (e) {
-      toast(e.message || t("wallet.withdrawError"), "error");
+      toast(e.message || t("Không gửi được yêu cầu rút"), "error");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal onClose={onClose} busy={busy} label={t("wallet.withdrawTitle")}>
+    <Modal onClose={onClose} busy={busy} label={t("Rút tiền")}>
       <div
         style={{
           display: "flex",
@@ -1302,12 +1307,12 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
             gap: 8,
           }}
         >
-          <Minus size={20} style={{ color: "#f59e0b" }} /> {t("wallet.withdrawTitle")}
+          <Minus size={20} style={{ color: "#f59e0b" }} /> {t("Rút tiền")}
         </h3>
         <button
           onClick={onClose}
           disabled={busy}
-          aria-label={t("common.close")}
+          aria-label={t("Đóng")}
           style={closeBtnStyle(busy)}
         >
           <X size={20} />
@@ -1326,11 +1331,11 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
         }}
       >
         <div>
-          <b>{t("wallet.availableBalance")}:</b> {money(balance)}
+          <b>{t("Số dư khả dụng")}:</b> {money(balance)}
         </div>
       </div>
 
-      <label style={labelStyle}>{t("wallet.amount")} *</label>
+      <label style={labelStyle}>{t("Số tiền")} *</label>
       <div style={{ position: "relative", marginBottom: 10 }}>
         <input
           type="number"
@@ -1401,10 +1406,10 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
           opacity: busy ? 0.6 : 1,
         }}
       >
-        {t("wallet.withdrawAll")} {money(balance)}
+        {t("Rút toàn bộ")} {money(balance)}
       </button>
 
-      <label style={labelStyle}>{t("wallet.receiveAccount")}</label>
+      <label style={labelStyle}>{t("Tài khoản nhận tiền")}</label>
       <div
         style={{
           background: "var(--bg-tertiary, #f5f7fb)",
@@ -1436,11 +1441,11 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
         </div>
       </div>
 
-      <label style={labelStyle}>{t("wallet.note")}</label>
+      <label style={labelStyle}>{t("Ghi chú")}</label>
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder={t("wallet.withdrawNotePlaceholder")}
+        placeholder={t("Ghi chú thêm (không bắt buộc)")}
         maxLength={200}
         disabled={busy}
         style={inputStyle}
@@ -1453,7 +1458,7 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
           disabled={busy}
           style={btnCancelStyle(busy)}
         >
-          {t("common.cancel")}
+          {t("Hủy")}
         </button>
         <button
           type="button"
@@ -1470,10 +1475,10 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
                 size={14}
                 style={{ animation: "spin 1s linear infinite" }}
               />
-              {t("common.processing")}
+              {t("Đang xử lý...")}
             </>
           ) : (
-            t("wallet.requestWithdraw")
+            t("Gửi yêu cầu rút tiền")
           )}
         </button>
       </div>
@@ -1486,7 +1491,7 @@ function WithdrawModal({ balance, bank, onClose, onSuccess }) {
 // ============================================================
 
 function LinkBankModal({ wallet, onClose, onSuccess }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const [bankName, setBankName] = useState(wallet.bank_name || "VCB");
   const [account, setAccount] = useState(wallet.bank_account || "");
   const [accountName, setAccountName] = useState(wallet.bank_account_name || "");
@@ -1498,11 +1503,11 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
     if (submitting) return;
 
     if (!account.trim() || account.trim().length < 6) {
-      toast(t("wallet.invalidAccount"), "error");
+      toast(t("Số tài khoản không hợp lệ"), "error");
       return;
     }
     if (!accountName.trim()) {
-      toast(t("wallet.enterAccountName"), "error");
+      toast(t("Vui lòng nhập tên chủ tài khoản"), "error");
       return;
     }
 
@@ -1513,17 +1518,17 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
         bank_account: account.trim(),
         bank_account_name: accountName.trim().toUpperCase(),
       });
-      toast(t("wallet.linkSuccess"), "success");
+      toast(t("Đã liên kết ngân hàng"), "success");
       onSuccess();
     } catch (e) {
-      toast(e.message || t("wallet.linkError"), "error");
+      toast(e.message || t("Không liên kết được ngân hàng"), "error");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal onClose={onClose} busy={busy} label={t("wallet.linkBankTitle")}>
+    <Modal onClose={onClose} busy={busy} label={t("Liên kết ngân hàng")}>
       <div
         style={{
           display: "flex",
@@ -1541,12 +1546,12 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
             gap: 8,
           }}
         >
-          <CreditCard size={20} style={{ color: "#2634d5" }} /> {t("wallet.linkBankTitle")}
+          <CreditCard size={20} style={{ color: "#2634d5" }} /> {t("Liên kết ngân hàng")}
         </h3>
         <button
           onClick={onClose}
           disabled={busy}
-          aria-label={t("common.close")}
+          aria-label={t("Đóng")}
           style={closeBtnStyle(busy)}
         >
           <X size={20} />
@@ -1567,10 +1572,12 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
         }}
       >
         <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>{t("wallet.linkNotice")}</span>
+        <span>
+          {t("Tài khoản này sẽ dùng để nhận tiền khi bạn rút từ Ví Canteen. Hãy kiểm tra kỹ trước khi lưu.")}
+        </span>
       </div>
 
-      <label style={labelStyle}>{t("wallet.bank")} *</label>
+      <label style={labelStyle}>{t("Ngân hàng")} *</label>
       <select
         value={bankName}
         onChange={(e) => setBankName(e.target.value)}
@@ -1584,7 +1591,7 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
         ))}
       </select>
 
-      <label style={labelStyle}>{t("wallet.accountNumber")} *</label>
+      <label style={labelStyle}>{t("Số tài khoản")} *</label>
       <input
         value={account}
         onChange={(e) => setAccount(e.target.value.replace(/[^0-9]/g, ""))}
@@ -1595,7 +1602,7 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
         style={{ ...inputStyle, fontFamily: "monospace" }}
       />
 
-      <label style={labelStyle}>{t("wallet.accountHolder")} *</label>
+      <label style={labelStyle}>{t("Tên chủ tài khoản")} *</label>
       <input
         value={accountName}
         onChange={(e) => setAccountName(e.target.value)}
@@ -1613,7 +1620,7 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
           disabled={busy}
           style={btnCancelStyle(busy)}
         >
-          {t("common.cancel")}
+          {t("Hủy")}
         </button>
         <button
           type="button"
@@ -1632,10 +1639,10 @@ function LinkBankModal({ wallet, onClose, onSuccess }) {
                 size={14}
                 style={{ animation: "spin 1s linear infinite" }}
               />
-              {t("common.saving")}
+              {t("Đang lưu...")}
             </>
           ) : (
-            t("wallet.saveAccount")
+            t("Lưu tài khoản")
           )}
         </button>
       </div>

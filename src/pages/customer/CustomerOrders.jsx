@@ -1,5 +1,8 @@
-﻿// ============================================================
+// ============================================================
 // CUSTOMERORDERS.JSX — Danh sách đơn hàng của khách
+// ============================================================
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+//    Không còn key cũ kiểu "orders.xxx" / "common.xxx"
 // ============================================================
 
 import { Skeleton, SkeletonText } from "../../components/Skeleton";
@@ -12,7 +15,7 @@ import {
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import { money } from "../../components/UI";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 import CustomerOrderDetail from "../../components/CustomerOrderDetail";
 
 // ============================================================
@@ -42,19 +45,20 @@ const STATUS_COLORS = {
 // ============================================================
 
 export default function CustomerOrders() {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
+  // ✅ SOURCE-TEXT: Dùng tiếng Việt trực tiếp, không dùng key
   const STATUS_LIST = useMemo(
     () => [
-      { id: "Tất cả",        label: t("orders.status.all"),      icon: Package,      color: "#2634d5" },
-      { id: "Chờ xác nhận",  label: t("status.pending"),          icon: Bell,         color: "#f59e0b" },
-      { id: "Đã xác nhận",   label: t("status.confirmed"),        icon: CheckCircle2, color: "#2634d5" },
-      { id: "Đang chuẩn bị", label: t("status.preparing"),        icon: ChefHat,      color: "#8b5cf6" },
-      { id: "Sẵn sàng nhận", label: t("status.ready"),            icon: ShoppingBag,  color: "#18a967" },
-      { id: "Hoàn thành",    label: t("status.done"),             icon: CheckCircle2, color: "#18a967" },
-      { id: "Đã hủy",        label: t("status.cancelled"),        icon: XCircle,      color: "#ef4444" },
+      { id: "Tất cả",        label: "Tất cả",         icon: Package,      color: "#2634d5" },
+      { id: "Chờ xác nhận",  label: "Chờ xác nhận",   icon: Bell,         color: "#f59e0b" },
+      { id: "Đã xác nhận",   label: "Đã xác nhận",    icon: CheckCircle2, color: "#2634d5" },
+      { id: "Đang chuẩn bị", label: "Đang chuẩn bị",  icon: ChefHat,      color: "#8b5cf6" },
+      { id: "Sẵn sàng nhận", label: "Sẵn sàng nhận",  icon: ShoppingBag,  color: "#18a967" },
+      { id: "Hoàn thành",    label: "Hoàn thành",     icon: CheckCircle2, color: "#18a967" },
+      { id: "Đã hủy",        label: "Đã hủy",         icon: XCircle,      color: "#ef4444" },
     ],
-    [t]
+    []
   );
 
   const [orders, setOrders] = useState([]);
@@ -90,7 +94,7 @@ export default function CustomerOrders() {
       setOrders(sorted);
     } catch (e) {
       if (myReqId === reqIdRef.current) {
-        setError(e.message || t("orders.loadError"));
+        setError(e.message || t("Không tải được đơn hàng"));
       }
     } finally {
       if (myReqId === reqIdRef.current) {
@@ -182,7 +186,7 @@ export default function CustomerOrders() {
               fontSize: 12,
             }}
           >
-            {t("common.retry")}
+            {t("Thử lại")}
           </button>
         </div>
       )}
@@ -198,25 +202,25 @@ export default function CustomerOrders() {
       >
         <StatCard
           icon={<Package size={20} />}
-          label={t("orders.stat.total")}
+          label={t("Tổng đơn")}
           value={stats.total}
           color="#2634d5"
         />
         <StatCard
           icon={<Clock size={20} />}
-          label={t("orders.stat.active")}
+          label={t("Đang xử lý")}
           value={stats.active}
           color="#f59e0b"
         />
         <StatCard
           icon={<CheckCircle2 size={20} />}
-          label={t("orders.stat.completed")}
+          label={t("Hoàn thành")}
           value={stats.completed}
           color="#18a967"
         />
         <StatCard
           icon={<DollarSign size={20} />}
-          label={t("orders.stat.spent")}
+          label={t("Tổng chi tiêu")}
           value={money(stats.totalSpent)}
           color="#8b5cf6"
         />
@@ -314,7 +318,7 @@ export default function CustomerOrders() {
             gap: 8,
           }}
         >
-          📦 {t("orders.listTitle")}
+          📦 {t("Danh sách đơn hàng")}
           <span
             style={{
               fontSize: 12,
@@ -322,7 +326,7 @@ export default function CustomerOrders() {
               fontWeight: 400,
             }}
           >
-            ({filtered.length} {t("orders.count")})
+            ({filtered.length} {t("đơn")})
           </span>
         </h3>
         <button
@@ -347,7 +351,7 @@ export default function CustomerOrders() {
           ) : (
             <RefreshCw size={13} />
           )}
-          {refreshing ? t("common.loading") : t("common.refresh")}
+          {refreshing ? t("Đang tải...") : t("Làm mới")}
         </button>
       </div>
 
@@ -425,8 +429,8 @@ export default function CustomerOrders() {
             }}
           >
             {status === "Tất cả"
-              ? t("orders.emptyAll")
-              : t("orders.emptyStatus").replace("{status}", t("status." + statusMapKey(status)))}
+              ? t("Bạn chưa có đơn hàng nào")
+              : t("Không có đơn hàng ở trạng thái \"{status}\"").replace("{status}", status)}
           </h3>
           <p
             style={{
@@ -436,8 +440,8 @@ export default function CustomerOrders() {
             }}
           >
             {status === "Tất cả"
-              ? t("orders.emptyAllDesc")
-              : t("orders.emptyStatusDesc")}
+              ? t("Hãy đặt món để bắt đầu trải nghiệm")
+              : t("Thử chọn trạng thái khác hoặc xem tất cả đơn hàng.")}
           </p>
           {status === "Tất cả" && (
             <Link
@@ -455,7 +459,7 @@ export default function CustomerOrders() {
                 fontSize: 13,
               }}
             >
-              <ShoppingBag size={15} /> {t("orders.orderNow")}
+              <ShoppingBag size={15} /> {t("Đặt món ngay")}
             </Link>
           )}
         </div>
@@ -506,26 +510,11 @@ export default function CustomerOrders() {
 }
 
 // ============================================================
-// HELPERS
-// ============================================================
-
-function statusMapKey(viStatus) {
-  return {
-    "Chờ xác nhận": "pending",
-    "Đã xác nhận": "confirmed",
-    "Đang chuẩn bị": "preparing",
-    "Sẵn sàng nhận": "ready",
-    "Hoàn thành": "done",
-    "Đã hủy": "cancelled",
-  }[viStatus] || "pending";
-}
-
-// ============================================================
 // SUB-COMPONENT: OrderCard
 // ============================================================
 
 function OrderCard({ order, onView }) {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const colors = STATUS_COLORS[order.status] || {
     color: "#64748b",
     bg: "#f1f5f9",
@@ -533,10 +522,10 @@ function OrderCard({ order, onView }) {
 
   const items = order.items || [];
   const totalQty = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
-  const firstItemName = items[0]?.name || t("orders.orderLabel");
+  const firstItemName = items[0]?.name || t("Đơn hàng");
 
-  const statusLabel =
-    t("status." + statusMapKey(order.status)) || order.status;
+  // ✅ SOURCE-TEXT: status giữ nguyên tiếng Việt từ DB
+  const statusLabel = order.status;
 
   return (
     <div
@@ -572,7 +561,7 @@ function OrderCard({ order, onView }) {
               textTransform: "uppercase",
             }}
           >
-            {t("orders.code")}
+            {t("Mã đơn")}
           </div>
           <b
             style={{
@@ -689,12 +678,12 @@ function OrderCard({ order, onView }) {
                     fontWeight: 400,
                   }}
                 >
-                  {" "}+{items.length - 1} {t("orders.moreItems")}
+                  {" "}+{items.length - 1} {t("món khác")}
                 </span>
               )}
             </b>
             <span style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}>
-              {totalQty} {t("cart.parts")}
+              {totalQty} {t("phần")}
             </span>
           </div>
         </div>
@@ -750,7 +739,7 @@ function OrderCard({ order, onView }) {
               textTransform: "uppercase",
             }}
           >
-            {t("cart.total")}
+            {t("Tổng cộng")}
           </span>
           <b style={{ fontSize: 17, color: "#2634d5" }}>
             {money(order.total)}
@@ -772,7 +761,7 @@ function OrderCard({ order, onView }) {
             gap: 6,
           }}
         >
-          <Eye size={14} /> {t("orders.detail")}
+          <Eye size={14} /> {t("Chi tiết")}
         </button>
       </div>
     </div>

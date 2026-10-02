@@ -5,25 +5,18 @@
 // - Bảng đơn cần xử lý (sort theo thời gian đặt, limit 10)
 // - CheckInOutCard ở cột trái
 //
-// Fixes (so với bản gốc):
-//   - getLocalDateStr() — timezone-safe, dùng local date
-//   - todayCount so sánh theo local date của created_at
-//   - Error state + retry (không silent fail)
-//   - Loading state cho lần đầu
-//   - Auto-refresh mỗi 20s (silent)
-//   - needAction: sort cũ → mới, limit 10, memo
-//   - stats memo (không tính lại mỗi render)
-//   - Bảng có overflow-x cho mobile
-//   - Bỏ dấu "" thừa trong empty state
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { ShoppingBag, Clock, AlertTriangle, Utensils, RefreshCw, Loader2, AlertCircle } from "lucide-react";
+import {
+  ShoppingBag, Clock, AlertTriangle, Utensils, RefreshCw, Loader2, AlertCircle,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import { money, StatusBadge } from "../../components/UI";
 import CheckInOutCard from "../../components/CheckInOutCard";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -58,7 +51,7 @@ function getLocalDateStr(input) {
 // ============================================================
 
 export default function EmployeeHome() {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   // ---------- State ----------
   const [orders, setOrders] = useState([]);
@@ -81,13 +74,13 @@ export default function EmployeeHome() {
       setOrders(Array.isArray(ordersRes) ? ordersRes : []);
       setStats(statsRes || null);
     } catch (e) {
-      if (!silent) setError(e.message || "Không tải được dữ liệu");
+      if (!silent) setError(e.message || t("Không tải được dữ liệu"));
       // Giữ data cũ nếu silent refresh fail
     } finally {
       setLoading(false);
       if (!silent) setRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   // Initial load
   useEffect(() => {
@@ -171,46 +164,46 @@ export default function EmployeeHome() {
               fontSize: 12,
             }}
           >
-            Thử lại
+            {t("Thử lại")}
           </button>
         </div>
       )}
 
       {/* ============ KHU VỰC CHÍNH: CHECK-IN + KPI ============ */}
       <div className="emp-home-layout">
-  <CheckInOutCard />
+        <CheckInOutCard />
 
-  <div className="emp-home-kpi-grid">
-    <KpiCard
-      icon={<ShoppingBag size={22} />}
-      color="#2634d5"
-      value={loading ? "..." : stats2.todayCount}
-      label={t("employee.ordersToday")}
-    />
-    <KpiCard
-      icon={<Clock size={22} />}
-      color="#f59e0b"
-      value={loading ? "..." : stats2.pending}
-      label={t("employee.pendingOrders")}
-    />
-    <KpiCard
-      icon={<Utensils size={22} />}
-      color="#8b5cf6"
-      value={loading ? "..." : stats2.processing}
-      label="Đang chuẩn bị"
-    />
-    <KpiCard
-      icon={<AlertTriangle size={22} />}
-      color="#f59e0b"
-      value={loading ? "..." : lowStockCount}
-      label={t("employee.lowStock")}
-    />
-  </div>
-</div>
+        <div className="emp-home-kpi-grid">
+          <KpiCard
+            icon={<ShoppingBag size={22} />}
+            color="#2634d5"
+            value={loading ? "..." : stats2.todayCount}
+            label={t("Đơn hôm nay")}
+          />
+          <KpiCard
+            icon={<Clock size={22} />}
+            color="#f59e0b"
+            value={loading ? "..." : stats2.pending}
+            label={t("Chờ xác nhận")}
+          />
+          <KpiCard
+            icon={<Utensils size={22} />}
+            color="#8b5cf6"
+            value={loading ? "..." : stats2.processing}
+            label={t("Đang chuẩn bị")}
+          />
+          <KpiCard
+            icon={<AlertTriangle size={22} />}
+            color="#f59e0b"
+            value={loading ? "..." : lowStockCount}
+            label={t("Sắp hết hàng")}
+          />
+        </div>
+      </div>
 
       {/* ============ BẢNG ĐƠN CẦN XỬ LÝ ============ */}
-     <div className="emp-need-action-card">
-  <div className="emp-need-action-head">
+      <div className="emp-need-action-card">
+        <div className="emp-need-action-head">
           <div>
             <h3
               style={{
@@ -219,7 +212,7 @@ export default function EmployeeHome() {
                 color: "var(--text-primary, #172033)",
               }}
             >
-              {t("employee.processOrder")}
+              {t("Đơn cần xử lý")}
             </h3>
             <span
               style={{
@@ -227,7 +220,7 @@ export default function EmployeeHome() {
                 fontSize: 12,
               }}
             >
-              {t("employee.priority")}
+              {t("Ưu tiên đơn đặt lâu nhất")}
             </span>
           </div>
 
@@ -235,8 +228,8 @@ export default function EmployeeHome() {
             <button
               onClick={() => load(false)}
               disabled={refreshing}
-              title="Làm mới"
-              aria-label="Làm mới"
+              title={t("Làm mới")}
+              aria-label={t("Làm mới")}
               style={{
                 padding: "6px 12px",
                 background: "var(--bg-tertiary, #f5f7fb)",
@@ -259,7 +252,7 @@ export default function EmployeeHome() {
               ) : (
                 <RefreshCw size={13} />
               )}
-              Làm mới
+              {t("Làm mới")}
             </button>
             <Link
               to="/employee/orders"
@@ -270,7 +263,7 @@ export default function EmployeeHome() {
                 fontWeight: 600,
               }}
             >
-              {t("employee.viewAll")} →
+              {t("Xem tất cả")} →
             </Link>
           </div>
         </div>
@@ -288,7 +281,7 @@ export default function EmployeeHome() {
               size={24}
               style={{ animation: "spin 1s linear infinite", marginBottom: 8 }}
             />
-            <div style={{ fontSize: 13 }}>Đang tải đơn hàng...</div>
+            <div style={{ fontSize: 13 }}>{t("Đang tải đơn hàng...")}</div>
           </div>
         )}
 
@@ -298,10 +291,10 @@ export default function EmployeeHome() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                  <th style={thStyle}>{t("orders.code")}</th>
-                  <th style={thStyle}>Customer</th>
-                  <th style={thStyle}>{t("cart.total")}</th>
-                  <th style={thStyle}>{t("common.status")}</th>
+                  <th style={thStyle}>{t("Mã đơn")}</th>
+                  <th style={thStyle}>{t("Khách hàng")}</th>
+                  <th style={thStyle}>{t("Tổng cộng")}</th>
+                  <th style={thStyle}>{t("Trạng thái")}</th>
                   <th style={thStyle}></th>
                 </tr>
               </thead>
@@ -338,7 +331,7 @@ export default function EmployeeHome() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {t("employee.process")}
+                        {t("Xử lý")}
                       </Link>
                     </td>
                   </tr>
@@ -354,7 +347,7 @@ export default function EmployeeHome() {
                         color: "var(--text-light, #8993a3)",
                       }}
                     >
-                      Không có đơn cần xử lý
+                      {t("Không có đơn cần xử lý")}
                     </td>
                   </tr>
                 )}
@@ -371,12 +364,12 @@ export default function EmployeeHome() {
                   color: "var(--text-light, #8993a3)",
                 }}
               >
-                Hiển thị {NEED_ACTION_LIMIT} đơn đầu —{" "}
+                {t("Hiển thị 10 đơn đầu")} —{" "}
                 <Link
                   to="/employee/orders"
                   style={{ color: "#2634d5", fontWeight: 600 }}
                 >
-                  xem tất cả
+                  {t("xem tất cả")}
                 </Link>
               </div>
             )}
