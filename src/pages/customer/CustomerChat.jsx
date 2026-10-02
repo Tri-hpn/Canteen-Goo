@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CUSTOMERCHAT.JSX — Chat khách hàng
 // ============================================================
 // ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
@@ -210,8 +210,7 @@ export default function CustomerChat({ cart, setCart, user }) {
 
   // Load menu 1 lần
   useEffect(() => {
-    api.menu
-      .list("", "Tất cả", "popular")
+    api.menu.listActive("", "Tất cả", "popular")
       .then((d) => setMenuItems(Array.isArray(d) ? d : []))
       .catch(() => setMenuItems([]));
   }, []);

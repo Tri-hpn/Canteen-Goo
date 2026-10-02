@@ -57,7 +57,7 @@ export default function OwnerPriceHistory() {
   useEffect(() => {
     let cancelled = false;
     api.menu
-      .list("", "Tất cả", "popular", true)
+      .list("", "Tất cả", "popular")
       .then((d) => !cancelled && setMenu(Array.isArray(d) ? d : []))
       .catch(() => !cancelled && setMenu([]));
     return () => {

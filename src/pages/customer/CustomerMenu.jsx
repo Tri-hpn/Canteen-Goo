@@ -80,7 +80,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
       setError("");
       try {
         const [menuRes, catRes] = await Promise.all([
-          api.menu.list("", ALL_CATEGORY, "popular").catch(() => []),
+          api.menu.listActive("", ALL_CATEGORY, "popular").catch(() => []),
           api.categories.list().catch(() => []),
         ]);
         const rawList = Array.isArray(menuRes) ? menuRes : [];

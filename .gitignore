@@ -20,4 +20,10 @@ auto-merge-all.ps1
 fix-*.ps1
 migrate-*.ps1
 auto-*.ps1
+*.bakcanteen-db.backup-*.json
+
+translate-cache.json
+*.backup-*.json
+.backup-quickfix/
 *.bak
+

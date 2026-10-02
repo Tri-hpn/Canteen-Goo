@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // APP.JSX — Root component + Routing
 // ============================================================
 // Cấu trúc:
@@ -203,6 +203,8 @@ export default function App() {
     document.documentElement.style.overflow = "";
     document.body.classList.remove("has-bottom-nav");
     document.body.classList.remove("mobile-open");
+
+    try { window.dispatchEvent(new CustomEvent("logout")); } catch {}
 
     navigate("/");
   };

@@ -15,6 +15,7 @@ import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
 import { useI18n } from "../../hooks/useI18n";
+import { useCrossTabSync } from "../../hooks/useCrossTabSync";
 import PaymentModal from "../../components/PaymentModal";
 
 // ============================================================
@@ -109,10 +110,11 @@ export default function CustomerCheckout({ cart, setCart, user }) {
   const submittingRef = useRef(false);
   const prevSubtotalRef = useRef(null);
 
-  const lines = useMemo(() => {
-    const selectedKeys = readSelectedKeys();
+  // P1-002 FIX: Sync selectedKeys giua cac tab
+  const [selectedKeys] = useCrossTabSync("canteen_cart_selected", []);
 
-    if (!selectedKeys.length) {
+  const lines = useMemo(() => {
+    if (!selectedKeys || !selectedKeys.length) {
       return Object.entries(cart).map(([key, item]) => ({ ...item, _key: key }));
     }
 
@@ -120,7 +122,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
     return Object.entries(cart)
       .filter(([key]) => selectedSet.has(key))
       .map(([key, item]) => ({ ...item, _key: key }));
-  }, [cart]);
+  }, [cart, selectedKeys]);
 
   const subtotal = useMemo(
     () =>
@@ -355,6 +357,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
         items,
         payment: paymentMethod,
         note: noteParts.join(" · "),
+        pickupTime: pickupTime || "",
         discount,
         voucherCode: appliedVoucher?.code || "",
       });

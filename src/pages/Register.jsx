@@ -1,142 +1,206 @@
 // ============================================================
-// FORGOTPASSWORD.JSX — Khôi phục mật khẩu (style Login V8)
+// REGISTER.JSX — Trang đăng ký tài khoản (style Login V8)
 // ============================================================
-// Demo — OTP hardcode "123456"
-// 3 bước: Email → OTP + mật khẩu mới → Thành công
+// ✅ FIX #1: File cũ bị copy lộn từ ForgotPassword.jsx
+// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+//
+// Layout: 2 cột giống Login.jsx
+//   - Left: brand + illustration + caption
+//   - Right: form (họ tên, email, SĐT, mật khẩu, xác nhận, điều khoản)
+//
+// Sau khi đăng ký thành công:
+//   - Nếu nhận prop `onRegister` → gọi callback (App state cập nhật ngay)
+//   - Nếu không → setToken + window.location.href = "/" để App tự auto-login
 // ============================================================
 
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
-  Mail, LockKeyhole, ArrowRight, ShieldCheck, CheckCircle2,
-  Eye, EyeOff, Loader2, RefreshCw,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Mail,
+  ArrowRight,
+  Loader2,
+  User as UserIcon,
+  Phone,
+  Check,
 } from "lucide-react";
-import { toast } from "../components/Effects";
+import { api, setToken } from "../api";
 import { useI18n } from "../hooks/useI18n";
+import { toast } from "../components/Effects";
 import CuteCharacters from "../components/LoginIllustration";
 
-const DEMO_OTP = "123456";
-const RESEND_COOLDOWN = 60;
+// ============================================================
+// OAUTH HELPERS (đồng bộ với Login.jsx)
+// ============================================================
 
-export default function ForgotPassword() {
+function startGoogleOAuth(t) {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    toast(t("Chưa cấu hình Google Client ID"), "error");
+    return;
+  }
+
+  const redirectUri = encodeURIComponent(
+    window.location.origin + "/auth/google/callback"
+  );
+  const scope = encodeURIComponent("openid email profile");
+
+  const url =
+    `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${clientId}` +
+    `&redirect_uri=${redirectUri}` +
+    `&response_type=code` +
+    `&scope=${scope}` +
+    `&prompt=select_account`;
+
+  window.location.href = url;
+}
+
+function startFacebookOAuth(t) {
+  const appId = import.meta.env.VITE_FACEBOOK_APP_ID;
+  if (!appId) {
+    toast(t("Chưa cấu hình Facebook App ID"), "error");
+    return;
+  }
+
+  const redirectUri = encodeURIComponent(
+    window.location.origin + "/auth/facebook/callback"
+  );
+
+  const url =
+    `https://www.facebook.com/v18.0/dialog/oauth?` +
+    `client_id=${appId}` +
+    `&redirect_uri=${redirectUri}` +
+    `&scope=email,public_profile` +
+    `&response_type=code`;
+
+  window.location.href = url;
+}
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
+
+export default function Register({ onRegister }) {
   const { t } = useI18n();
+  const navigate = useNavigate();
 
-  const [step, setStep] = useState(1);
+  // ---------- Form fields ----------
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [agree, setAgree] = useState(false);
+
+  // ---------- UI state ----------
+  const [show, setShow] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
-  const [countdown, setCountdown] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [peeking, setPeeking] = useState(false);
 
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const timer = setInterval(() => {
-      setCountdown((c) => (c <= 1 ? 0 : c - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [countdown]);
+  const clearError = () => {
+    if (error) setError("");
+  };
 
-  const clearError = () => error && setError("");
+  // ---------- Validate ----------
+  const validate = () => {
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPhone = phone.trim();
 
-  const sendOTP = async (e, isResend = false) => {
+    if (!trimmedName) return t("Vui lòng nhập họ tên");
+
+    if (!trimmedEmail) return t("Vui lòng nhập email");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      return t("Email không hợp lệ");
+    }
+
+    if (trimmedPhone && !/^[0-9]{10,11}$/.test(trimmedPhone)) {
+      return t("SĐT phải 10-11 số");
+    }
+
+    if (!password) return t("Vui lòng nhập mật khẩu");
+    if (password.length < 6) return t("Mật khẩu phải từ 6 ký tự");
+    if (password !== confirm) return t("Xác nhận mật khẩu không khớp");
+
+    if (!agree) return t("Vui lòng đồng ý điều khoản để tiếp tục");
+
+    return null;
+  };
+
+  // ---------- Submit ----------
+  const submit = async (e) => {
     if (e) e.preventDefault();
     if (loading) return;
 
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) return setError(t("Vui lòng nhập email"));
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail))
-      return setError(t("Email không hợp lệ"));
+    const errMsg = validate();
+    if (errMsg) {
+      setError(errMsg);
+      return;
+    }
 
     setError("");
     setLoading(true);
 
     try {
-      await new Promise((r) => setTimeout(r, 1000));
+      const res = await api.register({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
+        password,
+      });
+
+      if (!res || !res.token) {
+        throw new Error(t("Đăng ký thất bại"));
+      }
+
+      setToken(res.token);
 
       toast(
-        isResend ? t("Đã gửi lại mã OTP") : t("Đã gửi mã OTP đến email"),
+        t("Đăng ký thành công! Chào mừng {name}").replace(
+          "{name}",
+          res.user?.name || name.trim()
+        ),
         "success"
       );
 
-      setOtp(DEMO_OTP);
-      if (!isResend) setStep(2);
-      setCountdown(RESEND_COOLDOWN);
+      // Ưu tiên callback từ App (giữ state, không cần reload)
+      if (typeof onRegister === "function") {
+        onRegister(res.user);
+        // Điều hướng về trang chủ customer
+        navigate("/customer", { replace: true });
+      } else {
+        // Fallback: reload để App auto-login từ token
+        window.location.href = "/";
+      }
     } catch (err) {
-      setError(err.message || t("Không gửi được mã OTP"));
+      const msg = err.message || t("Đăng ký thất bại");
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResend = () => {
-    if (countdown > 0 || loading) return;
-    sendOTP(null, true);
-  };
-
-  const resetPassword = async (e) => {
-    if (e) e.preventDefault();
-    if (loading) return;
-
-    if (!otp.trim()) return setError(t("Vui lòng nhập mã OTP"));
-    if (otp.length !== 6) return setError(t("Mã OTP phải có 6 chữ số"));
-    if (newPassword.length < 6) return setError(t("Mật khẩu phải từ 6 ký tự"));
-
-    setError("");
-
-    if (otp !== DEMO_OTP) {
-      return setError(t("Mã OTP không đúng"));
-    }
-
-    setLoading(true);
-    try {
-      await new Promise((r) => setTimeout(r, 1000));
-      toast(t("Đổi mật khẩu thành công"), "success");
-      setStep(3);
-    } catch (err) {
-      setError(err.message || t("Đổi mật khẩu thất bại"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // ---------- Bubble text theo trạng thái peeking ----------
   const bubbleText = useMemo(() => {
-    if (step === 3) return t("Xong rồi! 🎉");
     if (peeking) return t("Đừng nhìn mật khẩu nhé! 🙈");
-    if (step === 2) return t("Nhập mã OTP và mật khẩu mới 📩");
-    return t("Nhập email để nhận mã OTP 📧");
-  }, [step, peeking, t]);
+    return t("Tạo tài khoản để đặt món cùng Canteen VWA! 🍽️");
+  }, [peeking, t]);
 
-  const caption = useMemo(() => {
-    if (step === 3) {
-      return {
-        b: t("Hoàn tất!"),
-        s: t("Bạn có thể đăng nhập bằng mật khẩu mới."),
-      };
-    }
-    return {
-      b: t("Khôi phục mật khẩu"),
-      s: t("Chúng tôi sẽ giúp bạn lấy lại quyền truy cập."),
-    };
-  }, [step, t]);
-
-  const titleText = useMemo(() => {
-    if (step === 1) return t("Quên mật khẩu?");
-    if (step === 2) return t("Đặt lại mật khẩu");
-    return t("Thành công!");
-  }, [step, t]);
-
-  const subtitleText = useMemo(() => {
-    if (step === 1) return t("Nhập email để nhận mã xác thực");
-    if (step === 2) return t("Nhập mã OTP và mật khẩu mới của bạn");
-    return t("Mật khẩu đã được cập nhật");
-  }, [step, t]);
+  // ---------- Auto scroll to top khi mount (fix mobile) ----------
+  useEffect(() => {
+    try {
+      window.scrollTo(0, 0);
+    } catch {}
+  }, []);
 
   return (
     <div className="v8-login-page">
-      {/* LEFT */}
+      {/* ============ LEFT: BRAND + ILLUSTRATION ============ */}
       <section className="v8-login-left">
         <div className="v8-login-brand">
           <div className="v8-brand-mark">C</div>
@@ -154,216 +218,273 @@ export default function ForgotPassword() {
         </div>
 
         <div className="v8-left-caption">
-          <b>{caption.b}</b>
-          <span>{caption.s}</span>
+          <b>{t("Chào mừng đến Canteen VWA")}</b>
+          <span>{t("Đặt món nhanh chóng, tiện lợi mỗi ngày.")}</span>
         </div>
       </section>
 
-      {/* RIGHT */}
+      {/* ============ RIGHT: FORM ============ */}
       <main className="v8-login-right">
         <div className="v8-form-inner">
           {/* Logo + Tabs */}
           <div className="v8-form-top">
             <div className="v8-form-logo">
-              <div className="v8-form-logo-mark">
-                {step === 3 ? <CheckCircle2 size={22} /> : <ShieldCheck size={22} />}
-              </div>
+              <div className="v8-form-logo-mark">C</div>
             </div>
 
             <nav className="v8-tabs" aria-label={t("Chuyển trang")}>
               <Link to="/" className="v8-tab">
                 {t("Đăng nhập")}
               </Link>
+              <span className="v8-tab active">{t("Đăng ký")}</span>
             </nav>
           </div>
 
           {/* Heading */}
-          <h1 className="v8-form-title">{titleText}</h1>
-          <p className="v8-form-subtitle">{subtitleText}</p>
+          <h1 className="v8-form-title">{t("Tạo tài khoản mới")}</h1>
+          <p className="v8-form-subtitle">
+            {t("Đăng ký miễn phí — chỉ mất 30 giây.")}
+          </p>
 
+          {/* Error */}
           {error && <div className="v8-error-box">{error}</div>}
 
-          {/* STEP 1 — Email */}
-          {step === 1 && (
-            <form onSubmit={sendOTP} autoComplete="off">
-              <label className="v8-label">{t("Email")}</label>
-              <div className="v8-input-wrap">
-                <Mail size={16} className="v8-input-icon" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    clearError();
-                  }}
-                  placeholder={t("email@vwa.vn")}
-                  disabled={loading}
-                  autoFocus
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="v8-cta"
-                disabled={loading}
-                style={{ marginTop: 20 }}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 size={16} className="spin" />
-                    {t("Đang gửi OTP...")}
-                  </>
-                ) : (
-                  <>
-                    {t("Gửi mã OTP")} <ArrowRight size={16} />
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* STEP 2 — OTP + Password */}
-          {step === 2 && (
-            <form onSubmit={resetPassword} autoComplete="off">
-              <label className="v8-label">{t("Mã OTP (demo: 123456)")}</label>
-              <div className="v8-input-wrap">
-                <input
-                  value={otp}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                    setOtp(val);
-                    clearError();
-                  }}
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="000000"
-                  disabled={loading}
-                  autoFocus
-                  style={{
-                    fontSize: 18,
-                    letterSpacing: 6,
-                    textAlign: "center",
-                    fontWeight: 700,
-                    fontFamily: "monospace",
-                  }}
-                />
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginTop: 8,
-                  marginBottom: 4,
-                  fontSize: 12,
+          {/* Form */}
+          <form onSubmit={submit} autoComplete="off">
+            {/* Họ tên */}
+            <label className="v8-label">{t("Họ và tên")} *</label>
+            <div className="v8-input-wrap">
+              <UserIcon size={16} className="v8-input-icon" />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  clearError();
                 }}
-              >
-                <span style={{ color: "#64748b" }}>
-                  {t("Chưa nhận được mã?")}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleResend}
-                  disabled={countdown > 0 || loading}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    background: "transparent",
-                    border: 0,
-                    cursor: countdown > 0 || loading ? "not-allowed" : "pointer",
-                    color: countdown > 0 ? "#94a3b8" : "#2634d5",
-                    fontWeight: 600,
-                    fontSize: 12,
-                    padding: 4,
-                  }}
-                >
-                  <RefreshCw size={12} />
-                  {countdown > 0
-                    ? `${t("Gửi lại sau")} ${countdown}s`
-                    : t("Gửi lại")}
-                </button>
-              </div>
-
-              <label className="v8-label">{t("Mật khẩu mới")}</label>
-              <div className="v8-input-wrap">
-                <LockKeyhole size={16} className="v8-input-icon" />
-                <input
-                  type={showPwd ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => {
-                    setNewPassword(e.target.value);
-                    clearError();
-                  }}
-                  placeholder={t("Tối thiểu 6 ký tự")}
-                  disabled={loading}
-                  autoComplete="new-password"
-                  onFocus={() => setPeeking(true)}
-                  onBlur={() => setPeeking(false)}
-                  onKeyDown={(e) => e.key === "Enter" && resetPassword(e)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd(!showPwd)}
-                  tabIndex={-1}
-                  className="v8-eye-btn"
-                  aria-label={
-                    showPwd ? t("Ẩn mật khẩu") : t("Hiện mật khẩu")
-                  }
-                >
-                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-
-              <button
-                type="submit"
-                className="v8-cta"
+                spellCheck={false}
+                autoComplete="off"
+                placeholder={t("Nguyễn Văn A")}
                 disabled={loading}
-                style={{ marginTop: 20 }}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 size={16} className="spin" />
-                    {t("Đang xử lý...")}
-                  </>
-                ) : (
-                  <>
-                    {t("Đặt lại mật khẩu")} <ArrowRight size={16} />
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* STEP 3 — Success */}
-          {step === 3 && (
-            <div style={{ textAlign: "center", marginTop: 12 }}>
-              <p
-                style={{
-                  color: "#18a967",
-                  marginBottom: 24,
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                }}
-              >
-                {t("Mật khẩu của bạn đã được cập nhật. Vui lòng đăng nhập lại bằng mật khẩu mới.")}
-              </p>
-              <Link
-                to="/"
-                className="v8-cta"
-                style={{ textDecoration: "none", display: "inline-flex" }}
-              >
-                {t("Đăng nhập ngay")} <ArrowRight size={16} />
-              </Link>
+                autoFocus
+              />
             </div>
-          )}
 
-          {step !== 3 && (
-            <p className="v8-bottom-text" style={{ marginTop: 24 }}>
-              <Link to="/">{t("Quay lại đăng nhập")}</Link>
-            </p>
-          )}
+            {/* Email */}
+            <label className="v8-label">{t("Email")} *</label>
+            <div className="v8-input-wrap">
+              <Mail size={16} className="v8-input-icon" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  clearError();
+                }}
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
+                placeholder={t("email@vwa.vn")}
+                disabled={loading}
+              />
+            </div>
+
+            {/* SĐT (optional) */}
+            <label className="v8-label">
+              {t("Số điện thoại")}{" "}
+              <span
+                style={{
+                  fontWeight: 400,
+                  color: "var(--text-light, #94a3b8)",
+                }}
+              >
+                ({t("không bắt buộc")})
+              </span>
+            </label>
+            <div className="v8-input-wrap">
+              <Phone size={16} className="v8-input-icon" />
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value.replace(/[^0-9]/g, ""));
+                  clearError();
+                }}
+                placeholder={t("0901234567")}
+                inputMode="numeric"
+                maxLength={11}
+                disabled={loading}
+              />
+            </div>
+
+            {/* Mật khẩu */}
+            <label className="v8-label">{t("Mật khẩu")} *</label>
+            <div className="v8-input-wrap">
+              <LockKeyhole size={16} className="v8-input-icon" />
+              <input
+                type={show ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  clearError();
+                }}
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="new-password"
+                placeholder={t("Tối thiểu 6 ký tự")}
+                disabled={loading}
+                onFocus={() => setPeeking(true)}
+                onBlur={() => setPeeking(false)}
+              />
+              <button
+                type="button"
+                onClick={() => setShow(!show)}
+                tabIndex={-1}
+                className="v8-eye-btn"
+                aria-label={show ? t("Ẩn mật khẩu") : t("Hiện mật khẩu")}
+              >
+                {show ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+
+            {/* Xác nhận mật khẩu */}
+            <label className="v8-label">{t("Xác nhận mật khẩu")} *</label>
+            <div className="v8-input-wrap">
+              <Check size={16} className="v8-input-icon" />
+              <input
+                type={showConfirm ? "text" : "password"}
+                value={confirm}
+                onChange={(e) => {
+                  setConfirm(e.target.value);
+                  clearError();
+                }}
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="new-password"
+                placeholder={t("Nhập lại mật khẩu")}
+                disabled={loading}
+                onFocus={() => setPeeking(true)}
+                onBlur={() => setPeeking(false)}
+                onKeyDown={(e) => e.key === "Enter" && submit(e)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                tabIndex={-1}
+                className="v8-eye-btn"
+                aria-label={
+                  showConfirm ? t("Ẩn mật khẩu") : t("Hiện mật khẩu")
+                }
+              >
+                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+
+            {/* Điều khoản */}
+            <label className="v8-check">
+              <input
+                type="checkbox"
+                checked={agree}
+                onChange={(e) => {
+                  setAgree(e.target.checked);
+                  clearError();
+                }}
+                disabled={loading}
+              />
+              <span>
+                {t("Tôi đồng ý với")}{" "}
+                <a
+                  href="#"
+                  onClick={(e) => e.preventDefault()}
+                  style={{ color: "#2634d5", fontWeight: 600 }}
+                >
+                  {t("Điều khoản & Chính sách")}
+                </a>{" "}
+                {t("của Canteen VWA")}
+              </span>
+            </label>
+
+            {/* Submit */}
+            <button
+              type="submit"
+              className="v8-cta"
+              disabled={loading}
+              style={{ marginTop: 16 }}
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="spin" />
+                  {t("Đang tạo tài khoản...")}
+                </>
+              ) : (
+                <>
+                  {t("Đăng ký")} <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className="v8-divider">
+            <span>{t("Hoặc đăng ký với")}</span>
+          </div>
+
+          {/* Social */}
+          <div className="v8-socials">
+            <button
+              type="button"
+              className="v8-social"
+              onClick={() => startGoogleOAuth(t)}
+              disabled={loading}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
+              </svg>
+              Google
+            </button>
+
+            <button
+              type="button"
+              className="v8-social"
+              onClick={() => startFacebookOAuth(t)}
+              disabled={loading}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="#1877F2"
+                aria-hidden="true"
+              >
+                <path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z" />
+              </svg>
+              Facebook
+            </button>
+          </div>
+
+          {/* Link sang Login */}
+          <p className="v8-bottom-text">
+            {t("Đã có tài khoản?")}{" "}
+            <Link to="/">{t("Đăng nhập ngay")}</Link>
+          </p>
         </div>
       </main>
 
@@ -379,6 +500,28 @@ export default function ForgotPassword() {
         .v8-illustration-inner svg line,
         .v8-illustration-inner svg ellipse {
           transition: all 0.2s ease;
+        }
+
+        /* Đảm bảo .v8-check label hiển thị đúng trong trang Register */
+        .v8-check {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          font-size: 12.5px;
+          color: var(--text-muted, #475569);
+          cursor: pointer;
+          margin-top: 14px;
+          margin-bottom: 4px;
+          user-select: none;
+          line-height: 1.5;
+        }
+        .v8-check input[type="checkbox"] {
+          width: 16px;
+          height: 16px;
+          accent-color: #2634d5;
+          cursor: pointer;
+          flex-shrink: 0;
+          margin: 2px 0 0 0;
         }
       `}</style>
     </div>

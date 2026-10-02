@@ -172,31 +172,31 @@ export const api = {
   // MENU — Thực đơn
   // ----------------------------------------------------------
   menu: {
-    list: (q = "", category = "Tất cả", sort = "popular", all = false) => {
-      const params = new URLSearchParams();
-      if (q) params.set("q", q);
-      if (category && category !== "Tất cả") params.set("category", category);
-      if (sort) params.set("sort", sort);
-      if (all) params.set("all", "1");
-      const qs = params.toString();
-      return req("/menu" + (qs ? "?" + qs : ""));
-    },
-
-    listActive: (q = "", category = "Tất cả", sort = "popular") => {
-      const params = new URLSearchParams();
-      params.set("active_only", "1");
-      if (q) params.set("q", q);
-      if (category && category !== "Tất cả") params.set("category", category);
-      if (sort) params.set("sort", sort);
-      return req("/menu?" + params.toString());
-    },
-
-    get:    (id)          => req(`/menu/${id}`),
-    create: (data)        => req("/menu",       { method: "POST",   body: JSON.stringify(data) }),
-    update: (id, data)    => req(`/menu/${id}`, { method: "PUT",    body: JSON.stringify(data) }),
-    remove: (id)          => req(`/menu/${id}`, { method: "DELETE" }),
+  // Admin/Employee: lấy TẤT CẢ món (kể cả active=0)
+  list: (q = "", category = "Tất cả", sort = "popular") => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (category && category !== "Tất cả") params.set("category", category);
+    if (sort) params.set("sort", sort);
+    const qs = params.toString();
+    return req("/menu" + (qs ? "?" + qs : ""));
   },
 
+  // Customer: CHỈ lấy món active=1
+  listActive: (q = "", category = "Tất cả", sort = "popular") => {
+    const params = new URLSearchParams();
+    params.set("active_only", "1");
+    if (q) params.set("q", q);
+    if (category && category !== "Tất cả") params.set("category", category);
+    if (sort) params.set("sort", sort);
+    return req("/menu?" + params.toString());
+  },
+
+  get:    (id)          => req(`/menu/${id}`),
+  create: (data)        => req("/menu",       { method: "POST",   body: JSON.stringify(data) }),
+  update: (id, data)    => req(`/menu/${id}`, { method: "PUT",    body: JSON.stringify(data) }),
+  remove: (id)          => req(`/menu/${id}`, { method: "DELETE" }),
+},
   // ----------------------------------------------------------
   // PRICE HISTORY — Lịch sử đổi giá
   // ----------------------------------------------------------

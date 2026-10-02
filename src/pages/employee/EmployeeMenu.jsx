@@ -57,7 +57,7 @@ export default function EmployeeMenu() {
     setError("");
 
     try {
-      const data = await api.menu.list("", "Tất cả", "popular", true);
+      const data = await api.menu.list("", "Tất cả", "popular");
       setItems(Array.isArray(data) ? data : []);
     } catch (e) {
       if (!silent) setError(e.message || t("Không tải được thực đơn"));

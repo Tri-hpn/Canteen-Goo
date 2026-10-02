@@ -11,14 +11,16 @@
 //   - Testimonials
 //   - QR truy cập menu (auto-detect origin)
 //
-// ✅ BANNER: nếu buttonLink bắt đầu bằng "#" → scroll thay vì navigate
+// ✅ FIX #6: Bỏ hết keys "customer.xxx" self-reference (bug i18n)
+//           → dùng text tiếng Việt trực tiếp làm key
+// ✅ BANNER: bọc t(s.title) để dịch theo source-text i18n
 // ============================================================
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Star, Clock, Utensils, Gift,
-  Sparkles, Zap, ShoppingCart, Quote, AlertCircle, RefreshCw, Plus, Flame,
+  Sparkles, Zap, Quote, AlertCircle, RefreshCw, Plus, Flame,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
@@ -41,10 +43,26 @@ const SIGNATURE_LIMIT = 5;
 const SIGNATURE_ALL_LIMIT = 20;
 const SKELETON_COUNT = 5;
 
+// ✅ FIX #6: Testimonials dùng text VI trực tiếp (không dùng key)
 const TESTIMONIAL_DATA = [
-  { name: "Nguyễn Minh Anh", roleKey: "testimonial.1.role", rating: 5, textKey: "testimonial.1.text" },
-  { name: "Trần Quốc Bảo",   roleKey: "testimonial.2.role", rating: 5, textKey: "testimonial.2.text" },
-  { name: "Lê Thu Hà",       roleKey: "testimonial.3.role", rating: 4, textKey: "testimonial.3.text" },
+  {
+    name: "Nguyễn Minh Anh",
+    role: "Sinh viên VWA",
+    rating: 5,
+    text: "Món ăn ngon, giao diện đặt món nhanh và tiện. Mình đặt mỗi ngày luôn!",
+  },
+  {
+    name: "Trần Quốc Bảo",
+    role: "Sinh viên năm 3",
+    rating: 5,
+    text: "Đặt món trên app rất tiện, lại tích được điểm đổi voucher nữa. Recommend!",
+  },
+  {
+    name: "Lê Thu Hà",
+    role: "Cán bộ VWA",
+    rating: 4,
+    text: "Canteen sạch sẽ, đồ ăn tươi ngon. Mình hay đặt cho cả nhóm.",
+  },
 ];
 
 // ============================================================
@@ -76,7 +94,7 @@ function fmtNumber(n) {
 
 export default function CustomerHome({ user, cart, setCart }) {
   const navigate = useNavigate();
-  const { t, tData, lang } = useI18n();
+  const { t, tData } = useI18n();
 
   const [items, setItems] = useState([]);
   const [newItems, setNewItems] = useState([]);
@@ -101,12 +119,13 @@ export default function CustomerHome({ user, cart, setCart }) {
 
   const inFlightRef = useRef(false);
 
-  // ---------- Default flash promos (i18n) ----------
+  // ---------- Default flash promos (i18n source-text VI) ----------
+  // ✅ FIX #6: dùng text VI trực tiếp thay vì t("flash.default.1")
   const defaultFlashItems = useMemo(
     () => [
-      { text: t("flash.default.1") },
-      { text: t("flash.default.2") },
-      { text: t("flash.default.3") },
+      { text: t("🎁 Giảm giá sốc mỗi ngày — Nhận voucher ngay!") },
+      { text: t("🔥 Combo tiết kiệm — Tiết kiệm đến 30%") },
+      { text: t("⭐ Món ngon mỗi ngày — Đặt nhanh gọn lẹ") },
     ],
     [t]
   );
@@ -122,7 +141,7 @@ export default function CustomerHome({ user, cart, setCart }) {
 
       try {
         const [menuRes, promoRes, pubVoucherRes] = await Promise.all([
-          api.menu.list("", "Tất cả", "popular").catch(() => []),
+          api.menu.listActive("", "Tất cả", "popular").catch(() => []),
           api.promotions.list().catch(() => []),
           api.vouchers.public().catch(() => []),
         ]);
@@ -161,7 +180,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         });
         setFlashItems(flash.length > 0 ? flash : []);
       } catch (e) {
-        if (!silent) setError(e.message || t("customer.loadError"));
+        if (!silent) setError(e.message || t("Không tải được dữ liệu"));
       } finally {
         setLoading(false);
         if (!silent) setRefreshing(false);
@@ -230,28 +249,23 @@ export default function CustomerHome({ user, cart, setCart }) {
   }, [signatureItems, showAllSignature]);
 
   // ✅ Handle banner button click — nếu link bắt đầu bằng "#" thì scroll
-  const handleBannerClick = useCallback((link) => {
-    if (!link) return;
+  const handleBannerClick = useCallback(
+    (link) => {
+      if (!link) return;
 
-    if (link.startsWith("#")) {
-      const id = link.slice(1);
-      const el = document.getElementById(id);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (link.startsWith("#")) {
+        const id = link.slice(1);
+        const el = document.getElementById(id);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        return;
       }
-      return;
-    }
 
-    navigate(link);
-  }, [navigate]);
-
-  // ✅ Scroll to signature section
-  const scrollToSignature = useCallback(() => {
-    const el = document.getElementById("signature-section");
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
+      navigate(link);
+    },
+    [navigate]
+  );
 
   // ============================================================
   // RENDER FOOD CARD
@@ -278,11 +292,11 @@ export default function CustomerHome({ user, cart, setCart }) {
 
             {isOutOfStock ? (
               <span className="grab-food-card__badge grab-food-card__badge--out">
-                {t("customer.badgeOutOfStock")}
+                {t("Hết hàng")}
               </span>
             ) : isHot ? (
               <span className="grab-food-card__badge grab-food-card__badge--hot">
-                <Flame size={10} /> {t("customer.badgeBestSeller")}
+                <Flame size={10} /> {t("Bán chạy")}
               </span>
             ) : null}
 
@@ -295,7 +309,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   setMode("cart");
                   setSelected(m);
                 }}
-                aria-label={`${t("customer.addItem")} ${m.name}`}
+                aria-label={`${t("Thêm vào giỏ")} ${m.name}`}
               >
                 <Plus size={20} strokeWidth={3} />
               </button>
@@ -311,7 +325,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         </div>
       );
     },
-    [t]
+    [t, tData]
   );
 
   // ============================================================
@@ -354,7 +368,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               gap: 4,
             }}
           >
-            <RefreshCw size={12} /> {t("customer.retry")}
+            <RefreshCw size={12} /> {t("Thử lại")}
           </button>
         </div>
       )}
@@ -365,7 +379,7 @@ export default function CustomerHome({ user, cart, setCart }) {
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
         role="region"
-        aria-label={t("customer.bannerAria")}
+        aria-label={t("Banner khuyến mãi")}
       >
         <div
           style={{
@@ -417,7 +431,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                       marginBottom: 10,
                     }}
                   >
-                    {s.badge}
+                    {t(s.badge)}
                   </span>
                 )}
 
@@ -433,7 +447,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   }}
                 >
                   {s.useName && user?.name ? `${user.name} ơi, ` : ""}
-                  {s.title}
+                  {t(s.title)}
                 </h2>
 
                 <p
@@ -448,7 +462,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                     textShadow: "0 1px 4px rgba(0,0,0,0.4)",
                   }}
                 >
-                  {s.description}
+                  {t(s.description)}
                 </p>
 
                 {s.chips && s.chips.length > 0 && (
@@ -478,7 +492,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                         }}
                       >
                         {renderChipIcon(c.icon)}
-                        {c.text}
+                        {t(c.text)}
                       </span>
                     ))}
                   </div>
@@ -503,7 +517,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                     cursor: "pointer",
                   }}
                 >
-                  {s.buttonText}
+                  {t(s.buttonText)}
                 </button>
               </div>
             </div>
@@ -512,14 +526,14 @@ export default function CustomerHome({ user, cart, setCart }) {
 
         <button
           onClick={goPrev}
-          aria-label={t("customer.prevSlide")}
+          aria-label={t("Slide trước")}
           className="banner-nav banner-nav-left"
         >
           <ChevronLeft size={20} />
         </button>
         <button
           onClick={goNext}
-          aria-label={t("customer.nextSlide")}
+          aria-label={t("Slide tiếp theo")}
           className="banner-nav banner-nav-right"
         >
           <ChevronRight size={20} />
@@ -530,7 +544,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             <button
               key={i}
               onClick={() => setIdx(i)}
-              aria-label={t("customer.goToSlide").replace("{n}", i + 1)}
+              aria-label={t("Đi đến slide {n}").replace("{n}", i + 1)}
               aria-current={i === idx ? "true" : "false"}
               style={{
                 width: i === idx ? 28 : 10,
@@ -574,7 +588,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             ))}
           </div>
           <span className="flash-label">
-            <Sparkles size={12} /> {t("customer.flashLabel")}
+            <Sparkles size={12} /> {t("Flash Sale")}
           </span>
         </Link>
       )}
@@ -600,7 +614,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 gap: 8,
               }}
             >
-              <span style={{ fontSize: 22 }}>⚡</span> {t("customer.flashTitle")}
+              <span style={{ fontSize: 22 }}>⚡</span> {t("Flash Sale")}
               <span
                 style={{
                   background: "linear-gradient(135deg, #ef4444, #f59e0b)",
@@ -611,7 +625,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   fontWeight: 800,
                 }}
               >
-                {t("customer.flashHot")}
+                {t("HOT")}
               </span>
             </h3>
 
@@ -624,7 +638,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
-              {t("customer.viewAll")} →
+              {t("Xem tất cả")} →
             </Link>
           </div>
 
@@ -648,17 +662,17 @@ export default function CustomerHome({ user, cart, setCart }) {
 
                   <div className="grab-food-card__info">
                     <span className="voucher-card__label">
-                      {t("customer.voucherLabel")}
+                      {t("Voucher")}
                     </span>
                     <h4
                       className="grab-food-card__name"
                       style={{ textAlign: "center" }}
                     >
-                      {t("customer.voucherDiscount")} {fmtNumber(v.value || 0)}đ
+                      {t("Giảm giá")} {fmtNumber(v.value || 0)}đ
                     </h4>
                     <div className="voucher-card__code">{v.code}</div>
                     <div className="voucher-card__cta">
-                      {t("customer.claimNow")}
+                      {t("Nhận ngay")}
                     </div>
                   </div>
                 </Link>
@@ -688,7 +702,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                         setMode("buy");
                         setSelected(m);
                       }}
-                      aria-label={`${t("customer.orderItem")} ${m.name}`}
+                      aria-label={`${t("Đặt món")} ${m.name}`}
                     >
                       <Zap size={18} strokeWidth={3} />
                     </button>
@@ -744,11 +758,10 @@ export default function CustomerHome({ user, cart, setCart }) {
                 gap: 8,
               }}
             >
-              <span style={{ fontSize: 22 }}>⭐</span> {t("signature.title")}
+              <span style={{ fontSize: 22 }}>⭐</span> {t("Món Signature")}
               <span
                 style={{
-                  background:
-                    "linear-gradient(135deg, #f59e0b, #ef4444)",
+                  background: "linear-gradient(135deg, #f59e0b, #ef4444)",
                   color: "#fff",
                   padding: "3px 10px",
                   borderRadius: 12,
@@ -756,7 +769,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   fontWeight: 800,
                 }}
               >
-                {t("customer.badgeBestSeller")}
+                {t("Đặc sản")}
               </span>
             </h3>
 
@@ -778,9 +791,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   gap: 4,
                 }}
               >
-                {showAllSignature
-                  ? `${t("common.close")} ↑`
-                  : `${t("customer.viewAll")} →`}
+                {showAllSignature ? `${t("Thu gọn")} ↑` : `${t("Xem tất cả")} →`}
               </button>
             )}
           </div>
@@ -806,7 +817,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   color: "var(--text-muted, #475569)",
                 }}
               >
-                ↑ {t("common.close")}
+                ↑ {t("Thu gọn")}
               </button>
             </div>
           )}
@@ -821,7 +832,7 @@ export default function CustomerHome({ user, cart, setCart }) {
           color: "var(--text-primary, #172033)",
         }}
       >
-        🔥 {t("customer.bestSeller")}
+        🔥 {t("Bán chạy nhất")}
       </h3>
 
       <div className="home-food-grid-5" style={{ marginBottom: 26 }}>
@@ -847,10 +858,10 @@ export default function CustomerHome({ user, cart, setCart }) {
           >
             <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-              {t("customer.noBestSellerTitle")}
+              {t("Chưa có dữ liệu bán chạy")}
             </div>
             <div style={{ fontSize: 12 }}>
-              {t("customer.noBestSellerDesc")}
+              {t("Bạn xem thực đơn nhé!")}
             </div>
             <Link
               to="/customer/menu"
@@ -868,7 +879,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontSize: 13,
               }}
             >
-              <Utensils size={15} /> {t("customer.exploreMenu")}
+              <Utensils size={15} /> {t("Khám phá thực đơn")}
             </Link>
           </div>
         )}
@@ -894,7 +905,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 color: "var(--text-primary, #172033)",
               }}
             >
-              ✨ {t("customer.newArrivalsTitle")}
+              ✨ {t("Món mới lên kệ")}
             </h3>
             <Link
               to="/customer/menu"
@@ -905,7 +916,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                 fontWeight: 600,
               }}
             >
-              {t("customer.viewAll")} →
+              {t("Xem tất cả")} →
             </Link>
           </div>
           <div className="home-food-grid-5">
@@ -923,7 +934,7 @@ export default function CustomerHome({ user, cart, setCart }) {
             color: "var(--text-primary, #172033)",
           }}
         >
-          ⭐ {t("customer.testimonialsTitle")}
+          ⭐ {t("Khách hàng nói gì")}
         </h3>
         <div className="home-testi-grid">
           {TESTIMONIAL_DATA.map((tm, i) => (
@@ -969,7 +980,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   flex: 1,
                 }}
               >
-                "{t(tm.textKey)}"
+                "{t(tm.text)}"
               </p>
               <div
                 style={{
@@ -1014,7 +1025,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   <span
                     style={{ fontSize: 11, color: "var(--text-light, #8993a3)" }}
                   >
-                    {t(tm.roleKey)}
+                    {t(tm.role)}
                   </span>
                 </div>
               </div>
@@ -1054,7 +1065,7 @@ export default function CustomerHome({ user, cart, setCart }) {
           {qrImageSrc && (
             <img
               src={qrImageSrc}
-              alt={t("customer.qrAlt")}
+              alt={t("QR truy cập menu")}
               loading="lazy"
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
@@ -1069,7 +1080,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontWeight: 800,
             }}
           >
-            📱 {t("customer.qrTitle")}
+            📱 {t("Quét QR để xem menu")}
           </h3>
           <p
             style={{
@@ -1079,7 +1090,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               color: "var(--text-muted, #64748b)",
             }}
           >
-            {t("customer.qrDesc")}
+            {t("Quét mã QR bằng điện thoại để mở thực đơn nhanh chóng. Hoặc bấm nút bên dưới.")}
           </p>
           <Link
             to="/customer/menu"
@@ -1096,7 +1107,7 @@ export default function CustomerHome({ user, cart, setCart }) {
               fontSize: 13,
             }}
           >
-            {t("customer.qrOrClick")}
+            {t("Mở thực đơn")}
           </Link>
         </div>
       </div>

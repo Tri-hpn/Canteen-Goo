@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // GLOBALSEARCH.JSX — Ô tìm kiếm toàn cục trên topbar
 // ============================================================
 
@@ -98,7 +98,7 @@ export default function GlobalSearch({ role }) {
       const myReqId = ++reqIdRef.current;
 
       try {
-        const menu = await api.menu.list(trimmed, "Tất cả", "popular");
+        const menu = role === "CUSTOMER" ? await api.menu.listActive(trimmed, "Tất cả", "popular") : await api.menu.list(trimmed, "Tất cả", "popular");
         if (myReqId !== reqIdRef.current) return;
 
         let list = Array.isArray(menu) ? menu : [];

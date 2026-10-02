@@ -86,8 +86,7 @@ export default function ChatBotWidget({ cart, setCart, user }) {
   useEffect(() => {
     let cancelled = false;
 
-    api.menu
-      .list("", "Tất cả", "popular")
+    api.menu.listActive("", "Tất cả", "popular")
       .then((d) => {
         if (cancelled) return;
         const list = Array.isArray(d) ? d : [];

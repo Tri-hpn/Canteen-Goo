@@ -48,7 +48,7 @@ function getSessionId(startTime) {
   return "other";
 }
 
-const DEBUG = true;
+const DEBUG = import.meta.env.DEV;
 function dbg(...args) {
   if (DEBUG) console.log("[OwnerMenu]", ...args);
 }
@@ -177,7 +177,7 @@ export default function OwnerMenu() {
     setError("");
     try {
       const [items, cats] = await Promise.all([
-        api.menu.list("", "Tất cả", "popular", true),
+        api.menu.list("", "Tất cả", "popular"),
         api.categories.list(),
       ]);
 
