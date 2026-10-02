@@ -17,3 +17,7 @@ data/
 merge-main.ps1
 check-conflict.ps1
 auto-merge-all.ps1
+fix-*.ps1
+migrate-*.ps1
+auto-*.ps1
+*.bak
