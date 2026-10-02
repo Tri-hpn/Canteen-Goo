@@ -1,7 +1,11 @@
 // ============================================================
 // OWNERMENU.JSX — Quản lý thực đơn + danh mục (Admin)
 // ============================================================
-// ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
+// Nhóm khung giờ nhận món (Time Slots) ở đầu trang.
+// Bảng món ăn ở dưới.
+//
+// ✅ THÊM: Checkbox "Món Signature" trong modal thêm/sửa món
+// ✅ THÊM: Cột "Signature" trong bảng hiển thị badge
 // ============================================================
 
 import { SkeletonTable } from "../../components/Skeleton";
@@ -9,13 +13,12 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Plus, Search, Edit, Trash2, FolderPlus, Folder,
   X, Save, Loader2, AlertCircle,
-  UtensilsCrossed, Star,
+  UtensilsCrossed, EyeOff, Eye, Star,
   Clock, Sunrise, Sun, Sunset, RotateCcw,
 } from "lucide-react";
 import { api } from "../../api";
 import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
-import { useI18n } from "../../hooks/useI18n";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import ImageUploader from "../../components/ImageUploader";
 
@@ -52,8 +55,6 @@ function dbg(...args) {
 // ============================================================
 
 export default function OwnerMenu() {
-  const { t } = useI18n();
-
   // ---------- Menu list state ----------
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -113,12 +114,12 @@ export default function OwnerMenu() {
       const data = await api.timeSlots.list();
       setSlots(Array.isArray(data) ? data : []);
     } catch (e) {
-      setSlotsError(e.message || t("Không tải được khung giờ"));
+      setSlotsError(e.message || "Không tải được khung giờ");
       setSlots([]);
     } finally {
       setSlotsLoading(false);
     }
-  }, [t]);
+  }, []);
 
   const toggleSlot = async (slot) => {
     if (togglingSlotId !== null) return;
@@ -135,16 +136,14 @@ export default function OwnerMenu() {
     try {
       await api.timeSlots.update(slot.id, { enabled: newEnabled });
       toast(
-        newEnabled
-          ? `${t("Đã BẬT khung")} ${slot.id}`
-          : `${t("Đã TẮT khung")} ${slot.id}`,
+        newEnabled ? `Đã BẬT khung ${slot.id}` : `Đã TẮT khung ${slot.id}`,
         "success"
       );
     } catch (e) {
       setSlots((prev) =>
         prev.map((s) => (s.id === slot.id ? { ...s, enabled: oldEnabled } : s))
       );
-      toast(e.message || t("Không đổi được trạng thái"), "error");
+      toast(e.message || "Không đổi được trạng thái", "error");
     } finally {
       setTogglingSlotId(null);
     }
@@ -156,10 +155,10 @@ export default function OwnerMenu() {
     try {
       const res = await api.timeSlots.reset();
       setSlots(Array.isArray(res.slots) ? res.slots : []);
-      toast(t("Đã reset toàn bộ khung giờ về mặc định"), "success");
+      toast("Đã reset toàn bộ khung giờ về mặc định", "success");
       setConfirmSlotReset(false);
     } catch (e) {
-      toast(e.message || t("Không reset được"), "error");
+      toast(e.message || "Không reset được", "error");
     } finally {
       setResettingSlots(false);
     }
@@ -185,12 +184,12 @@ export default function OwnerMenu() {
       const inactiveCount = itemsArr.filter((m) => !m.active).length;
       dbg(`📦 Load xong: ${itemsArr.length} món (${inactiveCount} đã tắt)`);
     } catch (e) {
-      setError(e.message || t("Không tải được thực đơn"));
+      setError(e.message || "Không tải được thực đơn");
       setList([]);
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -314,7 +313,7 @@ export default function OwnerMenu() {
     const stock = Number(f.get("stock"));
 
     if (!name) {
-      return toast(t("Vui lòng nhập tên món"), "error");
+      return toast("Vui lòng nhập tên món", "error");
     }
 
     const currentId = modal._id || modal.id;
@@ -325,7 +324,7 @@ export default function OwnerMenu() {
     );
     if (dup) {
       return toast(
-        `${t("Đã có món")} "${dup.name}" — ${t("vui lòng đặt tên khác")}`,
+        `Đã có món "${dup.name}" — vui lòng đặt tên khác`,
         "error"
       );
     }
@@ -339,13 +338,13 @@ export default function OwnerMenu() {
     }
 
     if (!price || price <= 0) {
-      return toast(t("Giá phải lớn hơn 0"), "error");
+      return toast("Giá phải lớn hơn 0", "error");
     }
     if (d < 0 || d > MAX_DISCOUNT) {
-      return toast(`${t("% giảm giá phải từ 0-")}${MAX_DISCOUNT}`, "error");
+      return toast(`% giảm giá phải từ 0-${MAX_DISCOUNT}`, "error");
     }
     if (stock < 0) {
-      return toast(t("Số lượng không được âm"), "error");
+      return toast("Số lượng không được âm", "error");
     }
 
     const data = {
@@ -358,6 +357,7 @@ export default function OwnerMenu() {
       description: f.get("description")?.trim() || "",
       image: image || f.get("imageUrl")?.trim() || "",
       reason: f.get("reason")?.trim() || "",
+      // ✅ Lưu field is_signature
       is_signature: isSignature,
     };
 
@@ -365,15 +365,15 @@ export default function OwnerMenu() {
     try {
       if (currentId) {
         await api.menu.update(currentId, data);
-        toast(t("Đã cập nhật món"), "success");
+        toast("Đã cập nhật món", "success");
       } else {
         await api.menu.create(data);
-        toast(t("Đã thêm món mới"), "success");
+        toast("Đã thêm món mới", "success");
       }
       closeItemModal();
       load();
     } catch (e) {
-      toast(e.message || t("Không lưu được"), "error");
+      toast(e.message || "Không lưu được", "error");
     } finally {
       setSaving(false);
     }
@@ -404,13 +404,10 @@ export default function OwnerMenu() {
       await api.menu.update(id, { active: newActive });
 
       if (newActive) {
-        toast(
-          `${t("Đã BẬT bán món")} "${item.name}"`,
-          "success"
-        );
+        toast(`Đã BẬT bán món "${item.name}"`, "success");
       } else {
         toast(
-          `${t("Đã TẮT bán món")} "${item.name}" ${t("(món vẫn còn, chỉ ẩn với khách)")}`,
+          `Đã TẮT bán món "${item.name}" (món vẫn còn, chỉ ẩn với khách)`,
           "success"
         );
       }
@@ -420,7 +417,7 @@ export default function OwnerMenu() {
           (m._id || m.id) === id ? { ...m, active: oldActive } : m
         )
       );
-      toast(e.message || t("Không đổi được trạng thái"), "error");
+      toast(e.message || "Không đổi được trạng thái", "error");
     } finally {
       setTogglingId(null);
     }
@@ -432,18 +429,18 @@ export default function OwnerMenu() {
     const id = item._id || item.id;
 
     setConfirm({
-      title: `${t("Xóa vĩnh viễn món")} "${item.name}"?`,
+      title: `Xóa vĩnh viễn món "${item.name}"?`,
       message:
-        t("⚠️ HÀNH ĐỘNG NÀY KHÔNG THỂ HOÀN TÁC.") + "\n\n" +
-        t("Món sẽ bị XÓA KHỎI DATABASE.") + "\n" +
-        t("Khác với 'Tắt món' (chỉ ẩn khỏi khách, có thể bật lại).") + "\n\n" +
-        t("Nếu bạn chỉ muốn ẩn tạm, hãy dùng nút Tắt ở cột Hiển thị."),
-      confirmText: t("XÓA VĨNH VIỄN"),
-      cancelText: t("Hủy — Giữ lại"),
+        "⚠️ HÀNH ĐỘNG NÀY KHÔNG THỂ HOÀN TÁC.\n\n" +
+        "Món sẽ bị XÓA KHỎI DATABASE.\n" +
+        "Khác với 'Tắt món' (chỉ ẩn khỏi khách, có thể bật lại).\n\n" +
+        "Nếu bạn chỉ muốn ẩn tạm, hãy dùng nút Tắt ở cột Hiển thị.",
+      confirmText: "XÓA VĨNH VIỄN",
+      cancelText: "Hủy — Giữ lại",
       danger: true,
       onConfirm: async () => {
         await api.menu.remove(id);
-        toast(`${t("Đã XÓA vĩnh viễn món")} "${item.name}"`, "success");
+        toast(`Đã XÓA vĩnh viễn món "${item.name}"`, "success");
         setConfirm(null);
         load();
       },
@@ -468,7 +465,7 @@ export default function OwnerMenu() {
 
   const saveCat = async () => {
     const name = catForm.name.trim();
-    if (!name) return toast(t("Nhập tên danh mục"), "error");
+    if (!name) return toast("Nhập tên danh mục", "error");
     if (catLoading) return;
 
     const orderStr = String(catForm.order || "").trim();
@@ -476,7 +473,7 @@ export default function OwnerMenu() {
     if (orderStr) {
       order = Number(orderStr);
       if (!Number.isInteger(order) || order < 0) {
-        return toast(t("Thứ tự phải là số nguyên >= 0"), "error");
+        return toast("Thứ tự phải là số nguyên >= 0", "error");
       }
     }
 
@@ -487,16 +484,16 @@ export default function OwnerMenu() {
 
       if (editingCat) {
         await api.categories.update(editingCat.id, payload);
-        toast(t("Đã cập nhật danh mục"), "success");
+        toast("Đã cập nhật danh mục", "success");
       } else {
         await api.categories.create(payload);
-        toast(t("Đã thêm danh mục"), "success");
+        toast("Đã thêm danh mục", "success");
       }
       setEditingCat(null);
       setCatForm({ name: "", icon: DEFAULT_CATEGORY_ICON, order: "" });
       load();
     } catch (e) {
-      toast(e.message || t("Không lưu được"), "error");
+      toast(e.message || "Không lưu được", "error");
     } finally {
       setCatLoading(false);
     }
@@ -504,17 +501,16 @@ export default function OwnerMenu() {
 
   const removeCat = (cat) => {
     setConfirm({
-      title: `${t("Xóa danh mục")} "${cat.name}"?`,
+      title: `Xóa danh mục "${cat.name}"?`,
       message:
-        t("Danh mục sẽ bị xoá khỏi hệ thống. Các món thuộc danh mục này") +
-        " " +
-        t("vẫn được giữ nhưng sẽ không có danh mục."),
-      confirmText: t("Xóa danh mục"),
-      cancelText: t("Hủy"),
+        "Danh mục sẽ bị xoá khỏi hệ thống. Các món thuộc danh mục này " +
+        "vẫn được giữ nhưng sẽ không có danh mục.",
+      confirmText: "Xóa danh mục",
+      cancelText: "Hủy",
       danger: true,
       onConfirm: async () => {
         await api.categories.remove(cat.id);
-        toast(t("Đã xóa danh mục"), "success");
+        toast("Đã xóa danh mục", "success");
         setConfirm(null);
         load();
       },
@@ -611,7 +607,7 @@ export default function OwnerMenu() {
                     color: "var(--text-primary, #172033)",
                   }}
                 >
-                  {t("Khung giờ nhận món")}
+                  Khung giờ nhận món
                 </h3>
                 <span
                   style={{
@@ -619,16 +615,16 @@ export default function OwnerMenu() {
                     color: "var(--text-light, #8993a3)",
                   }}
                 >
-                  {t("Tổng")} {slotStats.total} {t("khung")} ·{" "}
+                  Tổng {slotStats.total} khung ·{" "}
                   <b style={{ color: "#18a967" }}>
-                    {slotStats.enabled} {t("đang mở")}
+                    {slotStats.enabled} đang mở
                   </b>
                   {slotStats.disabled > 0 && (
                     <>
                       {" "}
                       ·{" "}
                       <b style={{ color: "#ef4444" }}>
-                        {slotStats.disabled} {t("đã tắt")}
+                        {slotStats.disabled} đã tắt
                       </b>
                     </>
                   )}
@@ -641,8 +637,8 @@ export default function OwnerMenu() {
                 type="button"
                 onClick={loadSlots}
                 disabled={slotsLoading}
-                title={t("Làm mới")}
-                aria-label={t("Làm mới khung giờ")}
+                title="Làm mới"
+                aria-label="Làm mới khung giờ"
                 style={{
                   padding: "8px 12px",
                   background: "var(--card-bg, #fff)",
@@ -665,7 +661,7 @@ export default function OwnerMenu() {
                 ) : (
                   <RotateCcw size={13} />
                 )}
-                {t("Làm mới")}
+                Làm mới
               </button>
 
               <button
@@ -687,7 +683,7 @@ export default function OwnerMenu() {
                   gap: 6,
                 }}
               >
-                <RotateCcw size={13} /> {t("Reset")}
+                <RotateCcw size={13} /> Reset
               </button>
             </div>
           </div>
@@ -723,7 +719,7 @@ export default function OwnerMenu() {
                   fontWeight: 600,
                 }}
               >
-                {t("Thử lại")}
+                Thử lại
               </button>
             </div>
           )}
@@ -745,7 +741,7 @@ export default function OwnerMenu() {
                   marginBottom: 8,
                 }}
               />
-              <div>{t("Đang tải khung giờ...")}</div>
+              <div>Đang tải khung giờ...</div>
             </div>
           )}
 
@@ -794,7 +790,7 @@ export default function OwnerMenu() {
                         color: "var(--text-primary, #172033)",
                       }}
                     >
-                      {t(group.label)}
+                      {group.label}
                     </b>
                     <span
                       style={{
@@ -806,7 +802,7 @@ export default function OwnerMenu() {
                       <b style={{ color: "#18a967" }}>
                         {enabledCount}/{group.slots.length}
                       </b>{" "}
-                      {t("khung mở")}
+                      khung mở
                     </span>
                   </div>
 
@@ -864,8 +860,8 @@ export default function OwnerMenu() {
                             role="switch"
                             title={
                               active
-                                ? t("Tắt khung giờ này")
-                                : t("Bật khung giờ này")
+                                ? "Tắt khung giờ này"
+                                : "Bật khung giờ này"
                             }
                             style={{
                               background: active ? "#18a967" : "#cbd5e1",
@@ -922,14 +918,9 @@ export default function OwnerMenu() {
               fontFamily: "monospace",
             }}
           >
-            🔍 DEBUG: {t("Tổng")} <b>{stats.total}</b> {t("món")} ·{" "}
-            <b style={{ color: "#18a967" }}>
-              {stats.active} {t("đang bán")}
-            </b>{" "}
-            ·{" "}
-            <b style={{ color: "#f59e0b" }}>
-              {stats.inactive} {t("đã tắt")}
-            </b>
+            🔍 DEBUG: Tổng <b>{stats.total}</b> món ·{" "}
+            <b style={{ color: "#18a967" }}>{stats.active} đang bán</b> ·{" "}
+            <b style={{ color: "#f59e0b" }}>{stats.inactive} đã tắt</b>
           </div>
         )}
 
@@ -961,7 +952,7 @@ export default function OwnerMenu() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder={t("Tìm món ăn...")}
+              placeholder="Tìm món ăn..."
               style={{
                 flex: 1,
                 border: 0,
@@ -975,7 +966,7 @@ export default function OwnerMenu() {
               <button
                 onClick={() => setQ("")}
                 style={clearBtnStyle}
-                aria-label={t("Xoá tìm kiếm")}
+                aria-label="Xoá tìm kiếm"
               >
                 <X size={14} />
               </button>
@@ -997,7 +988,7 @@ export default function OwnerMenu() {
               minWidth: 140,
             }}
           >
-            <option value="">{t("Tất cả danh mục")}</option>
+            <option value="">Tất cả danh mục</option>
             {categories.map((c) => (
               <option key={c.id} value={c.name}>
                 {c.icon} {c.name}
@@ -1006,7 +997,7 @@ export default function OwnerMenu() {
           </select>
 
           <button onClick={() => openItemModal(null)} style={btnPrimaryStyle}>
-            <Plus size={16} /> {t("Thêm món")}
+            <Plus size={16} /> Thêm món
           </button>
 
           <button
@@ -1016,7 +1007,7 @@ export default function OwnerMenu() {
             }}
             style={btnOutlineStyle}
           >
-            <FolderPlus size={16} /> {t("Quản lý danh mục")}
+            <FolderPlus size={16} /> Quản lý danh mục
           </button>
         </div>
 
@@ -1034,38 +1025,39 @@ export default function OwnerMenu() {
               columns={8}
               rows={5}
               headers={[
-                t("Ảnh"),
-                t("Món"),
-                t("Danh mục"),
-                t("Giá"),
-                t("Tồn"),
-                t("Hiển thị"),
-                t("Signature"),
-                t("Thao tác"),
+                "Ảnh",
+                "Món",
+                "Danh mục",
+                "Giá",
+                "Tồn",
+                "Hiển thị",
+                "Signature",
+                "Thao tác",
               ]}
             />
           )}
 
-          {!loading && error && <ErrorBox message={error} onRetry={load} t={t} />}
+          {!loading && error && <ErrorBox message={error} onRetry={load} />}
 
           {!loading && !error && (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "var(--bg-tertiary, #f5f7fb)" }}>
-                    <th style={thStyle}>{t("Ảnh")}</th>
-                    <th style={thStyle}>{t("Món")}</th>
-                    <th style={thStyle}>{t("Danh mục")}</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>{t("Giá")}</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>{t("Tồn")}</th>
+                    <th style={thStyle}>Ảnh</th>
+                    <th style={thStyle}>Món</th>
+                    <th style={thStyle}>Danh mục</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Giá</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Tồn</th>
                     <th style={{ ...thStyle, textAlign: "center" }}>
-                      {t("Hiển thị")}
+                      Hiển thị
                     </th>
+                    {/* ✅ CỘT SIGNATURE */}
                     <th style={{ ...thStyle, textAlign: "center" }}>
-                      {t("Signature")}
+                      Signature
                     </th>
                     <th style={{ ...thStyle, textAlign: "right" }}>
-                      {t("Thao tác")}
+                      Thao tác
                     </th>
                   </tr>
                 </thead>
@@ -1213,11 +1205,11 @@ export default function OwnerMenu() {
                               disabled={isToggling}
                               title={
                                 isActive
-                                  ? t("TẮT BÁN món này (khách không thấy, món vẫn còn)")
-                                  : t("BẬT BÁN món này")
+                                  ? "TẮT BÁN món này (khách không thấy, món vẫn còn)"
+                                  : "BẬT BÁN món này"
                               }
                               aria-label={
-                                isActive ? t("Tắt bán món") : t("Bật bán món")
+                                isActive ? "Tắt bán món" : "Bật bán món"
                               }
                               aria-pressed={isActive}
                               role="switch"
@@ -1265,7 +1257,7 @@ export default function OwnerMenu() {
                                   letterSpacing: 0.3,
                                 }}
                               >
-                                {t("Đã tắt")}
+                                Đã tắt
                               </span>
                             )}
                           </div>
@@ -1275,7 +1267,7 @@ export default function OwnerMenu() {
                         <td style={{ ...tdStyle, textAlign: "center" }}>
                           {m.is_signature ? (
                             <span
-                              title={t("Món Signature")}
+                              title="Món Signature"
                               style={{
                                 display: "inline-flex",
                                 alignItems: "center",
@@ -1292,7 +1284,7 @@ export default function OwnerMenu() {
                                   "0 2px 6px rgba(245, 158, 11, 0.35)",
                               }}
                             >
-                              <Star size={10} fill="#fff" /> {t("Signature")}
+                              <Star size={10} fill="#fff" /> Signature
                             </span>
                           ) : (
                             <span
@@ -1316,13 +1308,13 @@ export default function OwnerMenu() {
                           >
                             <IconButton
                               onClick={() => openItemModal(m)}
-                              title={t("Sửa món (không phải tắt)")}
+                              title="Sửa món (không phải tắt)"
                             >
                               <Edit size={15} />
                             </IconButton>
                             <IconButton
                               onClick={() => removeItem(m)}
-                              title={t("XÓA VĨNH VIỄN món này (khác với tắt)")}
+                              title="XÓA VĨNH VIỄN món này (khác với tắt)"
                               color="#ef4444"
                             >
                               <Trash2 size={15} />
@@ -1349,8 +1341,8 @@ export default function OwnerMenu() {
                         />
                         <div>
                           {q || filterCat
-                            ? t("Không có món nào khớp bộ lọc")
-                            : t('Chưa có món nào — bấm "Thêm món" để bắt đầu')}
+                            ? "Không có món nào khớp bộ lọc"
+                            : 'Chưa có món nào — bấm "Thêm món" để bắt đầu'}
                         </div>
                       </td>
                     </tr>
@@ -1369,13 +1361,13 @@ export default function OwnerMenu() {
           >
             <div style={modalHeaderStyle}>
               <h3 style={modalTitleStyle}>
-                <Folder size={20} style={{ color: "#0EA5E9" }} />{" "}
-                {t("Quản lý danh mục")}
+                <Folder size={20} style={{ color: "#0EA5E9" }} /> Quản lý danh
+                mục
               </h3>
               <button
                 onClick={() => !catLoading && setShowCatModal(false)}
                 style={modalCloseStyle}
-                aria-label={t("Đóng")}
+                aria-label="Đóng"
               >
                 <X size={20} />
               </button>
@@ -1397,7 +1389,7 @@ export default function OwnerMenu() {
                   marginBottom: 8,
                 }}
               >
-                {editingCat ? `✏️ ${t("Sửa danh mục")}` : `➕ ${t("Thêm danh mục mới")}`}
+                {editingCat ? "✏️ Sửa danh mục" : "➕ Thêm danh mục mới"}
               </div>
 
               <div
@@ -1423,14 +1415,14 @@ export default function OwnerMenu() {
                     fontSize: 20,
                     background: "var(--card-bg, #fff)",
                   }}
-                  aria-label={t("Icon danh mục")}
+                  aria-label="Icon danh mục"
                 />
                 <input
                   value={catForm.name}
                   onChange={(e) =>
                     setCatForm({ ...catForm, name: e.target.value })
                   }
-                  placeholder={t("VD: Bún, Phở, Tráng miệng...")}
+                  placeholder="VD: Bún, Phở, Tráng miệng..."
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -1454,8 +1446,8 @@ export default function OwnerMenu() {
                   onChange={(e) =>
                     setCatForm({ ...catForm, order: e.target.value })
                   }
-                  placeholder={t("Tự động")}
-                  title={t("Thứ tự hiển thị (để trống = tự động)")}
+                  placeholder="Tự động"
+                  title="Thứ tự hiển thị (để trống = tự động)"
                   style={{
                     padding: 10,
                     border: "1px solid var(--border-color, #e5e9ef)",
@@ -1465,7 +1457,7 @@ export default function OwnerMenu() {
                     color: "var(--text-primary, #172033)",
                     fontSize: 13,
                   }}
-                  aria-label={t("Thứ tự hiển thị")}
+                  aria-label="Thứ tự hiển thị"
                 />
                 <button
                   onClick={saveCat}
@@ -1496,7 +1488,7 @@ export default function OwnerMenu() {
                   ) : (
                     <Save size={14} />
                   )}
-                  {editingCat ? t("Lưu") : t("Thêm")}
+                  {editingCat ? "Lưu" : "Thêm"}
                 </button>
               </div>
               {editingCat && (
@@ -1522,7 +1514,7 @@ export default function OwnerMenu() {
                     gap: 4,
                   }}
                 >
-                  <X size={12} /> {t("Hủy sửa")}
+                  <X size={12} /> Hủy sửa
                 </button>
               )}
             </div>
@@ -1535,7 +1527,7 @@ export default function OwnerMenu() {
                 marginBottom: 8,
               }}
             >
-              {t("Danh sách")} ({categories.length})
+              Danh sách ({categories.length})
             </div>
 
             <div
@@ -1591,20 +1583,20 @@ export default function OwnerMenu() {
                           color: "var(--text-light, #8993a3)",
                         }}
                       >
-                        {t("Thứ tự:")} {cat.order}
+                        Thứ tự: {cat.order}
                       </div>
                     )}
                   </div>
                   <IconButton
                     onClick={() => openEditCat(cat)}
-                    title={t("Sửa")}
+                    title="Sửa"
                     color="#0EA5E9"
                   >
                     <Edit size={14} />
                   </IconButton>
                   <IconButton
                     onClick={() => removeCat(cat)}
-                    title={t("Xóa")}
+                    title="Xóa"
                     color="#ef4444"
                   >
                     <Trash2 size={14} />
@@ -1620,7 +1612,7 @@ export default function OwnerMenu() {
                     fontSize: 13,
                   }}
                 >
-                  {t("Chưa có danh mục nào")}
+                  Chưa có danh mục nào
                 </div>
               )}
             </div>
@@ -1629,7 +1621,7 @@ export default function OwnerMenu() {
               onClick={() => setShowCatModal(false)}
               style={{ ...btnPrimaryStyle, marginTop: 16, width: "100%" }}
             >
-              {t("Đóng")}
+              Đóng
             </button>
           </Modal>
         )}
@@ -1639,19 +1631,19 @@ export default function OwnerMenu() {
           <Modal onClose={() => !saving && closeItemModal()} maxWidth={560}>
             <div style={modalHeaderStyle}>
               <h3 style={modalTitleStyle}>
-                {modal._id || modal.id ? t("Sửa món") : t("Thêm món")}
+                {modal._id || modal.id ? "Sửa món" : "Thêm món"}
               </h3>
               <button
                 onClick={() => !saving && closeItemModal()}
                 style={modalCloseStyle}
-                aria-label={t("Đóng")}
+                aria-label="Đóng"
               >
                 <X size={20} />
               </button>
             </div>
 
             <form onSubmit={saveItem} autoComplete="off">
-              <label style={labelStyle}>{t("Tên món")} *</label>
+              <label style={labelStyle}>Tên món *</label>
               <input
                 name="name"
                 defaultValue={modal.name || ""}
@@ -1661,7 +1653,7 @@ export default function OwnerMenu() {
                 disabled={saving}
               />
 
-              <label style={labelStyle}>{t("Danh mục")} *</label>
+              <label style={labelStyle}>Danh mục *</label>
               <select
                 name="category"
                 defaultValue={modal.category || (categories[0]?.name ?? "")}
@@ -1670,7 +1662,7 @@ export default function OwnerMenu() {
                 disabled={saving}
               >
                 {categories.length === 0 && (
-                  <option value="">{t("— Chưa có danh mục —")}</option>
+                  <option value="">— Chưa có danh mục —</option>
                 )}
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.name}>
@@ -1689,7 +1681,7 @@ export default function OwnerMenu() {
               >
                 <div>
                   <label style={{ ...labelStyle, marginTop: 0 }}>
-                    {t("Giá gốc")}
+                    Giá gốc
                   </label>
                   <input
                     type="number"
@@ -1697,15 +1689,13 @@ export default function OwnerMenu() {
                     step="1000"
                     value={priceFields.originalPrice}
                     onChange={(e) => handleOriginalChange(e.target.value)}
-                    placeholder={t("VD: 50000")}
+                    placeholder="VD: 50000"
                     style={{ ...inputStyle, marginBottom: 0 }}
                     disabled={saving}
                   />
                 </div>
                 <div>
-                  <label style={{ ...labelStyle, marginTop: 0 }}>
-                    {t("% Giảm")}
-                  </label>
+                  <label style={{ ...labelStyle, marginTop: 0 }}>% Giảm</label>
                   <input
                     type="number"
                     min="0"
@@ -1719,7 +1709,7 @@ export default function OwnerMenu() {
                 </div>
                 <div>
                   <label style={{ ...labelStyle, marginTop: 0 }}>
-                    {t("Giá bán")} {!hasOriginal && "*"}
+                    Giá bán {!hasOriginal && "*"}
                   </label>
                   <input
                     type="number"
@@ -1728,7 +1718,7 @@ export default function OwnerMenu() {
                     value={priceFields.price}
                     onChange={(e) => handlePriceChange(e.target.value)}
                     required={!hasOriginal}
-                    placeholder={t("VD: 30000")}
+                    placeholder="VD: 30000"
                     style={{
                       ...inputStyle,
                       marginBottom: 0,
@@ -1762,13 +1752,11 @@ export default function OwnerMenu() {
               >
                 {hasOriginal ? (
                   <>
-                    💰 {t("Khách sẽ trả")}{" "}
-                    <b>{money(priceFields.price)}</b>
+                    💰 Khách sẽ trả <b>{money(priceFields.price)}</b>
                     {priceFields.discountPercent > 0 && (
                       <>
                         {" "}
-                        — {t("giảm")}{" "}
-                        <b>{priceFields.discountPercent}%</b> {t("từ")}{" "}
+                        — giảm <b>{priceFields.discountPercent}%</b> từ{" "}
                         <span style={{ textDecoration: "line-through" }}>
                           {money(Number(priceFields.originalPrice) || 0)}
                         </span>
@@ -1776,24 +1764,24 @@ export default function OwnerMenu() {
                     )}
                   </>
                 ) : (
-                  <>💡 {t("Để trống Giá gốc nếu không giảm giá.")}</>
+                  <>💡 Để trống Giá gốc nếu không giảm giá.</>
                 )}
               </div>
 
-              <label style={labelStyle}>{t("Số lượng")} *</label>
+              <label style={labelStyle}>Số lượng *</label>
               <input
                 name="stock"
                 type="number"
                 min="0"
                 step="1"
                 defaultValue={modal.stock ?? ""}
-                placeholder={t("VD: 20")}
+                placeholder="VD: 20"
                 required
                 style={inputStyle}
                 disabled={saving}
               />
 
-              <label style={labelStyle}>{t("Mô tả")}</label>
+              <label style={labelStyle}>Mô tả</label>
               <textarea
                 name="description"
                 defaultValue={modal.description || ""}
@@ -1801,12 +1789,10 @@ export default function OwnerMenu() {
                 disabled={saving}
               />
 
-              <label style={labelStyle}>
-                {t("Lý do đổi giá (nếu có sửa giá)")}
-              </label>
+              <label style={labelStyle}>Lý do đổi giá (nếu có sửa giá)</label>
               <input
                 name="reason"
-                placeholder={t("VD: Tăng giá nguyên liệu, khuyến mãi...")}
+                placeholder="VD: Tăng giá nguyên liệu, khuyến mãi..."
                 style={inputStyle}
                 disabled={saving}
               />
@@ -1814,14 +1800,12 @@ export default function OwnerMenu() {
               <ImageUploader
                 value={image}
                 onChange={setImage}
-                label={t("Ảnh món ăn (JPEG/PNG, tối đa 2MB)")}
+                label="Ảnh món ăn (JPEG/PNG, tối đa 2MB)"
               />
 
               {!image && (
                 <>
-                  <label style={labelStyle}>
-                    {t("Hoặc dán URL ảnh")}
-                  </label>
+                  <label style={labelStyle}>Hoặc dán URL ảnh</label>
                   <input
                     name="imageUrl"
                     defaultValue={
@@ -1882,7 +1866,7 @@ export default function OwnerMenu() {
                       fill={isSignature ? "#f59e0b" : "none"}
                       color="#f59e0b"
                     />
-                    {t("Món Signature")}
+                    Món Signature
                   </b>
                   <span
                     style={{
@@ -1892,9 +1876,7 @@ export default function OwnerMenu() {
                       marginTop: 2,
                     }}
                   >
-                    {t(
-                      'Hiển thị ở section "Món Signature" trên trang chủ khách hàng'
-                    )}
+                    Hiển thị ở section "Món Signature" trên trang chủ khách hàng
                   </span>
                 </div>
               </label>
@@ -1906,7 +1888,7 @@ export default function OwnerMenu() {
                   disabled={saving}
                   style={{ ...btnCancelStyle, flex: 1 }}
                 >
-                  {t("Hủy")}
+                  Hủy
                 </button>
                 <button
                   type="submit"
@@ -1919,11 +1901,11 @@ export default function OwnerMenu() {
                         size={14}
                         style={{ animation: "spin 1s linear infinite" }}
                       />
-                      {t("Đang lưu...")}
+                      Đang lưu...
                     </>
                   ) : (
                     <>
-                      <Save size={14} /> {t("Lưu món")}
+                      <Save size={14} /> Lưu món
                     </>
                   )}
                 </button>
@@ -1956,12 +1938,10 @@ export default function OwnerMenu() {
 
       <ConfirmDialog
         open={confirmSlotReset}
-        title={t("Reset toàn bộ khung giờ?")}
-        message={t(
-          "Tất cả khung giờ sẽ được BẬT lại như mặc định. Trạng thái tắt hiện tại sẽ bị xoá."
-        )}
-        confirmText={t("Reset")}
-        cancelText={t("Hủy")}
+        title="Reset toàn bộ khung giờ?"
+        message="Tất cả khung giờ sẽ được BẬT lại như mặc định. Trạng thái tắt hiện tại sẽ bị xoá."
+        confirmText="Reset"
+        cancelText="Hủy"
         danger
         loading={resettingSlots}
         onConfirm={resetSlots}
@@ -2006,7 +1986,7 @@ function IconButton({
   );
 }
 
-function ErrorBox({ message, onRetry, t }) {
+function ErrorBox({ message, onRetry }) {
   return (
     <div
       style={{
@@ -2020,7 +2000,7 @@ function ErrorBox({ message, onRetry, t }) {
     >
       <AlertCircle size={26} style={{ marginBottom: 10 }} />
       <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        {t("Không tải được dữ liệu")}
+        Không tải được dữ liệu
       </div>
       <div style={{ fontSize: 13, opacity: 0.85, marginBottom: onRetry ? 12 : 0 }}>
         {message}
@@ -2040,7 +2020,7 @@ function ErrorBox({ message, onRetry, t }) {
             fontSize: 13,
           }}
         >
-          {t("Thử lại")}
+          Thử lại
         </button>
       )}
     </div>
