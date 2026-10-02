@@ -9,10 +9,10 @@ const CACHE_FILE = path.join(__dirname, "translate-cache.json");
 const memoryCache = new Map();
 let saveTimer = null;
 
-// ✅ CONCURRENCY LIMITER — tối đa 3 request Google cùng lúc
-// Tránh server tự DDoS Google → bị block IP
+// ✅ CONCURRENCY LIMITER — tối đa 3 request MyMemory cùng lúc
 const MAX_CONCURRENT = 3;
-const REQUEST_TIMEOUT_MS = 3000; // 3s timeout thay vì 5s
+const REQUEST_TIMEOUT_MS = 8000; // MyMemory chậm hơn Google chút
+
 let running = 0;
 const waitQueue = [];
 
@@ -70,7 +70,7 @@ function cacheKey(text, lang) {
   return text + "||" + lang;
 }
 
-// ---------- Translate 1 đoạn ----------
+// ---------- Translate 1 đoạn qua MyMemory ----------
 export async function translateOne(text, targetLang) {
   if (!text || !String(text).trim()) return "";
   if (targetLang === "vi") return text;
@@ -78,15 +78,22 @@ export async function translateOne(text, targetLang) {
   const key = cacheKey(text, targetLang);
   if (memoryCache.has(key)) return memoryCache.get(key);
 
+  // MyMemory giới hạn 500 chars/request
+  if (String(text).length > 500) {
+    console.warn("[translate] skip: text > 500 chars");
+    return text;
+  }
+
   // ✅ Chờ slot từ limiter
   await acquire();
 
   try {
     const url =
-      "https://translate.googleapis.com/translate_a/single" +
-      "?client=gtx&sl=vi&tl=" + targetLang + "&dt=t&q=" + encodeURIComponent(text);
+      "https://api.mymemory.translated.net/get" +
+      "?q=" + encodeURIComponent(text) +
+      "&langpair=vi|" + encodeURIComponent(targetLang);
 
-    // ✅ AbortController với timeout 3s
+    // AbortController với timeout 8s (MyMemory chậm hơn Google)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -100,21 +107,42 @@ export async function translateOne(text, targetLang) {
     if (!res.ok) throw new Error("HTTP " + res.status);
 
     const data = await res.json();
-    const translated =
-      (data && data[0] && data[0].map((seg) => seg && seg[0]).filter(Boolean).join("")) || text;
+
+    // Check rate limit / quota exceeded
+    if (data?.responseStatus === 429 || data?.responseStatus === 403) {
+      throw new Error("Rate limit / quota exceeded");
+    }
+
+    // MyMemory trả về translatedText trong responseData
+    let translated = data?.responseData?.translatedText || "";
+
+    // MyMemory đôi khi trả về string rỗng hoặc message lỗi
+    if (!translated || translated === text) {
+      // Fallback: giữ nguyên
+      memoryCache.set(key, text);
+      scheduleSaveCache();
+      return text;
+    }
+
+    // Cleanup HTML entities nếu có
+    translated = translated
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">");
 
     memoryCache.set(key, translated);
     scheduleSaveCache();
     return translated;
   } catch (err) {
-    // Fail nhanh, không log spam khi timeout
     const isTimeout = err.name === "AbortError" || err.type === "aborted";
     if (!isTimeout) {
-      console.warn("[translate] fail " + text.slice(0, 30) + " -> " + targetLang + ":", err.message);
+      console.warn("[translate] fail " + String(text).slice(0, 30) + " -> " + targetLang + ":", err.message);
     }
+    // Fallback: trả về text gốc (không cache để lần sau thử lại)
     return text;
   } finally {
-    // ✅ Luôn release slot dù thành công hay thất bại
     release();
   }
 }
