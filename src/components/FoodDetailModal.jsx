@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // FOODDETAILMODAL.JSX — Modal chi tiết món ăn
 // ============================================================
 // ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
@@ -51,7 +51,7 @@ export default function FoodDetailModal({
   initialQty,
   onUpdate,
 }) {
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
   const navigate = useNavigate();
 
   const [selectedToppings, setSelectedToppings] = useState([]);
@@ -245,7 +245,7 @@ export default function FoodDetailModal({
       className="food-detail-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={`${t("Chi tiết")} ${item.name}`}
+      aria-label={`${t("Chi tiết")} ${tData(item, "name")}`}
       style={{
         position: "fixed",
         inset: 0,
@@ -289,7 +289,7 @@ export default function FoodDetailModal({
               minWidth: 0,
             }}
           >
-            {item.name}
+            {tData(item, "name")}
           </h3>
           <button
             onClick={onClose}
@@ -339,7 +339,7 @@ export default function FoodDetailModal({
               lineHeight: 1.5,
             }}
           >
-            {item.description}
+            {tData(item, "description")}
           </p>
         )}
 

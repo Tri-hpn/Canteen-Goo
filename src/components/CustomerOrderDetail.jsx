@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CUSTOMERORDERDETAIL.JSX — Modal chi tiết đơn hàng (Customer)
 // ============================================================
 
@@ -59,7 +59,7 @@ export default function CustomerOrderDetail({
   onClose,
   onUpdate,
 }) {
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
   const [order, setOrder] = useState(initialOrder);
   const [showReview, setShowReview] = useState(false);
   const [showMyReviews, setShowMyReviews] = useState(false);
@@ -560,7 +560,7 @@ export default function CustomerOrderDetail({
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
   <div style={{ color: "var(--text-primary, #172033)" }}>
-    <b>{it.qty}×</b> {it.name}
+    <b>{it.qty}×</b> {tData(it, "name")}
   </div>
 
   {it.size && (
@@ -1074,7 +1074,7 @@ function MyReviewsView({ order, myReviews, onClose, t }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {item?.name || t("menu.title")}
+                  {tData(item, "name") || t("menu.title")}
                 </b>
                 <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
                   {[1, 2, 3, 4, 5].map((s) => (

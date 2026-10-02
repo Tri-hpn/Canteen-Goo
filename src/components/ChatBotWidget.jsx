@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CHATBOTWIDGET.JSX — Widget chat nổi (góc phải dưới)
 // ============================================================
 
@@ -54,7 +54,7 @@ function getMaxQty(item) {
 }
 
 export default function ChatBotWidget({ cart, setCart, user }) {
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("ai");
 
@@ -727,7 +727,7 @@ function AIContent({
                               textOverflow: "ellipsis",
                             }}
                           >
-                            {it.name}
+                            {tData(it, "name")}
                           </div>
                           <div
                             style={{

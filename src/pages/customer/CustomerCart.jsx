@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CUSTOMERCART.JSX — Giỏ hàng khách hàng
 // ============================================================
 // ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
@@ -50,7 +50,7 @@ function readSavedSelection(cartKeys) {
 // ============================================================
 
 export default function CustomerCart({ cart, setCart }) {
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
   const navigate = useNavigate();
 
   const lines = useMemo(
@@ -400,7 +400,7 @@ export default function CustomerCart({ cart, setCart }) {
                         lineHeight: 1.35,
                       }}
                     >
-                      {m.name}
+                      {tData(m, "name")}
                     </b>
                     <div
                       style={{
@@ -508,7 +508,7 @@ export default function CustomerCart({ cart, setCart }) {
                   <button
                     onClick={() => setEditingItem({ key: m._key, item: m })}
                     title={t("Sửa món")}
-                    aria-label={`${t("Sửa")} ${m.name}`}
+                    aria-label={`${t("Sửa")} ${tData(m, "name")}`}
                     style={{
                       width: 32,
                       height: 32,
@@ -528,7 +528,7 @@ export default function CustomerCart({ cart, setCart }) {
                   <button
                     onClick={() => removeItem(m._key)}
                     title={t("Xoá khỏi giỏ")}
-                    aria-label={`${t("Xoá")} ${m.name} ${t("khỏi giỏ")}`}
+                    aria-label={`${t("Xoá")} ${tData(m, "name")} ${t("khỏi giỏ")}`}
                     style={{
                       width: 32,
                       height: 32,

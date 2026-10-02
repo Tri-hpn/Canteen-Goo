@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
+import { translateList } from "./autoTranslate.js";
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -673,7 +674,7 @@ app.get("/api/_debug/oauth-status", (_, res) => {
 // ============================================================
 // MENU
 // ============================================================
-app.get("/api/menu", (req, res) => {
+app.get("/api/menu", async (req, res) => {
   try {
     const db = loadDB();
     const { q = "", category = "Tất cả" } = req.query;
@@ -687,7 +688,15 @@ app.get("/api/menu", (req, res) => {
     if (category && category !== "Tất cả") {
       items = items.filter((m) => m.category === category);
     }
-    res.json(items);
+
+    // ✅ TỰ ĐỘNG DỊCH
+    const translated = await translateList(
+      items,
+      ["name", "description"],
+      ["en", "ja", "ko", "zh"]
+    );
+
+    res.json(translated);
   } catch (e) {
     console.error("GET /api/menu error:", e);
     res.status(500).json({ message: e.message });
@@ -1472,11 +1481,28 @@ function ensureCategories(db) {
   return { categories: db.categories, changed: false };
 }
 
-app.get("/api/categories", (req, res) => {
-  const db = loadDB();
-  const { categories, changed } = ensureCategories(db);
-  if (changed) saveDB(db);
-  res.json([...categories].sort((a, b) => (a.order || 0) - (b.order || 0)));
+app.get("/api/categories", async (req, res) => {
+  try {
+    const db = loadDB();
+    const { categories, changed } = ensureCategories(db);
+    if (changed) saveDB(db);
+
+    const sorted = [...categories].sort(
+      (a, b) => (a.order || 0) - (b.order || 0)
+    );
+
+    // ✅ TỰ ĐỘNG DỊCH
+    const translated = await translateList(
+      sorted,
+      ["name"],
+      ["en", "ja", "ko", "zh"]
+    );
+
+    res.json(translated);
+  } catch (e) {
+    console.error("GET /api/categories error:", e);
+    res.status(500).json({ message: e.message });
+  }
 });
 
 app.post("/api/categories", auth(["ADMIN", "EMPLOYEE"]), (req, res) => {

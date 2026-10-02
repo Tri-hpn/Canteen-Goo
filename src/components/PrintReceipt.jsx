@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // PRINTRECEIPT.JSX — In hóa đơn đơn hàng
 // ============================================================
 
@@ -37,7 +37,7 @@ function fmtDateTime(iso) {
 }
 
 export default function PrintReceipt({ order, onClose }) {
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
   const [hotline, setHotline] = useState(DEFAULT_HOTLINE);
 
   useEffect(() => {
@@ -275,7 +275,7 @@ export default function PrintReceipt({ order, onClose }) {
               {items.map((it, i) => (
                 <tr key={it.id || i}>
                   <td style={{ padding: "4px 0", fontSize: 11 }}>
-                    {it.name || "—"}
+                    {tData(it, "name") || "—"}
                   </td>
                   <td
                     style={{

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CUSTOMERPROMOTIONS.JSX — Khuyến mãi & Voucher
 // ============================================================
 // ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
@@ -73,7 +73,7 @@ function fmtDate(iso) {
 
 export default function CustomerPromotions() {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
 
   const [vouchers, setVouchers] = useState([]);
   const [publicVouchers, setPublicVouchers] = useState([]);
@@ -613,7 +613,7 @@ export default function CustomerPromotions() {
                       lineHeight: 1.3,
                     }}
                   >
-                    {m.name}
+                    {tData(m, "name")}
                   </b>
 
                   <div

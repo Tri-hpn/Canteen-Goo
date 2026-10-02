@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // EMPLOYEEMENU.JSX — Xem thực đơn (Nhân viên)
 // ============================================================
 // Nhân viên XEM thực đơn + có thể bật/tắt món (ẩn khi hết hàng).
@@ -36,7 +36,7 @@ const FALLBACK_IMG =
 // ============================================================
 
 export default function EmployeeMenu() {
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
 
   // ---------- Data ----------
   const [items, setItems] = useState([]);
@@ -393,7 +393,7 @@ export default function EmployeeMenu() {
                             fontSize: 13,
                           }}
                         >
-                          {m.name}
+                          {tData(m, "name")}
                         </b>
                         <div
                           style={{

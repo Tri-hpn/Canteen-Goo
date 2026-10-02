@@ -25,7 +25,7 @@ import { money } from "../../components/UI";
 import { SkeletonCard } from "../../components/Skeleton";
 import FoodDetailModal from "../../components/FoodDetailModal";
 import ChatBotWidget from "../../components/ChatBotWidget";
-import { useTranslation } from "../../i18n";
+import { useI18n } from "../../hooks/useI18n";
 import { bannerSlides as SLIDES } from "../../bannerSlides";
 
 // ============================================================
@@ -76,7 +76,7 @@ function fmtNumber(n) {
 
 export default function CustomerHome({ user, cart, setCart }) {
   const navigate = useNavigate();
-  const { t, lang } = useTranslation();
+  const { t, tData, lang } = useI18n();
 
   const [items, setItems] = useState([]);
   const [newItems, setNewItems] = useState([]);
@@ -303,7 +303,7 @@ export default function CustomerHome({ user, cart, setCart }) {
           </div>
 
           <div className="grab-food-card__info">
-            <h4 className="grab-food-card__name">{m.name}</h4>
+            <h4 className="grab-food-card__name">{tData(m, "name")}</h4>
             <div className="grab-food-card__price-row">
               <span className="grab-food-card__price">{money(m.price)}</span>
             </div>
@@ -695,7 +695,7 @@ export default function CustomerHome({ user, cart, setCart }) {
                   </div>
 
                   <div className="grab-food-card__info">
-                    <h4 className="grab-food-card__name">{m.name}</h4>
+                    <h4 className="grab-food-card__name">{tData(m, "name")}</h4>
                     <div className="grab-food-card__price-row">
                       <span
                         className="grab-food-card__price"

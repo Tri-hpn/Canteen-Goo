@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // OWNERMENU.JSX — Quản lý thực đơn + danh mục (Admin)
 // ============================================================
 // Nhóm khung giờ nhận món (Time Slots) ở đầu trang.
@@ -21,6 +21,9 @@ import { money } from "../../components/UI";
 import { toast } from "../../components/Effects";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import ImageUploader from "../../components/ImageUploader";
+
+// ✅ i18n hook
+import { useI18n } from "../../hooks/useI18n";
 
 // ============================================================
 // CONSTANTS
@@ -55,6 +58,7 @@ function dbg(...args) {
 // ============================================================
 
 export default function OwnerMenu() {
+  const { t, tData } = useI18n();
   // ---------- Menu list state ----------
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1103,7 +1107,7 @@ export default function OwnerMenu() {
                         </td>
                         <td style={tdStyle}>
                           <b style={{ display: "block", marginBottom: 2 }}>
-                            {m.name}
+                            {tData(m, "name")}
                           </b>
                           {m.description && (
                             <span
@@ -1117,7 +1121,7 @@ export default function OwnerMenu() {
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {m.description}
+                              {tData(m, "description")}
                             </span>
                           )}
                         </td>

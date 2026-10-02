@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // STAFFORDERDETAILMODAL.JSX — Modal chi tiết đơn (Staff/Admin)
 // ============================================================
 
@@ -78,7 +78,7 @@ export default function StaffOrderDetailModal({
   onClose,
   onUpdate,
 }) {
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
   const [order, setOrder] = useState(initialOrder);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -715,7 +715,7 @@ export default function StaffOrderDetailModal({
                     }}
                   >
                     <div>
-                      {it.name || "—"}
+                      {tData(it, "name") || "—"}
                       {it.size?.name && (
                         <span
                           style={{

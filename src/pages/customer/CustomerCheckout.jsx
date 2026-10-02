@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CUSTOMERCHECKOUT.JSX — Trang thanh toán
 // ============================================================
 // ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
@@ -83,7 +83,7 @@ function isSlotInPast(slot) {
 
 export default function CustomerCheckout({ cart, setCart, user }) {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
 
   const [name, setName] = useState(() => user?.name || "");
   const [phone, setPhone] = useState(() => user?.phone || "");
@@ -848,7 +848,7 @@ export default function CustomerCheckout({ cart, setCart, user }) {
                   textOverflow: "ellipsis",
                 }}
               >
-                <b>{m.qty}×</b> {m.name}
+                <b>{m.qty}×</b> {tData(m, "name")}
               </span>
               <b
                 style={{

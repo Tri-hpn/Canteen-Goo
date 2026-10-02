@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CUSTOMERMENU.JSX — Thực đơn khách hàng (GrabFood style)
 // ============================================================
 // ✅ SOURCE-TEXT I18N: dùng tiếng Việt trực tiếp qua t("...")
@@ -62,7 +62,7 @@ function translateCategory(name, t) {
 // ============================================================
 
 export default function CustomerMenu({ cart, setCart, user }) {
-  const { t } = useI18n();
+  const { t, tData } = useI18n();
 
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -119,7 +119,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
   const categoryChips = useMemo(() => {
     const fromApi = categories.map((cat) => ({
       id: cat.name,                             // giữ tiếng Việt để filter đúng DB
-      label: translateCategory(cat.name, t),    // label đã dịch
+      label: tData(cat, "name"),    // label đã dịch
       icon: cat.icon,
     }));
     return [
@@ -385,7 +385,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
                         e.stopPropagation();
                         openModal(m);
                       }}
-                      aria-label={t("Thêm {name}").replace("{name}", m.name)}
+                      aria-label={t("Thêm {name}").replace("{name}", tData(m, "name"))}
                     >
                       <Plus size={20} strokeWidth={3} />
                     </button>
@@ -393,7 +393,7 @@ export default function CustomerMenu({ cart, setCart, user }) {
                 </div>
 
                 <div className="grab-food-card__info">
-                  <h4 className="grab-food-card__name">{m.name}</h4>
+                  <h4 className="grab-food-card__name">{tData(m, "name")}</h4>
                   <div className="grab-food-card__price-row">
                     <span className="grab-food-card__price">
                       {money(m.price)}
